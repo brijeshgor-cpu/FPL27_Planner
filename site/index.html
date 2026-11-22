@@ -321,6 +321,12 @@ td.why { white-space: normal; min-width: 220px; font-size: .8rem; color: var(--m
 .gws-stats { list-style: none; margin: 0; padding: 0; display: grid; gap: 3px; font-size: .84rem; }
 .gws-stats li { display: flex; justify-content: space-between; gap: 10px; }
 .gws-stats li span { color: var(--muted); }
+.gws-verdict { display: grid; grid-template-columns: auto minmax(0, 1fr); gap: 2px 8px; align-items: start; padding: 8px 10px; border-radius: 8px; border-left: 4px solid var(--line); background: var(--surface-2); font-size: .84rem; }
+.gws-verdict small { grid-column: 1 / -1; color: var(--muted); font-size: .74rem; }
+.gws-verdict.v-keep { border-left-color: var(--good); } .gws-verdict.v-keep .pill { background: color-mix(in srgb, var(--good) 20%, var(--surface)); color: var(--good); }
+.gws-verdict.v-start { border-left-color: var(--accent); } .gws-verdict.v-start .pill { background: var(--accent); color: var(--accent-ink); }
+.gws-verdict.v-watch { border-left-color: var(--warn); } .gws-verdict.v-watch .pill { background: var(--warn); color: #1b1200; }
+.gws-verdict.v-sell { border-left-color: var(--bad); } .gws-verdict.v-sell .pill { background: var(--bad); color: #fff; }
 .gws-brk { margin: 0; font-size: .74rem; color: var(--muted); border-top: 1px dashed var(--line); padding-top: 6px; }
 /* Deeper Insights */
 .cs-cell { white-space: nowrap; }
@@ -830,10 +836,79 @@ select, input[type="search"] { font: inherit; color: var(--ink); background: var
     if (!document.body.contains(box)) return;
     if (!data) { box.innerHTML = `<div class="panel-head"><h2>Current gameweek team stats <span class="note">GW${gwCur}</span></h2></div><p class="note">Match stats load on the live site.</p>`; return; }
     const by = {}; data.players.forEach((x) => (by[x.id] = x));
+    try { await ensureFA(picks.map((p) => p[0])); } catch (e) { /* season data used */ }
+    if (!document.body.contains(box)) return;
     const fxOf = (team) => D.fixtures.filter((f) => f[1] === gwCur && (f[2] === team || f[3] === team));
     const num = (v) => +v || 0;
     const rows = picks.map(([el, slot, mult, cap, vc]) => { const e = E[el], x = by[el] || { stats: {}, explain: [] }; return { e, slot, mult, cap, vc, st: x.stats || {}, ex: x.explain || [], fx: fxOf(e.team) }; });
     const played = rows.filter((r) => num(r.st.minutes) > 0);
+
+    // ---- Next-gameweek verdict per player: this gameweek + Insights data + Transfer planner projections ----
+    const TOv = teamOdds();
+    const bank = bankOf(myM);
+    const sqSet = new Set(picks.map((p) => p[0]));
+    const tcount = {}; picks.forEach((p) => (tcount[E[p[0]].team] = (tcount[E[p[0]].team] || 0) + 1));
+    rows.forEach((r) => {
+      const e = r.e, st = r.st;
+      r.p1 = expertScore(e, 1, TOv); r.p5 = expertScore(e, 5, TOv);
+      r.rk = risks(e, TOv); r.sev = sevOf(r.rk);
+      r.pm = priceMove(e); r.mi = minutesInfo(e);
+      r.gap = e.goals_scored - (+e.expected_goals || 0);
+      r.formD = parseFloat(e.form) - parseFloat(e.points_per_game);
+      r.sc = e.element_type >= 3 ? scoreChance(e, TOv) : null;
+      r.sp = [e.penalties_order === 1 ? "pens" : "", e.corners_and_indirect_freekicks_order === 1 ? "corners" : "", e.direct_freekicks_order === 1 ? "free kicks" : ""].filter(Boolean);
+      const c = candidates(e.element_type, bank + sellPrice(e.id), sqSet, tcount, e.team, TOv, new Set(), r.sev >= 3 ? 0 : e.now_cost - 30)[0];
+      r.rep = c ? { e: c.e, gain: c.p5 - r.p5 } : null;
+      r.quiet = num(st.minutes) >= 60 && num(st.total_points) <= 2 && num(st.expected_goal_involvements) < 0.25 && e.element_type >= 3;
+    });
+    // 1. Sales: starters (or anyone unavailable) with a clearly better affordable replacement, in priority order,
+    //    up to your free transfers, each with a different replacement and the bank updated after every move.
+    const ft = freeTransfers(myM, D.entry.started_event || 1);
+    const trig = (r) => r.sev >= 3 || r.quiet || r.formD <= -1.5 || r.pm.cls === "down" || r.sev >= 2;
+    const cands = rows.filter((r) => (r.slot <= 11 || r.sev >= 3) && r.rep && (r.sev >= 3 || (r.rep.gain >= 6 && trig(r))))
+      .sort((a, b) => (b.sev >= 3) - (a.sev >= 3) || b.rep.gain - a.rep.gain);
+    const used = new Set(), sold = new Set(); let bankLeft = bank; const tc2 = { ...tcount };
+    cands.forEach((r) => {
+      const squadNow = new Set([...sqSet, ...used]);
+      const c = candidates(r.e.element_type, bankLeft + sellPrice(r.e.id), squadNow, tc2, r.e.team, TOv, new Set(), r.sev >= 3 ? 0 : r.e.now_cost - 30)[0];
+      if (!c) return;
+      const gain = c.p5 - r.p5;
+      if (!(r.sev >= 3 || gain >= 6)) return;
+      if (sold.size < ft || (r.sev >= 3 && r.slot <= 11)) {
+        r.sellTo = { e: c.e, gain, hit: sold.size >= ft };
+        sold.add(r.e.id); used.add(c.e.id); bankLeft += sellPrice(r.e.id) - c.e.now_cost;
+        tc2[r.e.team]--; tc2[c.e.team] = (tc2[c.e.team] || 0) + 1;
+      } else r.upgrade = { e: c.e, gain };
+    });
+    // 2. Starting decisions after the sales: a bench outfielder who projects clearly more than the weakest remaining starter.
+    const outfieldXI = rows.filter((r) => r.slot <= 11 && r.e.element_type > 1 && !sold.has(r.e.id));
+    rows.filter((r) => r.slot > 11 && r.e.element_type > 1 && r.sev < 2).sort((a, b) => b.p1 - a.p1).forEach((b) => {
+      const weak = outfieldXI.filter((x) => !x.benchFor && (x.e.element_type === b.e.element_type || (x.e.element_type > 2 && b.e.element_type > 2))).sort((a, c) => a.p1 - c.p1)[0];
+      if (weak && b.p1 - weak.p1 >= 1.2) { b.startOver = weak; weak.benchFor = b; }
+    });
+    const why = (r) => {
+      const st = r.st, bits = [];
+      if (num(st.minutes)) bits.push(`GW${gwCur}: ${num(st.total_points)} pts, ${num(st.expected_goal_involvements).toFixed(2)} xGI${num(st.minutes) < 60 ? `, ${st.minutes}'` : ""}`);
+      if (r.e.element_type >= 3 && Math.abs(r.gap) >= 1) bits.push(r.gap < 0 ? `${Math.abs(r.gap).toFixed(1)} goals below his xG (due)` : `${r.gap.toFixed(1)} above his xG (may cool)`);
+      if (Math.abs(r.formD) >= 1.5) bits.push(`form ${r.e.form} vs ${r.e.points_per_game}/g`);
+      if (r.sp.length) bits.push(`on ${r.sp.join(", ")}`);
+      if (r.pm.cls) bits.push(`price ${r.pm.cls === "up" ? "rising" : "falling"}`);
+      bits.push(`next GW ${r.p1.toFixed(1)} pts${r.sc ? `, ${pct(r.sc.p)} to score` : ""}${(teamFx[r.e.team][gwNext] || [])[0] ? ` ${fxLabel(teamFx[r.e.team][gwNext][0])}` : ""}`);
+      return bits;
+    };
+    rows.forEach((r) => {
+      const risk = r.rk.find((x) => x[0] >= 2) || r.rk.find((x) => x[0] === 1 && !/yellow|fixtures|clean sheet|to score|Backup keeper/i.test(x[1]));
+      const reason = r.sev >= 3 ? r.rk.find((x) => x[0] >= 3)[1] : r.quiet ? "Blanked with little threat" : r.formD <= -1.5 ? `Form ${r.e.form} vs ${r.e.points_per_game}/g season` : r.pm.cls === "down" ? "Price falling" : risk ? risk[1] : "";
+      if (r.sellTo) r.v = { k: "sell", label: r.sellTo.hit ? "Sell (−4)" : "Sell", txt: `${reason ? reason + ". " : ""}Replace with ${esc(r.sellTo.e.web_name)} (£${price(r.sellTo.e.now_cost)}m), +${r.sellTo.gain.toFixed(1)} pts over 5 GWs` };
+      else if (r.startOver) r.v = { k: "start", label: "Start", txt: `Projects ${r.p1.toFixed(1)} next GW vs ${esc(r.startOver.e.web_name)}'s ${r.startOver.p1.toFixed(1)}: start him instead` };
+      else if (r.benchFor) r.v = { k: "watch", label: "Bench", txt: `${esc(r.benchFor.e.web_name)} on your bench projects more next GW (${r.benchFor.p1.toFixed(1)} vs ${r.p1.toFixed(1)})` };
+      else if (r.slot > 11 && r.sev < 3) r.v = { k: "keep", label: "Bench", txt: r.e.element_type === 1 ? "Backup keeper: fine as long as your first choice plays" : `Bench cover${risk ? `; ${risk[1].charAt(0).toLowerCase() + risk[1].slice(1)}` : ""}` };
+      else if (r.upgrade) r.v = { k: "watch", label: "Upgrade option", txt: `${esc(r.upgrade.e.web_name)} (£${price(r.upgrade.e.now_cost)}m) would add +${r.upgrade.gain.toFixed(1)} over 5 GWs: use a spare transfer once the sales above are done` };
+      else if (risk) r.v = { k: "watch", label: "Watch", txt: risk[1] };
+      else if (r.e.element_type >= 3 && r.gap <= -1 && num(r.st.expected_goal_involvements) >= 0.4) r.v = { k: "keep", label: "Keep", txt: "Creating chances without the returns; points should follow" };
+      else r.v = { k: "keep", label: "Keep", txt: r.rep && r.rep.gain >= 3 ? `Keep: ${esc(r.rep.e.web_name)} would add +${r.rep.gain.toFixed(1)} over 5 GWs, but his numbers don't justify a transfer yet` : "Performing well; no clearly better option within budget" };
+      r.v.why = why(r);
+    });
     const best = (k) => { const r = played.slice().sort((a, b) => num(b.st[k]) - num(a.st[k]))[0]; return r && num(r.st[k]) > 0 ? r.e.id : null; };
     const tops = { xa: best("expected_assists"), xg: best("expected_goals"), bps: best("bps"), def: best("defensive_contribution"), pts: best("total_points") };
     const status = (r) => {
@@ -880,6 +955,7 @@ select, input[type="search"] { font: inherit; color: var(--ink); background: var
         <div class="gws-head"><span class="gws-name"><span><strong>${esc(r.e.first_name)} ${esc(r.e.second_name)}</strong>${r.cap ? ' <span class="pill acc">C</span>' : r.vc ? ' <span class="pill">V</span>' : ""}${r.slot > 11 ? ' <span class="pill">Bench</span>' : ""}</span><small>${esc(T[r.e.team]?.name)} · ${POSN(r.e)}</small></span>
           <span class="gws-pts"><strong>${r.slot <= 11 && r.mult ? pts * r.mult : pts}</strong><small>${r.mult > 1 ? `${pts} × ${r.mult}` : "pts"}</small></span></div>
         <span class="gws-match ${s2.cls}">${esc(s2.txt)}</span>
+        ${r.v ? `<div class="gws-verdict v-${r.v.k}"><span class="pill">${r.v.label}</span><span>${r.v.txt}</span><small>${r.v.why.join(" · ")}</small></div>` : ""}
         ${hl.length ? `<div class="gws-hl"><span class="pill ok">Highlights</span><ul>${hl.map((x) => `<li>${x}</li>`).join("")}</ul></div>` : ""}
         ${mins || num(st.total_points) ? `<ul class="gws-stats">${list}</ul>${brk.length ? `<p class="gws-brk">${brk.join(" · ")}</p>` : ""}` : `<p class="note">${r.fx.length && !r.fx.some((f) => f[8]) ? "Yet to play" : "Did not play"}</p>`}
       </div>`;
@@ -892,6 +968,17 @@ select, input[type="search"] { font: inherit; color: var(--ink); background: var
 
     // ---- Key takeaways: an analyst's read of this gameweek, rebuilt from the match data on every load ----
     const take = [];
+    {
+      const sells = rows.filter((r) => r.sellTo), starts = rows.filter((r) => r.v && r.v.label === "Start");
+      const capNext = rows.filter((r) => r.slot <= 11 || r.startOver).filter((r) => r.sev < 2).sort((a, b) => b.p1 - a.p1)[0];
+      const lines = [
+        ...sells.map((r) => `<strong>Sell ${esc(r.e.web_name)} → ${esc(r.sellTo.e.web_name)}</strong> (+${r.sellTo.gain.toFixed(1)} over 5 GWs${r.sellTo.hit ? ", −4 hit" : ""})`),
+        ...(sells.length ? [`${sells.length} of your ${ft} free transfers, £${price(bankLeft)}m left in the bank`] : [`No sale is clearly worth a transfer: roll it`]),
+        ...starts.map((r) => `<strong>Start ${esc(r.e.web_name)}</strong> over ${esc(r.startOver.e.web_name)}`),
+        capNext ? `<strong>Captain ${esc(capNext.e.web_name)}</strong> (${(capNext.p1 * 2).toFixed(1)} projected captain pts${capNext.sc ? `, ${pct(capNext.sc.p)} to score` : ""})` : "",
+      ].filter(Boolean);
+      take.push({ k: "info", t: `Next gameweek action plan (GW${gwNext})`, d: lines.join(" · ") + `. Combines this gameweek's performances with the Insights data (form, xG, price trends, set pieces, minutes and news) and the Transfer planner's projections. Each player's card below shows his verdict and why.` });
+    }
     const top10 = top10Rivals(), meRow = members.find((x) => x.entry === me);
     const t10avg = top10.length ? top10.reduce((a, x) => a + x.event_total, 0) / top10.length : 0;
     const lgAvg = members.reduce((a, x) => a + x.event_total, 0) / members.length;
