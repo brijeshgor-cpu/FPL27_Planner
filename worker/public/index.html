@@ -1899,8 +1899,45 @@ select, input[type="search"] { font: inherit; color: var(--ink); background: var
         </tr>`).join("")}</tbody>
       </table></div>
       <p class="note">"Most captained" and "top scorer" are FPL's figures across all managers. Points are the player's own score; a captain doubles them. League ownership uses each manager's squad for that gameweek, including the bench.</p>
+      <div class="panel" id="xgiTop">${xgiTopHTML()}</div>
       ${freshness()}
     </section>`;
+    wireXgiTop();
+  }
+
+  // Top 20 by season expected goal involvements (Opta xG + xA, as published by FPL).
+  function xgiTopHTML() {
+    const pos = store.get("xgiPos", 0);
+    const mine = new Set(squadOf(myM).map((p) => p[0]));
+    const list = Object.values(E).filter((e) => !pos || e.element_type === pos)
+      .sort((a, b) => (+b.expected_goal_involvements) - (+a.expected_goal_involvements) || b.minutes - a.minutes).slice(0, 20);
+    const ownedCount = list.filter((e) => mine.has(e.id)).length;
+    const diff = (e) => { const d = e.goals_scored + e.assists - (+e.expected_goal_involvements); return `<span class="${d >= 1 ? "up" : d <= -1 ? "down" : "note"}">${d > 0 ? "+" : d < 0 ? "−" : ""}${Math.abs(d).toFixed(1)}</span>`; };
+    return `
+      <div class="panel-head"><h3>Top 20 for expected goal involvements (xGI)</h3>
+        <div class="seg" role="group" aria-label="Position">${[[0, "All"], [2, "DEF"], [3, "MID"], [4, "FWD"]].map(([v, l]) => `<button data-xpos="${v}" aria-pressed="${v === pos}">${l}</button>`).join("")}</div></div>
+      <p class="note">Season totals from Opta's expected goals (xG) and expected assists (xA), as published by FPL. You own ${ownedCount} of these ${list.length}.</p>
+      <div class="tbl-wrap"><table class="cards-sm xgi-tbl">
+        <thead><tr><th class="n">#</th><th>Player</th><th class="n">xGI</th><th class="n">xG</th><th class="n">xA</th><th class="n">xGI per 90</th><th class="n">Goals + assists</th><th class="n">vs xGI</th><th class="n">Mins</th><th class="n">Price</th><th>You own</th></tr></thead>
+        <tbody>${list.map((e, i) => `<tr class="${mine.has(e.id) ? "me" : ""}">
+          <td class="n">${i + 1}</td>
+          <td><span class="mgr"><span>${esc(e.web_name)} ${availability(e) < 1 ? statusPill(e) : ""}</span><small>${POSN(e)} · ${esc(T[e.team]?.name)} · ${e.selected_by_percent}% owned</small></span></td>
+          <td class="n"><strong>${(+e.expected_goal_involvements).toFixed(2)}</strong></td>
+          <td class="n">${(+e.expected_goals).toFixed(2)}</td>
+          <td class="n">${(+e.expected_assists).toFixed(2)}</td>
+          <td class="n">${(+e.expected_goal_involvements_per_90).toFixed(2)}</td>
+          <td class="n">${e.goals_scored + e.assists} <small class="note">(${e.goals_scored}G ${e.assists}A)</small></td>
+          <td class="n">${diff(e)}</td>
+          <td class="n">${fmt(e.minutes)}</td>
+          <td class="n"><strong>£${price(e.now_cost)}m</strong>${e.cost_change_start ? ` <small class="${e.cost_change_start > 0 ? "up" : "down"}">${e.cost_change_start > 0 ? "+" : "−"}${price(Math.abs(e.cost_change_start))}</small>` : ""}</td>
+          <td>${mine.has(e.id) ? '<span class="pill acc">Yes</span>' : '<span class="note">No</span>'}</td>
+        </tr>`).join("")}</tbody>
+      </table></div>
+      <p class="note">"vs xGI" compares actual goals plus assists with xGI: a big minus means he has been unlucky and could be due returns; a big plus means he is scoring more than his chances suggest. The small figure next to the price is the change since the start of the season.</p>`;
+  }
+  function wireXgiTop() {
+    const box = $("#xgiTop"); if (!box) return;
+    box.querySelectorAll("[data-xpos]").forEach((b) => b.addEventListener("click", () => { store.set("xgiPos", Number(b.dataset.xpos)); box.innerHTML = xgiTopHTML(); wireXgiTop(); }));
   }
 
   // ---------- fixtures ----------
