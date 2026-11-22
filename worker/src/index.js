@@ -35,6 +35,8 @@ export default {
     const path = url.pathname.slice("/api/".length);
     if (path === "odds" || path === "odds/") return odds(env);
     if (path === "news" || path === "news/") return news();
+    const gwp = /^gw\/(\d+)\/?$/.exec(path);
+    if (gwp) return gwData(env, Number(gwp[1]));
     const lp = /^league-picks\/(\d+)\/(\d+)\/?$/.exec(path);
     if (lp) return leaguePicks(env, Number(lp[1]), Number(lp[2]));
     if (!ALLOWED.some((re) => re.test(path))) return json({ error: "not allowed" }, 404);
@@ -234,4 +236,30 @@ async function kitImage(code, gk) {
     if (!r.ok) return new Response("Not found", { status: 404 });
     return new Response(r.body, { headers: { "content-type": "image/png", "cache-control": "public, max-age=604800" } });
   } catch (e) { return new Response("Unavailable", { status: 502 }); }
+}
+
+// ---------- one gameweek's player stats, compact ----------
+// [minutes, points, xG, xA, xG conceded, saves, bonus, defensive contributions, starts] per player who featured.
+// A finished gameweek (all fixtures finished) is stored once in KV; the gameweek in progress is always fetched fresh.
+async function gwData(env, gw) {
+  if (gw < 1 || gw > 38) return json({ error: "bad gameweek" }, 400);
+  const key = `gwd:${gw}`;
+  const stored = env.ODDS ? await env.ODDS.get(key, "json") : null;
+  if (stored) return json(stored, 200);
+  try {
+    const [live, fx] = await Promise.all([fplJson(`event/${gw}/live/`), fplJson(`fixtures/?event=${gw}`)]);
+    const final = fx.length > 0 && fx.every((f) => f.finished);
+    const els = {};
+    for (const e of live.elements) {
+      const st = e.stats || {};
+      if (!st.minutes && !st.total_points) continue;
+      els[e.id] = [st.minutes || 0, st.total_points || 0, +(+st.expected_goals || 0).toFixed(2), +(+st.expected_assists || 0).toFixed(2),
+        +(+st.expected_goals_conceded || 0).toFixed(2), st.saves || 0, st.bonus || 0, st.defensive_contribution || 0, st.starts || 0];
+    }
+    const out = { gw, final, els };
+    if (final && env.ODDS) await env.ODDS.put(key, JSON.stringify(out));
+    return json(out, 200);
+  } catch (e) {
+    return json({ error: "fpl_unreachable", detail: String(e.message || e) }, 502);
+  }
 }

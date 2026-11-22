@@ -29,6 +29,7 @@ ELEMENT_FIELDS = [
     "expected_goals_per_90", "expected_assists_per_90", "saves_per_90", "defensive_contribution",
     "price_change_percent", "price_change_projections", "price_change_locked_until", "price_change_calibrating",
     "expected_goals_conceded", "goals_conceded", "bps",
+    "corners_and_indirect_freekicks_order", "direct_freekicks_order", "penalties_text",
 ]
 
 
