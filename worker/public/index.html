@@ -2123,14 +2123,8 @@ select, input[type="search"] { font: inherit; color: var(--ink); background: var
     const names = (ms) => ms.map((m) => esc(m.name.split(" ")[0])).join(", ");
     $("#app").innerHTML = `
     <section class="view">
-      <div class="panel-head"><h2>Insights</h2><span class="note">Captains and top scorers across all FPL managers, and who in ${esc(D.league.name)} had them</span></div>
+      <div class="panel-head"><h2>Insights</h2></div>
       <div class="panel ki-panel" id="insSummary"><div class="panel-head"><h2>Key insights</h2></div><p class="empty">Analysing every section below…</p></div>
-      <div class="kpis">
-        <div class="kpi"><span class="k">Most-captained player</span><span class="v">${capAvg.toFixed(1)}</span><span class="s">Average points a gameweek (${(capAvg * 2).toFixed(1)} as captain)</span></div>
-        <div class="kpi"><span class="k">Captain blanks</span><span class="v">${blanks}<small style="font-size:1rem;color:var(--muted)">/${done.length}</small></span><span class="s">Gameweeks the most-captained player scored 3 or fewer</span></div>
-        <div class="kpi"><span class="k">Top scorer in your league</span><span class="v">${withLg.length ? ownAvg.toFixed(1) : "–"}</span><span class="s">Managers who owned him, on average</span></div>
-        <div class="kpi"><span class="k">You owned the top scorer</span><span class="v">${withLg.length ? iOwned : "–"}<small style="font-size:1rem;color:var(--muted)">/${withLg.length || done.length}</small></span><span class="s">Finished gameweeks</span></div>
-      </div>
       <div class="panel" id="valueChart"><div class="panel-head"><h3>Best Value: Price vs Projected Points</h3></div><p class="empty">Projecting the next 4 gameweeks…</p></div>
       <div class="panel" id="capShort"><div class="panel-head"><h3>GW${gwNext} captaincy shortlist</h3></div><p class="empty">Working out each player's chance of scoring…</p></div>
       ${offline ? `<p class="note">League ownership for past gameweeks loads on the live site only.</p>` : ""}
