@@ -234,6 +234,13 @@ td.why { white-space: normal; min-width: 220px; font-size: .8rem; color: var(--m
 .ban-strip .k { font-size: .72rem; text-transform: uppercase; letter-spacing: .08em; color: var(--muted); font-weight: 600; }
 .ban-item { display: inline-flex; align-items: center; gap: 6px; }
 .ban-item .yc { margin-left: 0; }
+.t10-grid { display: grid; grid-template-columns: minmax(0, 1fr); gap: 24px; }
+.obar { display: inline-block; width: 64px; height: 6px; border-radius: 3px; background: var(--surface-2); vertical-align: middle; overflow: hidden; }
+.obar i { display: block; height: 100%; background: var(--accent); border-radius: 3px; }
+.win-tally { display: flex; flex-wrap: wrap; gap: 6px; }
+.wt { display: inline-flex; gap: 6px; align-items: baseline; padding: 4px 10px; border-radius: 999px; background: var(--surface-2); font-size: .82rem; }
+.wt strong { font-family: var(--font-display); font-size: 1.05rem; }
+.wt.me { background: var(--accent); color: var(--accent-ink); }
 /* Fixtures and odds */
 .fdrc { display: inline-block; min-width: 58px; text-align: center; border-radius: 5px; padding: 4px 6px; font-size: .74rem; font-weight: 700; }
 .fdrc + .fdrc { margin-left: 3px; }
@@ -1329,12 +1336,42 @@ select, input[type="search"] { font: inherit; color: var(--ink); background: var
         <div class="legend"><span><i style="background:var(--s-me)"></i>You</span><span><i style="background:var(--s-them)"></i>${esc(members.find((x) => x.entry === rival)?.player_name)}</span><span><i style="background:var(--chart-other)"></i>Rest of the league</span></div>
         <div class="chart">${raceChart(rival)}</div>
       </div>
+      ${gwWinnersHTML()}
       <div class="panel" id="cmp"></div>
     </section>`;
     document.querySelectorAll("tbody tr.click").forEach((tr) => tr.addEventListener("click", () => {
       const e = Number(tr.dataset.e); if (e === me) return; store.set("rival", e); renderLeague(); $("#cmp").scrollIntoView({ behavior: "smooth", block: "start" });
     }));
     renderCompare(rival);
+  }
+
+  // Highest scorer in the league for every gameweek so far (points after hits).
+  function gwWinnersHTML() {
+    const rows = [], wins = {};
+    for (let g = 1; g <= gwCur; g++) {
+      const sc = members.map((x) => { const r = x.m.history.find((h) => h[0] === g); return r ? { x, net: r[1] - r[4], chip: x.m.chips.find(([, ev]) => ev === g)?.[0] } : null; }).filter(Boolean).sort((a, b) => b.net - a.net);
+      if (!sc.length) continue;
+      const top = sc.filter((v) => v.net === sc[0].net), second = sc.find((v) => v.net < sc[0].net);
+      const mine = sc.find((v) => v.x.entry === me);
+      top.forEach((v) => (wins[v.x.entry] = (wins[v.x.entry] || 0) + 1 / top.length));
+      rows.push({ g, top, pts: sc[0].net, margin: second ? sc[0].net - second.net : 0, avg: sc.reduce((a, v) => a + v.net, 0) / sc.length, mine, myRank: mine ? 1 + sc.filter((v) => v.net > mine.net).length : null, n: sc.length });
+    }
+    const ev = D.events.find((e) => e.id === gwCur);
+    const tally = Object.entries(wins).map(([e, w]) => ({ x: members.find((m) => m.entry === Number(e)), w })).sort((a, b) => b.w - a.w || a.x.rank - b.x.rank);
+    const myWins = wins[me] || 0;
+    const fmtW = (w) => (Number.isInteger(w) ? w : w.toFixed(1));
+    return `<div class="panel">
+      <div class="panel-head"><h2>Gameweek winners</h2><span class="note">Top score in ${esc(D.league.name)} each gameweek, after hits${ev && !ev.finished ? `. GW${gwCur} is still in progress` : ""}</span></div>
+      <div class="win-tally">${tally.map(({ x, w }) => `<span class="wt ${x.entry === me ? "me" : ""}"><strong>${fmtW(w)}</strong> ${esc(x.player_name)}</span>`).join("")}${myWins ? "" : `<span class="wt me"><strong>0</strong> You</span>`}</div>
+      <p class="note">Gameweek wins so far. A shared top score is split between the managers who tied.</p>
+      <div class="tbl-wrap"><table class="cards-sm win-tbl">
+        <thead><tr><th>Gameweek</th><th>Winner</th><th class="n">Points</th><th class="n">Won by</th><th class="n">League avg</th><th class="n">Your score</th></tr></thead>
+        <tbody>${rows.slice().reverse().map((r) => `<tr class="${r.top.some((v) => v.x.entry === me) ? "me" : ""}"><td>GW${r.g}${r.g === gwCur && ev && !ev.finished ? ' <span class="pill">Live</span>' : ""}</td>
+          <td><span class="mgr"><span>${r.top.map((v) => `${esc(v.x.entry_name)}${v.chip ? ` <span class="chip on">${CHIP_LABEL[v.chip] || esc(v.chip)}</span>` : ""}`).join(" & ")}</span><small>${r.top.map((v) => esc(v.x.player_name)).join(" & ")}${r.top.length > 1 ? " (tied)" : ""}</small></span></td>
+          <td class="n"><strong>${r.pts}</strong></td><td class="n">${r.top.length > 1 ? "Tie" : "+" + r.margin}</td><td class="n">${r.avg.toFixed(0)}</td>
+          <td class="n">${r.mine ? `${r.mine.net} <small style="color:var(--muted)">${ordinal(r.myRank)} of ${r.n}</small>` : "–"}</td></tr>`).join("")}</tbody>
+      </table></div>
+    </div>`;
   }
 
   function raceChart(rival) {
@@ -1458,6 +1495,7 @@ select, input[type="search"] { font: inherit; color: var(--ink); background: var
         </div>
       </div>
       ${repl}
+      <div class="panel" id="top10"><div class="panel-head"><h2>What the top 10 own</h2></div><p class="empty">Working out top-10 ownership and next-gameweek projections…</p></div>
       <p class="note">How the projection works: average of form and points per game, scaled per fixture by difficulty (easiest ×1.25 to hardest ×0.7), adjusted for injury flags, summed over the window. Double gameweeks count twice; blanks count zero. Sale prices use the current price; FPL may give you slightly less for players who have risen since you bought them. Free transfers are estimated from your transfer history.</p>
     </section>`;
 
@@ -1466,8 +1504,66 @@ select, input[type="search"] { font: inherit; color: var(--ink); background: var
     document.querySelectorAll("[data-in]").forEach((b) => b.addEventListener("click", () => { const p = planState(); p.push({ out: selOut, inn: Number(b.dataset.in) }); setPlan(p); selOut = null; renderPlanner(); }));
     document.querySelectorAll("[data-undo]").forEach((b) => b.addEventListener("click", () => { const p = planState(); p.splice(Number(b.dataset.undo), 1); setPlan(p); renderPlanner(); }));
     $("#reset")?.addEventListener("click", () => { setPlan([]); selOut = null; renderPlanner(); });
+    renderTop10(sq.map((x) => x.el));
     const q = $("#q"); if (q) q.addEventListener("input", debounce(() => { const pos = q.selectionStart; renderPlanner(); const nq = $("#q"); nq.focus(); nq.setSelectionRange(pos, pos); }, 250));
   }
+  // Top-10 ownership of your (planned) squad, and the players they have that you don't, with next-gameweek projections.
+  async function ensureFA(ids) {
+    if (FA.odds === undefined) FA.odds = await (oddsCache ? Promise.resolve(oddsCache) : fetch("api/odds", { cache: "no-store" }).then((r) => (r.ok && (r.headers.get("content-type") || "").includes("json") ? r.json() : null)).catch(() => null));
+    if (FA.odds) oddsCache = FA.odds;
+    const need = [...new Set(ids)].filter((id) => !(id in FA.summ));
+    if (D.source === "live" && need.length) await pool(need, 8, async (id) => { try { const j = await api(`element-summary/${id}/`); FA.summ[id] = j.history.map((h) => [h.round, h.minutes]); } catch (e) { FA.summ[id] = null; } });
+  }
+  async function renderTop10(squadIds) {
+    const box = $("#top10"); if (!box) return;
+    const top = [...members].sort((a, b) => a.rank - b.rank).filter((x) => x.entry !== me).slice(0, members.find((x) => x.entry === me).rank <= 10 ? 9 : 10);
+    const N = top.length;
+    const owners = {}; top.forEach((x) => squadOf(x.m).forEach((p) => (owners[p[0]] = owners[p[0]] || []).push(x)));
+    const mine = new Set(squadIds);
+    const missing = Object.keys(owners).map(Number).filter((id) => !mine.has(id) && E[id]);
+    try { await ensureFA([...squadIds, ...missing]); } catch (e) { /* projections fall back to season minutes */ }
+    if (!document.body.contains(box)) return; // the planner re-rendered meanwhile
+    const TO = teamOdds();
+    const nf = (e) => { const f = nextFx(e.team); return f && f.gw === gwNext ? f.list.map((x) => `<span class="fdrc fdr${x.fdr}">${esc(tShort(x.opp))} (${x.home ? "H" : "A"})</span>`).join("") : '<span class="fdrc fdr0">Blank</span>'; };
+    const pNext = (e) => proj(e, 1, TO).total;
+    const bar = (n) => `<span class="obar"><i style="width:${(n / N) * 100}%"></i></span>`;
+    const mineRows = squadIds.map((id) => ({ e: E[id], n: (owners[id] || []).length })).sort((a, b) => b.n - a.n || a.e.element_type - b.e.element_type);
+    const overlap = top.reduce((a, x) => a + squadOf(x.m).filter((p) => mine.has(p[0])).length, 0) / (N || 1);
+    const templ = Object.keys(owners).map(Number).filter((id) => owners[id].length / N >= 0.5);
+    const templMine = templ.filter((id) => mine.has(id)).length;
+    const miss = missing.map((id) => ({ e: E[id], who: owners[id], n: owners[id].length, p: pNext(E[id]) })).sort((a, b) => b.n - a.n || b.p - a.p);
+    const showAll = store.get("top10all", false);
+    const shown = showAll ? miss : miss.filter((x) => x.n >= 2);
+    const status = (e) => availability(e) < 1 ? ` <span class="pill sev${availability(e) === 0 ? 3 : 2}" title="${esc(e.news)}">${availability(e) === 0 ? "Out" : pct(availability(e))}</span>` : "";
+    box.innerHTML = `
+      <div class="panel-head"><h2>What the top 10 own</h2><span class="note">The ${N === 9 ? "other 9 managers in the top 10" : "top 10 managers"}: ${top.map((x) => esc(firstName(x))).join(", ")}</span></div>
+      <div class="kpis">
+        <div class="kpi"><span class="k">Shared with an average top-10 team</span><span class="v">${overlap.toFixed(1)}<small style="font-size:1rem;color:var(--muted)">/15</small></span><span class="s">Players in common</span></div>
+        <div class="kpi"><span class="k">Top-10 template you own</span><span class="v">${templMine}<small style="font-size:1rem;color:var(--muted)">/${templ.length}</small></span><span class="s">Players in half or more of their squads</span></div>
+        <div class="kpi"><span class="k">Players they have, you don't</span><span class="v">${miss.length}</span><span class="s">${miss.filter((x) => x.n >= 2).length} owned by 2 or more</span></div>
+      </div>
+      <div class="t10-grid">
+        <div class="panel">
+          <div class="panel-head"><h3>Your players: top-10 ownership</h3><span class="note">Squad after your planned transfers</span></div>
+          <div class="tbl-wrap"><table class="cards-sm">
+            <thead><tr><th>Player</th><th class="n">Top 10 own</th><th></th><th class="n">Proj GW${gwNext}</th></tr></thead>
+            <tbody>${mineRows.map(({ e, n }) => `<tr><td><span class="mgr"><span>${esc(e.web_name)}${ycBadge(e)}${status(e)}</span><small>${POSN(e)} · ${tShort(e.team)}</small></span></td><td class="n"><strong>${pct(n / (N || 1))}</strong> <small style="color:var(--muted)">${n} of ${N}</small></td><td>${bar(n)}</td><td class="n">${pNext(e).toFixed(1)}</td></tr>`).join("")}</tbody>
+          </table></div>
+          <p class="note">High ownership means a safe pick against the top 10; low ownership is a differential that can win or lose you ground.</p>
+        </div>
+        <div class="panel">
+          <div class="panel-head"><h3>Players they have that you don't</h3>
+            <label class="controls"><input type="checkbox" id="t10all" ${showAll ? "checked" : ""}> <span class="note">Include players only 1 team owns</span></label></div>
+          <div class="tbl-wrap"><table class="cards-sm">
+            <thead><tr><th>Player</th><th class="n">Owned by</th><th>GW${gwNext}</th><th class="n">Proj GW${gwNext}</th><th class="n">FPL xP</th></tr></thead>
+            <tbody>${shown.map((x) => `<tr><td><span class="mgr"><span>${esc(x.e.web_name)}${ycBadge(x.e)}${status(x.e)}</span><small>${POSN(x.e)} · ${tShort(x.e.team)} · £${price(x.e.now_cost)}m · ${x.who.map((w) => esc(firstName(w))).join(", ")}</small></span></td><td class="n"><strong>${x.n} of ${N}</strong> ${bar(x.n)}</td><td>${nf(x.e)}</td><td class="n"><strong>${x.p.toFixed(1)}</strong></td><td class="n">${x.e.ep_next}</td></tr>`).join("") || `<tr><td colspan="5" class="empty">No player is in 2 or more top-10 squads without being in yours.</td></tr>`}</tbody>
+          </table></div>
+          <p class="note">Proj GW${gwNext} is this site's projection (form, bookmaker odds, minutes and injury news); FPL xP is FPL's own expected points for comparison.</p>
+        </div>
+      </div>`;
+    $("#t10all").addEventListener("change", (ev) => { store.set("top10all", ev.target.checked); renderTop10(squadIds); });
+  }
+
   function debounce(fn, ms) { let t; return () => { clearTimeout(t); t = setTimeout(fn, ms); }; }
   function chipAdvice() {
     const doubles = [], blanks = [];
