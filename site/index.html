@@ -263,6 +263,13 @@ td.why { white-space: normal; min-width: 220px; font-size: .8rem; color: var(--m
 .def-tbl th, .def-tbl td { padding: 8px 6px; }
 .def-tbl th { white-space: normal; vertical-align: bottom; }
 .def-tbl td small.note { display: block; }
+.gxg-grid { display: grid; grid-template-columns: minmax(0, 1fr); gap: 22px; }
+.gxg-grid > div { display: grid; gap: 8px; min-width: 0; }
+.gxg-h.up { color: var(--good); } .gxg-h.down { color: var(--bad); }
+.gxg-tbl { font-size: .82rem; }
+.gxg-tbl th, .gxg-tbl td { padding: 7px 6px; }
+.gxg-tbl th { white-space: normal; vertical-align: bottom; }
+.gxg-tbl tr.half td { background: var(--surface-2); font-size: .7rem; text-transform: uppercase; letter-spacing: .07em; color: var(--muted); font-weight: 600; }
 .own-list { display: flex; flex-wrap: wrap; gap: 3px; max-width: 190px; }
 .ins-tbl td { vertical-align: top; }
 .ins-tbl td small.note { white-space: normal; max-width: 260px; display: block; }
@@ -1908,6 +1915,7 @@ select, input[type="search"] { font: inherit; color: var(--ink); background: var
       <p class="note">"Most captained" and "top scorer" are FPL's figures across all managers. Points are the player's own score; a captain doubles them. League ownership uses each manager's squad for that gameweek, including the bench.</p>
       <div class="panel" id="xgiTop">${xgiTopHTML()}</div>
       <div class="panel" id="defTop">${defTopHTML()}</div>
+      <div class="panel">${goalsVsXgHTML()}</div>
       ${freshness()}
     </section>`;
     wireXgiTop(); wireDefTop();
@@ -1979,6 +1987,36 @@ select, input[type="search"] { font: inherit; color: var(--ink); background: var
           </tr>`; }).join("")}</tbody>
       </table></div>
       <p class="note">xGA is expected goals against while he is on the pitch (Opta, via FPL). xCS chance is the estimated chance of a clean sheet in a full game from that rate; xCS / CS compares expected clean sheets so far with actual ones. Defenders earn 2 points for 10+ defensive contributions (clearances, blocks, interceptions and tackles) in a match; the small figure is the estimated share of games where he reaches it.</p>`;
+  }
+  // Goals vs expected goals: midfielders and forwards with 450+ minutes, split into over- and under-performers.
+  function goalsVsXgHTML() {
+    const mine = new Set(squadOf(myM).map((p) => p[0]));
+    const lgOwn = {}; members.forEach((x) => squadOf(x.m).forEach((p) => (lgOwn[p[0]] = (lgOwn[p[0]] || 0) + 1)));
+    const N = members.length;
+    const gap = (e) => e.goals_scored - (+e.expected_goals || 0);
+    const pool = Object.values(E).filter((e) => (e.element_type === 3 || e.element_type === 4) && e.minutes >= 450);
+    const pick = (type, dir) => pool.filter((e) => e.element_type === type && (dir > 0 ? gap(e) > 0 : gap(e) < 0))
+      .sort((a, b) => dir * (gap(b) - gap(a))).slice(0, 5);
+    const row = (e) => `<tr class="${mine.has(e.id) ? "me" : ""}">
+      <td><span class="mgr"><span>${esc(e.web_name)} ${availability(e) < 1 ? statusPill(e) : ""}</span><small>${POSN(e)} · ${esc(T[e.team]?.name)} · £${price(e.now_cost)}m · ${fmt(e.minutes)} mins</small></span></td>
+      <td class="n"><strong>${e.goals_scored}</strong></td>
+      <td class="n">${(+e.expected_goals).toFixed(2)}</td>
+      <td class="n"><strong class="${gap(e) > 0 ? "up" : "down"}">${gap(e) > 0 ? "+" : "−"}${Math.abs(gap(e)).toFixed(2)}</strong></td>
+      <td class="n">${e.selected_by_percent}%</td>
+      <td class="n">${lgOwn[e.id] || 0} of ${N}${mine.has(e.id) ? ' <span class="pill acc">You</span>' : ""}</td>
+      <td>${fxStrip(e.team, gwNext, 3)}</td>
+    </tr>`;
+    const table = (dir) => `<div class="tbl-wrap"><table class="cards-sm gxg-tbl">
+      <thead><tr><th>Player</th><th class="n">Goals</th><th class="n">xG</th><th class="n">Gap</th><th class="n">Owned (all FPL)</th><th class="n">Owned in your league</th><th>Next 3</th></tr></thead>
+      <tbody>${[[3, "Midfielders"], [4, "Forwards"]].map(([t, label]) => `<tr class="half"><td colspan="7">${label}</td></tr>` + (pick(t, dir).map(row).join("") || `<tr><td colspan="7" class="empty">None</td></tr>`)).join("")}</tbody>
+    </table></div>`;
+    return `
+      <div class="panel-head"><h3>Goals vs expected goals</h3><span class="note">Midfielders and forwards with 450+ minutes, top 5 of each</span></div>
+      <div class="gxg-grid">
+        <div><h3 class="gxg-h up">Scoring above their xG</h3><p class="note">Finishing better than their chances suggest. Good form, but goals may slow down.</p>${table(1)}</div>
+        <div><h3 class="gxg-h down">Scoring below their xG</h3><p class="note">Getting the chances without the goals. Often due a return if the chances keep coming.</p>${table(-1)}</div>
+      </div>
+      <p class="note">Gap = goals minus xG (Opta expected goals, via FPL). "Owned in your league" counts the ${N} managers' current squads; your rows are highlighted.</p>`;
   }
   function wireDefTop() {
     const box = $("#defTop"); if (!box) return;
