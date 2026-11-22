@@ -25,7 +25,7 @@ ELEMENT_FIELDS = [
     "expected_goal_involvements_per_90", "expected_goals_conceded_per_90",
     "defensive_contribution_per_90", "bonus", "status", "news", "chance_of_playing_next_round",
     "cost_change_event", "cost_change_start", "transfers_in_event", "transfers_out_event",
-    "penalties_order",
+    "penalties_order", "yellow_cards", "red_cards", "news_added", "chance_of_playing_this_round",
 ]
 
 

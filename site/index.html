@@ -146,7 +146,7 @@ tbody tr.click:hover td { background: var(--surface-2); }
 .chip.used { text-decoration: line-through; opacity: .55; }
 .pill { display: inline-block; font-size: .7rem; font-weight: 700; padding: 1px 7px; border-radius: 999px; background: var(--surface-2); color: var(--muted); }
 .pill.acc { background: var(--accent); color: var(--accent-ink); }
-.strip { display: flex; gap: 2px; }
+.strip { display: inline-flex; gap: 2px; vertical-align: middle; }
 .strip span { min-width: 34px; text-align: center; font-size: .68rem; font-weight: 600; border-radius: 3px; padding: 2px 2px; }
 
 /* Chart */
@@ -210,6 +210,21 @@ tbody tr.click:hover td { background: var(--surface-2); }
 .tip .r { display: flex; justify-content: space-between; gap: 12px; }
 td .sw { display: inline-block; width: 8px; height: 8px; border-radius: 50%; margin-right: 6px; vertical-align: middle; }
 .gw-tbl td.n small { color: var(--muted); font-weight: 400; margin-left: 4px; }
+/* Future analysis */
+#future h3 { margin-top: 4px; }
+.stack { display: grid; gap: 24px; }
+.lede { margin: 0; font-size: .98rem; line-height: 1.6; max-width: 80ch; }
+.prio { list-style: none; counter-reset: pr; margin: 0; padding: 0; display: grid; gap: 10px; }
+.prio li { counter-increment: pr; display: grid; grid-template-columns: 30px 128px minmax(0, 1fr); gap: 10px; align-items: start; padding: 12px; border: 1px solid var(--line); border-radius: var(--r); background: var(--surface); }
+.prio li::before { content: counter(pr); font-family: var(--font-display); font-size: 1.5rem; font-weight: 700; line-height: 1; color: var(--muted); }
+.prio li > .pill { justify-self: start; margin-top: 2px; }
+.prio .t { font-weight: 600; }
+.prio .d { color: var(--muted); font-size: .86rem; margin-top: 2px; }
+.prio .d strong { color: var(--ink); }
+@media (max-width: 640px) { .prio li { grid-template-columns: 26px minmax(0, 1fr); } .prio li > div { grid-column: 2; } }
+.pill.sev3 { background: var(--bad); color: #fff; } .pill.sev2 { background: var(--warn); color: #1b1200; } .pill.sev1 { background: var(--surface-2); color: var(--ink); } .pill.ok { background: color-mix(in srgb, var(--good) 18%, transparent); color: var(--good); }
+td.why { white-space: normal; min-width: 220px; font-size: .8rem; color: var(--muted); }
+.fx-tbl tr.half td { background: var(--surface-2); font-size: .7rem; text-transform: uppercase; letter-spacing: .07em; color: var(--muted); font-weight: 600; }
 /* Fixtures and odds */
 .fdrc { display: inline-block; min-width: 58px; text-align: center; border-radius: 5px; padding: 4px 6px; font-size: .74rem; font-weight: 700; }
 .fdrc + .fdrc { margin-left: 3px; }
@@ -298,7 +313,8 @@ select, input[type="search"] { font: inherit; color: var(--ink); background: var
     "expected_goals", "expected_assists", "expected_goal_involvements",
     "expected_goal_involvements_per_90", "expected_goals_conceded_per_90",
     "defensive_contribution_per_90", "bonus", "status", "news", "chance_of_playing_next_round",
-    "cost_change_event", "cost_change_start", "transfers_in_event", "transfers_out_event", "penalties_order"];
+    "cost_change_event", "cost_change_start", "transfers_in_event", "transfers_out_event", "penalties_order",
+    "yellow_cards", "red_cards", "news_added", "chance_of_playing_this_round"];
   const setStatus = (t) => { const a = $("#app"); if (a && !D) a.innerHTML = `<p class="empty">${esc(t)}</p>`; };
 
   async function api(path) {
@@ -512,8 +528,297 @@ select, input[type="search"] { font: inherit; color: var(--ink); background: var
           <ul class="insights">${insights().map((i) => `<li class="${i.k}"><div><div class="t">${i.t}</div><div class="d">${i.d}</div></div></li>`).join("")}</ul>
         </div>
       </div>
+      <div class="panel" id="future"><div class="panel-head"><h2>Future analysis</h2></div><p class="empty">Analysing fixtures, injury news, minutes and bookmaker odds…</p></div>
     </section>`;
+    renderFuture();
   }
+
+  // ---------- future analysis ----------
+  // Everything here is recomputed on each page load from live FPL data, FPL's official player news,
+  // recent minutes (per-player match history) and the cached bookmaker odds.
+  const FA = { summ: {}, odds: undefined, busy: null };
+  const pct = (p) => Math.round(p * 100) + "%";
+  const isFit = (e) => e.status === "a" && (e.chance_of_playing_next_round == null || e.chance_of_playing_next_round === 100);
+  const teamPlayed = (team) => D.fixtures.filter((f) => f[7] && (f[2] === team || f[3] === team)).length;
+  const deadlineOf = (g) => Date.parse(D.events.find((e) => e.id === g)?.deadline || 0);
+
+  function minutesInfo(e) {
+    const h = FA.summ[e.id];
+    if (h && h.length) {
+      const by = {}; h.forEach(([r, m]) => (by[r] = (by[r] || 0) + m));
+      const rounds = Object.keys(by).map(Number).sort((a, b) => b - a).slice(0, 3);
+      return { avg: rounds.reduce((a, r) => a + by[r], 0) / rounds.length, last: by[rounds[0]], lastGw: rounds[0], src: "recent" };
+    }
+    const gp = teamPlayed(e.team);
+    return { avg: gp ? Math.min(90, e.minutes / gp) : 0, last: null, src: "season" };
+  }
+  function expectedBack(e) {
+    const m = /expected back (\d{1,2}) (\w{3})/i.exec(e.news || ""); if (!m) return null;
+    const mon = "janfebmaraprmayjunjulaugsepoctnovdec".indexOf(m[2].toLowerCase()) / 3; if (mon < 0 || mon % 1) return null;
+    const now = new Date(); let d = Date.UTC(now.getUTCFullYear(), mon, +m[1]);
+    if (d < Date.now() - 60 * 864e5) d = Date.UTC(now.getUTCFullYear() + 1, mon, +m[1]);
+    return d;
+  }
+  // Chance a player is available for gameweek g (i = index from the next gameweek).
+  function availFor(e, g, i) {
+    const back = expectedBack(e);
+    if (back) return back > deadlineOf(g) ? 0 : 0.85;
+    if (e.status === "s") return i === 0 ? 0 : 1;
+    const a = availability(e);
+    if (i < 2) return a;
+    return a === 0 ? 0.3 : Math.max(a, 0.9);
+  }
+  // Next-gameweek clean sheet / scoring chances per team, from the bookmaker odds.
+  function teamOdds() {
+    const m = {}; if (!FA.odds || !FA.odds.events) return m;
+    D.fixtures.filter((f) => f[1] === gwNext).forEach((f) => {
+      const o = FA.odds.events.find((x) => oddsTeamId(x.home) === f[2] && oddsTeamId(x.away) === f[3]); if (!o) return;
+      const [lh, la] = fitGoals(o.h2h[0], o.h2h[1], o.h2h[2], o.over25);
+      m[f[2]] = { cs: Math.exp(-la), lam: lh, score: 1 - Math.exp(-lh), win: o.h2h[0] };
+      m[f[3]] = { cs: Math.exp(-lh), lam: la, score: 1 - Math.exp(-la), win: o.h2h[2] };
+    });
+    return m;
+  }
+  // Points projection: blended form and points per game, scaled per fixture (bookmaker odds for the
+  // next gameweek, FDR after that), by availability and by recent minutes.
+  function proj(e, n, TO) {
+    const base = (0.5 * parseFloat(e.form) + 0.5 * parseFloat(e.points_per_game)) || 0;
+    const mi = minutesInfo(e), mf = Math.max(0.15, Math.min(1, mi.avg / 80));
+    const per = [];
+    for (let g = gwNext, i = 0; i < n && g <= 38; g++, i++) {
+      let p = 0;
+      (teamFx[e.team][g] || []).forEach((f, k) => {
+        let fac = FDR_MULT[f.fdr];
+        const o = i === 0 && k === 0 ? TO[e.team] : null;
+        if (o) fac = e.element_type <= 2 ? Math.min(1.4, Math.max(0.7, 0.55 + 1.6 * o.cs)) : Math.min(1.5, Math.max(0.6, o.lam / 1.35));
+        p += base * fac;
+      });
+      per.push(p * availFor(e, g, i) * mf);
+    }
+    return { total: per.reduce((a, b) => a + b, 0), per, mins: mi };
+  }
+  // Risk flags: [severity, text]; 3 = sell now, 2 = strongly consider, 1 = watch.
+  function risks(e, TO) {
+    const r = [], mi = minutesInfo(e), a = availability(e), news = e.news ? esc(e.news) : "";
+    if (e.status === "s") r.push([3, `Suspended${news ? ": " + news : ""}`]);
+    else if (["i", "u", "n"].includes(e.status) || a === 0) r.push([3, `Unavailable: ${news || "ruled out"}`]);
+    else if (a <= 0.5) r.push([2, `Doubtful, ${pct(a)} chance of playing: ${news}`]);
+    else if (a < 1) r.push([1, `Slight doubt, ${pct(a)} chance of playing: ${news}`]);
+    if (a > 0 && e.status !== "s") {
+      const where = mi.src === "recent" ? "over the last 3 gameweeks" : "this season";
+      if (e.element_type === 1 && mi.avg < 45) r.push([1, `Backup keeper: ${Math.round(mi.avg)} minutes a game ${where}, only useful if your first-choice keeper is out`]);
+      else if (mi.avg < 45) r.push([2, `Only ${Math.round(mi.avg)} minutes a game ${where}`]);
+      else if (mi.avg < 65) r.push([1, `Rotation risk: ${Math.round(mi.avg)} minutes a game ${where}`]);
+      if (mi.src === "recent" && mi.last === 0 && mi.avg >= 45) r.push([1, `Didn't play in GW${mi.lastGw}`]);
+    }
+    if ((e.yellow_cards === 4 && gwNext <= 19) || (e.yellow_cards === 9 && gwNext <= 32)) r.push([1, `On ${e.yellow_cards} yellow cards: one more brings a ban`]);
+    const f3 = windowFdr(e.team, 3);
+    if (f3 >= 4) r.push([2, `Very hard next 3 fixtures (average FDR ${f3.toFixed(1)})`]);
+    else if (f3 >= 3.5) r.push([1, `Hard next 3 fixtures (average FDR ${f3.toFixed(1)})`]);
+    const o = TO[e.team];
+    if (o && e.element_type <= 2 && o.cs < 0.2) r.push([1, `Bookmakers give ${tShort(e.team)} only a ${pct(o.cs)} clean sheet chance in GW${gwNext}`]);
+    if (o && e.element_type >= 3 && o.score < 0.62) r.push([1, `${tShort(e.team)} are only ${pct(o.score)} to score in GW${gwNext}`]);
+    if (e.cost_change_event < 0) r.push([1, `Price fell £${price(-e.cost_change_event)}m this gameweek`]);
+    return r;
+  }
+  const sevOf = (rk) => rk.reduce((m, r) => Math.max(m, r[0]), 0);
+
+  function candidates(type, budget, squad, tc, outTeam, TO, avoid, minPrice = 0) {
+    return Object.values(E).filter((e) => e.element_type === type && !squad.has(e.id) && e.now_cost <= budget && e.now_cost >= minPrice && isFit(e)
+        && ((tc[e.team] || 0) - (e.team === outTeam ? 1 : 0)) < 3)
+      .map((e) => { const p5 = proj(e, 5, TO), p3 = proj(e, 3, TO); return { e, p5: p5.total, p3: p3.total, mins: p5.mins, swing: p3.total * (avoid.has(e.id) ? 0 : 1) }; })
+      .filter((c) => c.mins.avg >= 60 && sevOf(risks(c.e, TO)) < 2)
+      .sort((a, b) => b.p5 + 0.4 * b.swing - (a.p5 + 0.4 * a.swing));
+  }
+
+  async function renderFuture() {
+    const box = $("#future"); if (!box) return;
+    try {
+      if (FA.odds === undefined) FA.odds = await (oddsCache ? Promise.resolve(oddsCache) : fetch("api/odds", { cache: "no-store" }).then((r) => (r.ok && (r.headers.get("content-type") || "").includes("json") ? r.json() : null)).catch(() => null));
+      if (FA.odds) oddsCache = FA.odds;
+      const TO = teamOdds();
+      // Recent minutes: your squad, the strongest targets per position and the top-6 players you don't own.
+      const mineIds = squadOf(myM).map((p) => p[0]);
+      const pre = [1, 2, 3, 4].flatMap((t) => Object.values(E).filter((e) => e.element_type === t && isFit(e) && !mineIds.includes(e.id))
+        .map((e) => [e.id, proj(e, 5, TO).total]).sort((a, b) => b[1] - a[1]).slice(0, 8).map((x) => x[0]));
+      const sortedM = [...members].sort((a, b) => a.rank - b.rank);
+      const meRow = members.find((x) => x.entry === me);
+      const top = sortedM.filter((x) => x.entry !== me).slice(0, meRow.rank <= 6 ? 5 : 6);
+      const topOwn = {}; top.forEach((x) => squadOf(x.m).forEach((p) => (topOwn[p[0]] = (topOwn[p[0]] || 0) + 1)));
+      const topMissing = Object.keys(topOwn).map(Number).filter((id) => !mineIds.includes(id) && topOwn[id] >= 2);
+      const need = [...new Set([...mineIds, ...pre, ...topMissing])].filter((id) => !(id in FA.summ));
+      if (D.source === "live" && need.length) {
+        box.querySelector(".empty") && (box.querySelector(".empty").textContent = `Checking recent minutes for ${need.length} players…`);
+        await pool(need, 8, async (id) => { try { const j = await api(`element-summary/${id}/`); FA.summ[id] = j.history.map((h) => [h.round, h.minutes]); } catch (e) { FA.summ[id] = null; } });
+      }
+      drawFuture(box, TO, top, topOwn, sortedM, meRow);
+    } catch (err) {
+      box.innerHTML = `<div class="panel-head"><h2>Future analysis</h2></div><div class="err">The analysis couldn't be built (${esc(err.message)}). Reload to try again.</div>`;
+    }
+  }
+
+  function drawFuture(box, TO, top, topOwn, sortedM, meRow) {
+    const leader = sortedM[0].entry === me ? sortedM[1] : sortedM[0];
+    const lName = firstName(leader);
+    const leaderOwns = new Set(squadOf(leader.m).map((p) => p[0]));
+    const picks = squadOf(myM);
+    const ft = freeTransfers(myM, D.entry.started_event || 1);
+    let bank = myM.picks?.bank ?? lastHist(myM)[8];
+    const squad = new Set(picks.map((p) => p[0]));
+    const tc = {}; picks.forEach((p) => (tc[E[p[0]].team] = (tc[E[p[0]].team] || 0) + 1));
+    const mine = picks.map(([id, slot]) => { const e = E[id], rk = risks(e, TO), p5 = proj(e, 5, TO); return { e, slot, rk, sev: sevOf(rk), p5: p5.total, p3: proj(e, 3, TO).total, mins: p5.mins }; });
+
+    // Transfer plan: greedy, most urgent first. Bench players count for less unless they're unavailable.
+    const moves = []; const pool5 = [...mine];
+    for (let k = 0; k < 4 && moves.length < 3; k++) {
+      let best = null;
+      pool5.forEach((m) => {
+        // Unless a player is unavailable, don't downgrade by more than £3m (that just leaves money idle).
+        const c = candidates(m.e.element_type, bank + m.e.now_cost, squad, tc, m.e.team, TO, leaderOwns, m.sev >= 3 ? 0 : m.e.now_cost - 30)[0]; if (!c) return;
+        // Bench players matter less; a backup keeper hardly at all.
+        const w = m.slot <= 11 ? 1 : m.e.element_type === 1 ? 0.1 : 0.25, gain = c.p5 - m.p5;
+        const score = m.sev * 8 * (m.slot <= 11 ? 1 : 0.5) + gain * w;
+        // Selling a template player the leader owns is a big gamble: only for a clear gain.
+        const template = leaderOwns.has(m.e.id) && (own[m.e.id] || 0) >= 0.5 && m.sev < 2;
+        const ok = m.sev >= 3 || (m.sev >= 2 && gain > 0) || gain * w >= (template ? 10 : 5);
+        if (ok && (!best || score > best.score)) best = { m, c, gain, score };
+      });
+      if (!best) break;
+      const free = moves.length < ft;
+      if (!free && !(best.m.sev >= 3 && best.m.slot <= 11 && best.gain >= 8)) break;
+      moves.push({ ...best, hit: !free });
+      squad.delete(best.m.e.id); squad.add(best.c.e.id); bank += best.m.e.now_cost - best.c.e.now_cost;
+      tc[best.m.e.team]--; tc[best.c.e.team] = (tc[best.c.e.team] || 0) + 1;
+      pool5.splice(pool5.indexOf(best.m), 1);
+    }
+    const moved = new Map(moves.map((mv) => [mv.m.e.id, mv.c.e]));
+
+    // Projections for the next 3 gameweeks: starting XI plus captain each week.
+    const xiProj = (ids) => { let t = 0; for (let i = 0; i < 3; i++) { const v = ids.map((id) => proj(E[id], 3, TO).per[i] || 0); t += v.reduce((a, b) => a + b, 0) + Math.max(0, ...v); } return t; };
+    const myXI = picks.filter((p) => p[1] <= 11).map((p) => p[0]);
+    const myXIafter = myXI.map((id) => (moved.get(id) || E[id]).id);
+    const leadXI = squadOf(leader.m).filter((p) => p[1] <= 11).map((p) => p[0]);
+    const pNow = xiProj(myXI), pAfter = xiProj(myXIafter), pLead = xiProj(leadXI);
+    const gap = leader.total - meRow.total;
+
+    // Captain for next gameweek, after the transfers.
+    const capList = myXIafter.map((id) => ({ e: E[id], p: proj(E[id], 1, TO).total })).sort((a, b) => b.p - a.p);
+    const cap = capList[0], vice = capList[1];
+    const leadCap = squadOf(leader.m).find((p) => p[3]);
+    const capDiff = capList.find((c) => !leaderOwns.has(c.e.id) && c.p >= cap.p * 0.85);
+
+    // Chips: your weakest week in the window for a Free Hit.
+    const cl = chipsLeft(myM).filter((c) => !c.used);
+    const halfEnd = (D.chips_def.find(([, s, e]) => gwNext >= s && gwNext <= e) || [0, 0, 38])[2];
+    let chipTxt = null;
+    if (cl.some((c) => c.name === "freehit")) {
+      const weeks = []; for (let g = gwNext; g <= Math.min(halfEnd, gwNext + 6); g++) {
+        const i = g - gwNext; const tot = myXIafter.reduce((a, id) => a + (proj(E[id], i + 1, TO).per[i] || 0), 0);
+        const hard = myXIafter.filter((id) => { const l = teamFx[E[id].team][g] || []; return !l.length || l.every((f) => f.fdr >= 4); }).length;
+        weeks.push({ g, tot, hard });
+      }
+      const worst = [...weeks].sort((a, b) => a.tot - b.tot)[0];
+      chipTxt = worst ? `Keep your Free Hit for now. Your weakest week before it expires is <strong>GW${worst.g}</strong> (projected ${worst.tot.toFixed(0)} pts, ${worst.hard} starters with a blank or a hard fixture). If FPL doesn't announce a blank or double gameweek before GW${halfEnd}, play it in GW${worst.g}; unused it disappears after the GW${halfEnd} deadline.` : null;
+    }
+    const leadChips = chipsLeft(leader.m).filter((c) => !c.used).map((c) => CHIP_NAME[c.name]);
+
+    // Top-6 players you don't own.
+    const missing = Object.keys(topOwn).map(Number).filter((id) => !picks.some((p) => p[0] === id) && topOwn[id] >= 2 && E[id])
+      .map((id) => { const e = E[id], rk = risks(e, TO), p5 = proj(e, 5, TO); return { e, n: topOwn[id], rk, sev: sevOf(rk), p5: p5.total, mins: p5.mins, lead: leaderOwns.has(id), plan: moves.some((m) => m.c.e.id === id) }; })
+      .sort((a, b) => b.n - a.n || b.p5 - a.p5);
+    const posTop = {}; [1, 2, 3, 4].forEach((t) => { const v = Object.values(E).filter((e) => e.element_type === t && isFit(e)).map((e) => proj(e, 5, TO).total).sort((a, b) => b - a); posTop[t] = v[Math.min(14, v.length - 1)] || 0; });
+    const verdict = (x) => {
+      if (x.plan) return ["acc", "In your plan"];
+      if (x.sev >= 3) return ["bad", "Avoid: unavailable"];
+      if (x.sev >= 2) return ["warn", "Avoid for now"];
+      if (x.p5 >= posTop[x.e.element_type] && x.n >= 3 && availability(x.e) === 1) return ["acc", "Cover him"];
+      if (x.p5 >= posTop[x.e.element_type] * 0.8) return ["", "Worth a look"];
+      return ["", "Leave"];
+    };
+
+    // Write-up
+    const sign1 = (v) => (v >= 0 ? "+" : "−") + Math.abs(v).toFixed(0);
+    const myDiffs = myXIafter.filter((id) => !leaderOwns.has(id)).map((id) => ({ e: E[id], p: proj(E[id], 3, TO).total })).sort((a, b) => b.p - a.p);
+    const leadDiffs = leadXI.filter((id) => !squad.has(id)).map((id) => ({ e: E[id], p: proj(E[id], 3, TO).total })).sort((a, b) => b.p - a.p);
+    const verdictTxt = gap <= 0 ? `You're top of ${esc(D.league.name)}. The aim for the next 3 gameweeks is protecting the lead, so cover the players your closest rivals own.`
+      : `You're <strong>${gap} points behind ${esc(leader.player_name)}</strong>. On current squads your starting XI projects <strong>${pNow.toFixed(0)}</strong> points over GW${gwNext}–${gwNext + 2} against ${lName}'s <strong>${pLead.toFixed(0)}</strong> (${sign1(pNow - pLead)}). ${moves.length ? `With the transfers below that becomes <strong>${pAfter.toFixed(0)}</strong> (${sign1(pAfter - pLead)} on ${lName}).` : ""} ${gap > 40 ? `A ${gap}-point gap won't close in 3 weeks through the template. Every point has to come from players ${lName} doesn't own: your differentials (${myDiffs.slice(0, 3).map((d) => esc(d.e.web_name)).join(", ") || "none yet"}) and a captain ${lName} isn't on.` : `This gap is closeable in 3 weeks if your differentials (${myDiffs.slice(0, 3).map((d) => esc(d.e.web_name)).join(", ") || "none yet"}) outscore ${lName}'s (${leadDiffs.slice(0, 3).map((d) => esc(d.e.web_name)).join(", ") || "none"}).`}`;
+
+    const pr = [];
+    moves.forEach((mv) => {
+      // Fixture reasons only count if the replacement's fixtures are actually easier.
+      const easier = mv.c.e.team !== mv.m.e.team && windowFdr(mv.c.e.team, 3) < windowFdr(mv.m.e.team, 3);
+      const rs = mv.m.rk.filter((r) => easier || !/fixtures/.test(r[1])).slice(0, 2).map((r) => r[1]);
+      const why = [...rs, `projects ${mv.m.p5.toFixed(1)} pts over the next 5 gameweeks`].join("; ");
+      const o = TO[mv.c.e.team];
+      const oTxt = o ? (mv.c.e.element_type <= 2 ? `${pct(o.cs)} clean sheet chance in GW${gwNext}` : `${tShort(mv.c.e.team)} ${pct(o.score)} to score in GW${gwNext}`) : "";
+      pr.push({ tag: mv.hit ? "Transfer (−4 hit)" : "Transfer", cls: mv.m.sev >= 3 ? "bad" : "acc",
+        t: `Sell ${esc(mv.m.e.web_name)} (£${price(mv.m.e.now_cost)}m) → buy ${esc(mv.c.e.web_name)} (${tShort(mv.c.e.team)}, £${price(mv.c.e.now_cost)}m)`,
+        d: `<strong>Why sell:</strong> ${why}. <strong>Why ${esc(mv.c.e.web_name)}:</strong> projects ${mv.c.p5.toFixed(1)} pts over 5 gameweeks (${sign1(mv.gain)} on ${esc(mv.m.e.web_name)}), ${Math.round(mv.c.mins.avg)} mins a game, next 3 ${fxStrip(mv.c.e.team, gwNext, 3)}${oTxt ? ", " + oTxt : ""}. ${leaderOwns.has(mv.c.e.id) ? `${lName} owns him, so this protects you rather than gains ground.` : `${lName} doesn't own him: every point he scores is a point gained on the leader.`}` });
+    });
+    if (!moves.length) pr.push({ tag: "Transfer", cls: "", t: "No transfer is clearly worth making this week", d: `Nobody in your squad is injured or losing minutes badly, and no replacement projects at least 5 pts more over 5 gameweeks within your £${price(bank)}m budget. Roll the transfer.` });
+    const leftFT = ft - moves.filter((m) => !m.hit).length;
+    pr.push({ tag: "Captain", cls: "acc", t: `Captain ${esc(cap.e.web_name)} in GW${gwNext}, vice ${esc(vice.e.web_name)}`,
+      d: `${esc(cap.e.web_name)} has the highest projection in your XI (${cap.p.toFixed(1)} pts${nextFx(cap.e.team) ? ", " + fxLabel(nextFx(cap.e.team).list[0]) : ""}). ${leadCap ? `${lName} captained ${esc(E[leadCap[0]]?.web_name)} last week. ` : ""}${capDiff && capDiff.e.id !== cap.e.id ? `If you want to gamble on the gap, ${esc(capDiff.e.web_name)} (${capDiff.p.toFixed(1)} pts) is a captain ${lName} doesn't own.` : leaderOwns.has(cap.e.id) ? `${lName} owns him too, so this is the safe pick: it won't lose you ground.` : `${lName} doesn't own him, so a big haul swings the gap directly.`}` });
+    const hold = mine.filter((m) => m.sev >= 2 && !moved.has(m.e.id));
+    hold.forEach((m) => pr.push({ tag: "Hold", cls: "warn", t: `Hold ${esc(m.e.web_name)} for now`,
+      d: `${m.rk.map((r) => r[1]).join("; ")}. But no fit replacement within £3m of his price projects clearly more over 5 gameweeks${leaderOwns.has(m.e.id) && (own[m.e.id] || 0) >= 0.5 ? `, and ${lName} and ${Math.round((own[m.e.id] || 0) * 100)}% of the league own him, so selling would be a gamble against the field` : ""}. Keep him, but don't captain him in these fixtures.` }));
+    if (chipTxt) pr.push({ tag: "Chip", cls: "", t: "Free Hit timing", d: chipTxt + (leadChips.length ? ` ${lName} still has: ${leadChips.join(", ")}.` : "") });
+    if (leftFT > 0) pr.push({ tag: "Transfers", cls: "", t: `Bank ${leftFT} free transfer${leftFT > 1 ? "s" : ""}`, d: `You'll have ${Math.min(5, leftFT + 1)} next week (5 is the cap). Use them for injuries or a double gameweek rather than sideways moves.` });
+    const cover = missing.filter((x) => verdict(x)[1] === "Cover him").slice(0, 2);
+    if (cover.length) pr.push({ tag: "Top 6", cls: "warn", t: `Plan to cover ${cover.map((x) => esc(x.e.web_name)).join(" and ")}`, d: cover.map((x) => `${esc(x.e.web_name)} is in ${x.n} of the other top-6 squads${x.lead ? `, including ${lName}'s` : ""}, projecting ${x.p5.toFixed(1)} pts over 5 gameweeks`).join(". ") + `. ${cover.length > 1 ? "If they haul" : "If he hauls"} without you, you fall further behind. Use next week's transfer on ${cover.length > 1 ? "one of them" : "him"} once the moves above are done.` });
+    const watch = mine.filter((m) => m.sev === 1 && !moved.has(m.e.id)).slice(0, 5);
+    if (watch.length) pr.push({ tag: "Watch", cls: "", t: "Keep, but check team news before the deadline", d: watch.map((m) => `<strong>${esc(m.e.web_name)}</strong>: ${m.rk.map((r) => r[1]).join("; ")}`).join(". ") });
+
+    // Targets by position.
+    const targets = [1, 2, 3, 4].map((t) => {
+      const maxBudget = bank + Math.max(...picks.filter((p) => E[p[0]].element_type === t).map((p) => E[p[0]].now_cost));
+      return { t, list: candidates(t, maxBudget, new Set(picks.map((p) => p[0])), {}, null, TO, leaderOwns).slice(0, 3), maxBudget };
+    });
+    const mvOf = (id) => moves.find((mv) => mv.m.e.id === id);
+    const sevPill = (m) => moved.has(m.e.id) ? (m.sev >= 2 ? `<span class="pill sev3">Sell now</span>` : `<span class="pill acc">Upgrade</span>`) : m.sev >= 3 ? `<span class="pill sev3">Sell now</span>` : m.sev === 2 ? `<span class="pill sev2">Review</span>` : m.sev === 1 ? `<span class="pill sev1">Watch</span>` : `<span class="pill ok">Keep</span>`;
+    const minsTxt = (mi) => `${Math.round(mi.avg)}${mi.src === "recent" ? "" : "*"}`;
+    const oddsCell = (e) => { const o = TO[e.team]; if (!o) return "–"; return e.element_type <= 2 ? `CS ${pct(o.cs)}` : `Score ${pct(o.score)}`; };
+
+    box.innerHTML = `
+      <div class="panel-head"><h2>Future analysis</h2><span class="note">Rebuilt on every reload from live FPL data, FPL's official injury news, recent minutes and bookmaker odds</span></div>
+      <div class="kpis">
+        <div class="kpi"><span class="k">Gap to ${esc(lName)}</span><span class="v">${gap > 0 ? gap : "Leading"}</span><span class="s">${esc(leader.entry_name)}, ${ordinal(leader.rank)}</span></div>
+        <div class="kpi"><span class="k">Your XI, next 3 GWs</span><span class="v">${pNow.toFixed(0)}${moves.length ? ` → ${pAfter.toFixed(0)}` : ""}</span><span class="s">Projected, now${moves.length ? " → after the plan" : ""}</span></div>
+        <div class="kpi"><span class="k">${esc(lName)}'s XI, next 3 GWs</span><span class="v">${pLead.toFixed(0)}</span><span class="s">Projected on his current squad</span></div>
+        <div class="kpi"><span class="k">Free transfers</span><span class="v">${ft}</span><span class="s">£${price(myM.picks?.bank ?? lastHist(myM)[8])}m in the bank</span></div>
+      </div>
+      <p class="lede">${verdictTxt}</p>
+
+      <h3>Your priorities, in order</h3>
+      <ol class="prio">${pr.map((p) => `<li><span class="pill ${p.cls === "acc" ? "acc" : p.cls === "bad" ? "sev3" : p.cls === "warn" ? "sev2" : ""}">${p.tag}</span><div><div class="t">${p.t}</div><div class="d">${p.d}</div></div></li>`).join("")}</ol>
+
+      <div class="stack">
+        <div class="panel">
+          <div class="panel-head"><h3>Your squad risk check</h3><span class="note">Next 5 gameweeks</span></div>
+          <div class="tbl-wrap"><table class="fx-tbl">
+            <thead><tr><th>Player</th><th>Verdict</th><th class="n">Mins</th><th class="n">Proj 5</th><th>Next 5</th><th>Why</th></tr></thead>
+            <tbody>${[...mine].sort((a, b) => (moved.has(b.e.id) ? 4 : b.sev) - (moved.has(a.e.id) ? 4 : a.sev) || a.e.element_type - b.e.element_type).map((m) => `<tr><td><span class="mgr">${esc(m.e.web_name)}<small>${POSN(m.e)} · ${tShort(m.e.team)}${m.slot > 11 ? " · bench" : ""}</small></span></td><td>${sevPill(m)}</td><td class="n">${minsTxt(m.mins)}</td><td class="n">${m.p5.toFixed(1)}</td><td>${fxStrip(m.e.team, gwNext, 5)}</td><td class="why">${[...(mvOf(m.e.id) ? [`Upgrade to ${esc(mvOf(m.e.id).c.e.web_name)}: ${sign1(mvOf(m.e.id).gain)} pts over 5 gameweeks`] : []), ...m.rk.map((r) => r[1])].join("; ") || "No concerns"}</td></tr>`).join("")}</tbody>
+          </table></div>
+        </div>
+        <div class="panel">
+          <div class="panel-head"><h3>Best targets by position</h3><span class="note">Fit, playing 60+ mins, within your budget</span></div>
+          <div class="tbl-wrap"><table class="fx-tbl">
+            <thead><tr><th>Player</th><th class="n">£</th><th class="n">Proj 5</th><th>GW${gwNext} odds</th><th>Next 5</th><th>${esc(lName)}</th></tr></thead>
+            <tbody>${targets.map(({ t, list, maxBudget }) => `<tr class="half"><td colspan="6">${D.positions[t]} · up to £${price(maxBudget)}m</td></tr>` + (list.map((c) => `<tr><td><span class="mgr">${esc(c.e.web_name)}<small>${tShort(c.e.team)} · ${Math.round(c.mins.avg)} mins</small></span></td><td class="n">${price(c.e.now_cost)}</td><td class="n"><strong>${c.p5.toFixed(1)}</strong></td><td>${oddsCell(c.e)}</td><td>${fxStrip(c.e.team, gwNext, 5)}</td><td>${leaderOwns.has(c.e.id) ? "Owns" : "<strong>Doesn't own</strong>"}</td></tr>`).join("") || `<tr><td colspan="6" class="empty">No one fits</td></tr>`)).join("")}</tbody>
+          </table></div>
+        </div>
+      </div>
+
+      <div class="panel">
+        <div class="panel-head"><h3>What the top 6 have that you don't</h3><span class="note">Players in at least 2 of the other top-6 squads (${top.map((x) => esc(firstName(x))).join(", ")})</span></div>
+        <div class="tbl-wrap"><table class="fx-tbl">
+          <thead><tr><th>Player</th><th class="n">Owned by</th><th>${esc(lName)}</th><th>Verdict</th><th class="n">Proj 5</th><th class="n">Mins</th><th>Next 5</th><th>Notes</th></tr></thead>
+          <tbody>${missing.map((x) => { const [c, v] = verdict(x); return `<tr><td><span class="mgr">${esc(x.e.web_name)}<small>${POSN(x.e)} · ${tShort(x.e.team)} · £${price(x.e.now_cost)}m</small></span></td><td class="n">${x.n} of ${top.length}</td><td>${x.lead ? "Owns" : "–"}</td><td><span class="pill ${c === "acc" ? "acc" : c === "bad" ? "sev3" : c === "warn" ? "sev2" : ""}">${v}</span></td><td class="n">${x.p5.toFixed(1)}</td><td class="n">${minsTxt(x.mins)}</td><td>${fxStrip(x.e.team, gwNext, 5)}</td><td class="why">${x.rk.map((r) => r[1]).join("; ") || "No concerns"}</td></tr>`; }).join("") || `<tr><td colspan="8" class="empty">You already own everything the top 6 share.</td></tr>`}</tbody>
+        </table></div>
+      </div>
+      <p class="note">How this works: projections blend each player's form and points per game, then adjust per fixture (bookmaker clean sheet and scoring odds for GW${gwNext}, FPL difficulty after that), for injury news and expected return dates, and for minutes played over the last 3 gameweeks${Object.keys(FA.summ).length ? "" : " (* season average: recent minutes load on the live site)"}. Injured, suspended, doubtful or rotation-risk players are never recommended. ${FA.odds ? "" : "Bookmaker odds weren't available, so fixture difficulty is used throughout. "}Projections are estimates; check team news before the deadline.</p>`;
+  }
+  const POSN = (e) => D.positions[String(e.element_type)];
   // Overall rank change between the latest gameweek and the one before it.
   function rankMove(m) {
     const h = m.history; if (h.length < 2) return "";
