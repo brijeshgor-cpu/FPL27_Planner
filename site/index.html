@@ -1,0 +1,675 @@
+<title>FC27 Planner</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@500;600;700&family=Inter:wght@400;500;600;700&display=swap">
+<style>
+/* Layout: sticky scoreboard bar, then tabbed views (Overview / League / Planner / Fixtures) in one 1180px column. */
+:root {
+  --bg: #f3f6f2;
+  --surface: #ffffff;
+  --surface-2: #e8eee7;
+  --line: #d3ddd2;
+  --ink: #15211a;
+  --muted: #5d6c62;
+  --accent: #1d7a4b;
+  --accent-ink: #ffffff;
+  --rival: #c2721a;
+  --good: #1d7a4b;
+  --bad: #b8382f;
+  --warn: #b7831a;
+  --pitch-a: #2f7d4f;
+  --pitch-b: #2a7349;
+  --pitch-line: rgba(255,255,255,.35);
+  --card-on-pitch: #ffffff;
+  --card-on-pitch-ink: #15211a;
+  --fdr1: #1f8a52; --fdr1-ink: #ffffff;
+  --fdr2: #7cc69a; --fdr2-ink: #0f2a1b;
+  --fdr3: #dfe4dd; --fdr3-ink: #2a332d;
+  --fdr4: #e98a78; --fdr4-ink: #3b0f09;
+  --fdr5: #a8261d; --fdr5-ink: #ffffff;
+  --chart-other: #b8c5b9;
+  --font-display: "Barlow Condensed", "Arial Narrow", "Roboto Condensed", system-ui, sans-serif;
+  --font-body: "Inter", system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+  --r: 10px;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --bg: #0e1411; --surface: #161f1a; --surface-2: #1d2922; --line: #2a3830; --ink: #e6eee8; --muted: #93a499;
+    --accent: #45c283; --accent-ink: #07140d; --rival: #f0a04b; --good: #45c283; --bad: #f0786d; --warn: #e3b55a;
+    --pitch-a: #1d4f33; --pitch-b: #1a482e; --pitch-line: rgba(255,255,255,.18); --card-on-pitch: #0f1813; --card-on-pitch-ink: #e6eee8;
+    --fdr1: #2c9d61; --fdr1-ink: #ffffff; --fdr2: #2d6a46; --fdr2-ink: #dff3e7; --fdr3: #34403a; --fdr3-ink: #d4ddd7;
+    --fdr4: #8a3c30; --fdr4-ink: #ffe3dd; --fdr5: #6e1913; --fdr5-ink: #ffd9d4; --chart-other: #3a4a40;
+    color-scheme: dark;
+  }
+}
+:root[data-theme="dark"] {
+  --bg: #0e1411; --surface: #161f1a; --surface-2: #1d2922; --line: #2a3830; --ink: #e6eee8; --muted: #93a499;
+  --accent: #45c283; --accent-ink: #07140d; --rival: #f0a04b; --good: #45c283; --bad: #f0786d; --warn: #e3b55a;
+  --pitch-a: #1d4f33; --pitch-b: #1a482e; --pitch-line: rgba(255,255,255,.18); --card-on-pitch: #0f1813; --card-on-pitch-ink: #e6eee8;
+  --fdr1: #2c9d61; --fdr1-ink: #ffffff; --fdr2: #2d6a46; --fdr2-ink: #dff3e7; --fdr3: #34403a; --fdr3-ink: #d4ddd7;
+  --fdr4: #8a3c30; --fdr4-ink: #ffe3dd; --fdr5: #6e1913; --fdr5-ink: #ffd9d4; --chart-other: #3a4a40;
+  color-scheme: dark;
+}
+* { box-sizing: border-box; }
+body { background: var(--bg); color: var(--ink); font-family: var(--font-body); font-size: 14px; line-height: 1.5; font-variant-numeric: tabular-nums; }
+body::before { content: ""; position: fixed; inset: 0 0 auto; height: env(safe-area-inset-top, 0px); z-index: 10; background: var(--surface); }
+h1, h2, h3 { font-family: var(--font-display); font-weight: 700; letter-spacing: .01em; margin: 0; text-wrap: balance; line-height: 1.1; }
+h2 { font-size: 1.6rem; }
+h3 { font-size: 1.15rem; font-weight: 600; }
+a { color: var(--accent); }
+button { font: inherit; color: inherit; cursor: pointer; }
+:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+.wrap { max-width: 1180px; margin: 0 auto; padding-left: max(16px, env(safe-area-inset-left, 0px)); padding-right: max(16px, env(safe-area-inset-right, 0px)); }
+
+/* Scoreboard bar */
+.bar { position: sticky; top: env(safe-area-inset-top, 0px); z-index: 5; background: var(--surface); border-bottom: 1px solid var(--line); }
+.bar-inner { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 20px; padding-block: 10px; }
+.brand { display: flex; align-items: baseline; gap: 10px; min-width: 0; }
+.brand h1 { font-size: 1.7rem; }
+.brand .who { color: var(--muted); font-size: .85rem; }
+.deadline { margin-left: auto; display: flex; align-items: baseline; gap: 8px; }
+.deadline .lbl { font-size: .72rem; text-transform: uppercase; letter-spacing: .08em; color: var(--muted); }
+.deadline .cd { font-family: var(--font-display); font-size: 1.35rem; font-weight: 600; }
+.tabs { display: flex; gap: 4px; overflow-x: auto; scrollbar-width: none; }
+.tabs a { text-decoration: none; color: var(--muted); font-weight: 600; padding: 8px 12px; border-bottom: 3px solid transparent; white-space: nowrap; }
+.tabs a[aria-current="page"] { color: var(--ink); border-bottom-color: var(--accent); }
+main { padding-block: 20px 48px; display: grid; gap: 28px; }
+section.view { display: grid; gap: 28px; }
+.fresh { font-size: .78rem; color: var(--muted); }
+
+/* KPI strip */
+.kpis { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 1px; background: var(--line); border: 1px solid var(--line); border-radius: var(--r); overflow: hidden; }
+.kpi { background: var(--surface); padding: 14px 16px; display: grid; gap: 2px; align-content: start; }
+.kpi .k { font-size: .72rem; text-transform: uppercase; letter-spacing: .08em; color: var(--muted); }
+.kpi .v { font-family: var(--font-display); font-size: 2rem; font-weight: 700; line-height: 1.05; }
+.kpi .s { font-size: .8rem; color: var(--muted); }
+.up { color: var(--good); } .down { color: var(--bad); }
+
+.grid-2 { display: grid; grid-template-columns: minmax(0, 1.25fr) minmax(0, 1fr); gap: 24px; align-items: start; }
+@media (max-width: 900px) { .grid-2 { grid-template-columns: minmax(0, 1fr); } }
+.panel { background: var(--surface); border: 1px solid var(--line); border-radius: var(--r); padding: 16px; display: grid; gap: 12px; min-width: 0; }
+.panel-head { display: flex; flex-wrap: wrap; align-items: baseline; justify-content: space-between; gap: 6px 12px; }
+.note { font-size: .8rem; color: var(--muted); margin: 0; }
+
+/* Pitch */
+.pitch { border-radius: var(--r); padding: 14px 8px; display: grid; gap: 14px;
+  background: repeating-linear-gradient(180deg, var(--pitch-a) 0 44px, var(--pitch-b) 44px 88px);
+  position: relative; overflow: hidden; }
+.pitch::before { content: ""; position: absolute; inset: 10px; border: 1.5px solid var(--pitch-line); border-radius: 4px; pointer-events: none; }
+.pitch::after { content: ""; position: absolute; left: 50%; top: 10px; width: 120px; height: 46px; transform: translateX(-50%); border: 1.5px solid var(--pitch-line); border-top: 0; pointer-events: none; }
+.row { display: flex; justify-content: center; gap: 6px; flex-wrap: wrap; position: relative; z-index: 1; }
+.bench { background: var(--surface-2); border-radius: var(--r); padding: 10px 8px; }
+.bench .row { justify-content: center; }
+.bench-lbl { font-size: .7rem; text-transform: uppercase; letter-spacing: .08em; color: var(--muted); text-align: center; margin-bottom: 6px; }
+.pc { width: 92px; background: var(--card-on-pitch); color: var(--card-on-pitch-ink); border-radius: 8px; padding: 6px 4px 5px; text-align: center; display: grid; gap: 2px; position: relative; box-shadow: 0 1px 2px rgba(0,0,0,.18); }
+.pc .nm { font-weight: 600; font-size: .8rem; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.pc .meta { font-size: .68rem; color: var(--muted); }
+.pc .pts { font-family: var(--font-display); font-size: 1.15rem; font-weight: 700; line-height: 1; }
+.pc .fx { font-size: .66rem; border-radius: 4px; padding: 1px 3px; font-weight: 600; }
+.badge { position: absolute; top: -6px; right: -4px; width: 20px; height: 20px; border-radius: 50%; font-size: .68rem; font-weight: 700; display: grid; place-items: center; background: var(--ink); color: var(--bg); }
+.badge.vc { background: var(--muted); }
+.flag { position: absolute; top: -6px; left: -4px; width: 18px; height: 18px; border-radius: 50%; font-size: .7rem; font-weight: 700; display: grid; place-items: center; background: var(--warn); color: #1b1200; }
+.flag.out { background: var(--bad); color: #fff; }
+@media (max-width: 480px) { .pc { width: 70px; } .pc .nm { font-size: .72rem; } }
+
+.fdr1 { background: var(--fdr1); color: var(--fdr1-ink); } .fdr2 { background: var(--fdr2); color: var(--fdr2-ink); }
+.fdr3 { background: var(--fdr3); color: var(--fdr3-ink); } .fdr4 { background: var(--fdr4); color: var(--fdr4-ink); }
+.fdr5 { background: var(--fdr5); color: var(--fdr5-ink); } .fdr0 { background: transparent; color: var(--muted); }
+
+/* Insights */
+.insights { list-style: none; margin: 0; padding: 0; display: grid; gap: 10px; }
+.insights li { display: grid; grid-template-columns: 8px minmax(0, 1fr); gap: 12px; align-items: stretch; }
+.insights li::before { content: ""; border-radius: 4px; background: var(--line); }
+.insights li.warn::before { background: var(--warn); } .insights li.bad::before { background: var(--bad); } .insights li.good::before { background: var(--good); } .insights li.info::before { background: var(--rival); }
+.insights .t { font-weight: 600; }
+.insights .d { color: var(--muted); font-size: .86rem; }
+
+/* Tables */
+.tbl-wrap { overflow-x: auto; border: 1px solid var(--line); border-radius: var(--r); background: var(--surface); }
+table { border-collapse: collapse; width: 100%; font-size: .86rem; }
+th, td { padding: 8px 10px; text-align: left; border-bottom: 1px solid var(--line); white-space: nowrap; }
+th { font-size: .7rem; text-transform: uppercase; letter-spacing: .07em; color: var(--muted); font-weight: 600; background: var(--surface-2); position: sticky; top: 0; }
+td.n, th.n { text-align: right; }
+tr:last-child td { border-bottom: 0; }
+tr.me td { background: color-mix(in srgb, var(--accent) 12%, transparent); font-weight: 600; }
+tr.rv td { background: color-mix(in srgb, var(--rival) 12%, transparent); }
+tbody tr.click { cursor: pointer; }
+tbody tr.click:hover td { background: var(--surface-2); }
+.mgr { display: grid; line-height: 1.25; }
+.mgr small { color: var(--muted); font-weight: 400; }
+.chips { display: flex; gap: 3px; }
+.chip { font-size: .64rem; font-weight: 700; padding: 1px 5px; border-radius: 4px; border: 1px solid var(--line); color: var(--muted); }
+.chip.on { background: var(--ink); color: var(--bg); border-color: var(--ink); }
+.chip.used { text-decoration: line-through; opacity: .55; }
+.pill { display: inline-block; font-size: .7rem; font-weight: 700; padding: 1px 7px; border-radius: 999px; background: var(--surface-2); color: var(--muted); }
+.pill.acc { background: var(--accent); color: var(--accent-ink); }
+.strip { display: flex; gap: 2px; }
+.strip span { min-width: 34px; text-align: center; font-size: .68rem; font-weight: 600; border-radius: 3px; padding: 2px 2px; }
+
+/* Chart */
+.chart svg { width: 100%; height: auto; display: block; }
+.chart .grid { stroke: var(--line); stroke-width: 1; }
+.chart .zero { stroke: var(--muted); stroke-width: 1; stroke-dasharray: 3 3; }
+.chart .ax { fill: var(--muted); font-size: 11px; font-family: var(--font-body); }
+.chart .other { stroke: var(--chart-other); stroke-width: 1.2; fill: none; }
+.chart .mine { stroke: var(--accent); stroke-width: 3; fill: none; }
+.chart .riv { stroke: var(--rival); stroke-width: 2.5; fill: none; }
+.chart .lbl-me { fill: var(--accent); font-weight: 700; font-size: 12px; font-family: var(--font-body); }
+.chart .lbl-rv { fill: var(--rival); font-weight: 700; font-size: 12px; font-family: var(--font-body); }
+.legend { display: flex; flex-wrap: wrap; gap: 14px; font-size: .8rem; color: var(--muted); }
+.legend i { display: inline-block; width: 14px; height: 3px; border-radius: 2px; vertical-align: middle; margin-right: 6px; }
+
+/* Compare */
+.cmp { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 12px; }
+@media (max-width: 700px) { .cmp { grid-template-columns: minmax(0, 1fr); } }
+.cmp h3 { font-size: 1rem; margin-bottom: 6px; }
+.plist { list-style: none; margin: 0; padding: 0; display: grid; gap: 4px; font-size: .85rem; }
+.plist li { display: flex; justify-content: space-between; gap: 8px; border-bottom: 1px dashed var(--line); padding-bottom: 3px; }
+.plist li span:last-child { color: var(--muted); }
+
+select, input[type="search"] { font: inherit; color: var(--ink); background: var(--surface); border: 1px solid var(--line); border-radius: 8px; padding: 6px 10px; max-width: 100%; }
+.btn { border: 1px solid var(--line); background: var(--surface); border-radius: 8px; padding: 6px 12px; font-weight: 600; }
+.btn.pri { background: var(--accent); color: var(--accent-ink); border-color: var(--accent); }
+.btn.sm { padding: 3px 9px; font-size: .78rem; }
+.btn:disabled { opacity: .45; cursor: not-allowed; }
+.controls { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
+
+/* Planner */
+.squad-list { display: grid; gap: 4px; }
+.sq { display: grid; grid-template-columns: 38px minmax(0, 1fr) auto; gap: 8px; align-items: center; padding: 6px 8px; border-radius: 8px; border: 1px solid transparent; }
+.sq:hover { background: var(--surface-2); }
+.sq.sel { border-color: var(--accent); background: color-mix(in srgb, var(--accent) 10%, transparent); }
+.sq.new { background: color-mix(in srgb, var(--rival) 12%, transparent); }
+.sq .pos { font-size: .7rem; font-weight: 700; color: var(--muted); }
+.sq .nm { font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.sq .sub { font-size: .75rem; color: var(--muted); }
+.plan-sum { display: grid; grid-template-columns: repeat(auto-fit, minmax(110px, 1fr)); gap: 8px; }
+.plan-sum div { background: var(--surface-2); border-radius: 8px; padding: 8px 10px; }
+.plan-sum .k { font-size: .7rem; text-transform: uppercase; letter-spacing: .07em; color: var(--muted); }
+.plan-sum .v { font-family: var(--font-display); font-size: 1.4rem; font-weight: 700; }
+.moves { list-style: none; padding: 0; margin: 0; display: grid; gap: 6px; }
+.moves li { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; justify-content: space-between; background: var(--surface-2); border-radius: 8px; padding: 6px 10px; }
+.empty { color: var(--muted); font-size: .86rem; padding: 10px 0; }
+.err { background: var(--surface); border: 1px solid var(--bad); color: var(--ink); border-radius: var(--r); padding: 16px; }
+@media (prefers-reduced-motion: reduce) { * { transition: none !important; animation: none !important; } }
+</style>
+
+<header class="bar">
+  <div class="wrap bar-inner">
+    <div class="brand"><h1 id="teamName">FC27</h1><span class="who" id="who">Bobby Gor · Bring It On!</span></div>
+    <div class="deadline"><span class="lbl" id="dlLbl">Next deadline</span><span class="cd" id="countdown">–</span></div>
+  </div>
+  <nav class="wrap tabs" aria-label="Views">
+    <a href="#overview" data-v="overview">Overview</a>
+    <a href="#league" data-v="league">Mini-league</a>
+    <a href="#planner" data-v="planner">Transfer planner</a>
+    <a href="#fixtures" data-v="fixtures">Fixtures</a>
+  </nav>
+</header>
+
+<main class="wrap" id="app">
+  <p class="empty">Loading the latest FPL data…</p>
+</main>
+
+<script>
+(function () {
+  "use strict";
+  const $ = (s, r = document) => r.querySelector(s);
+  const esc = (s) => String(s ?? "").replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
+  const price = (c) => (c / 10).toFixed(1);
+  const fmt = (n) => Number(n).toLocaleString("en-GB");
+  const sign = (n) => (n > 0 ? "+" + n : String(n));
+  const store = {
+    get(k, d) { try { const v = localStorage.getItem("fc27:" + k); return v == null ? d : JSON.parse(v); } catch (e) { return d; } },
+    set(k, v) { try { localStorage.setItem("fc27:" + k, JSON.stringify(v)); } catch (e) { /* storage unavailable */ } },
+  };
+  const CHIP_LABEL = { wildcard: "WC", freehit: "FH", bboost: "BB", "3xc": "TC", manager: "AM" };
+  const FDR_MULT = { 1: 1.25, 2: 1.1, 3: 1.0, 4: 0.85, 5: 0.7 };
+
+  let D, E, T, me, myM, gwCur, gwNext, members, own, eo, capCount, teamFx, view;
+
+  fetch("data.json", { cache: "no-store" })
+    .then((r) => { if (!r.ok) throw new Error("data.json returned " + r.status); return r.json(); })
+    .then((d) => { D = d; prepare(); route(); window.addEventListener("hashchange", route); tick(); setInterval(tick, 1000); })
+    .catch((e) => { $("#app").innerHTML = `<div class="err"><strong>Couldn't load the FPL data.</strong><br>${esc(e.message)}. Reload the page; if it keeps failing, the data refresh job may not have run yet.</div>`; });
+
+  // ---------- data prep ----------
+  function prepare() {
+    const F = D.element_fields;
+    E = {};
+    D.elements.forEach((row) => { const o = {}; F.forEach((f, i) => (o[f] = row[i])); E[o.id] = o; });
+    T = {}; D.teams.forEach((t) => (T[t.id] = t));
+    me = D.me; myM = D.managers[me];
+    gwCur = D.current_gw; gwNext = D.next_gw || gwCur;
+    members = D.standings.map((s) => ({ ...s, m: D.managers[s.entry] })).filter((x) => x.m);
+
+    // league ownership, effective ownership and captaincy (current GW picks)
+    own = {}; eo = {}; capCount = {};
+    const withPicks = members.filter((x) => x.m.picks);
+    withPicks.forEach((x) => x.m.picks.picks.forEach(([el, , mult, cap]) => {
+      own[el] = (own[el] || 0) + 1; eo[el] = (eo[el] || 0) + mult; if (cap) capCount[el] = (capCount[el] || 0) + 1;
+    }));
+    const n = withPicks.length || 1;
+    Object.keys(own).forEach((k) => { own[k] = own[k] / n; eo[k] = eo[k] / n; });
+    D._n = n;
+
+    // fixtures by team and GW
+    teamFx = {};
+    D.teams.forEach((t) => (teamFx[t.id] = {}));
+    D.fixtures.forEach(([id, ev, h, a, hd, ad, ko, fin, st, hs, as]) => {
+      if (!ev) return;
+      (teamFx[h][ev] ||= []).push({ opp: a, home: true, fdr: hd, fin, hs, as });
+      (teamFx[a][ev] ||= []).push({ opp: h, home: false, fdr: ad, fin, hs: as, as: hs });
+    });
+    $("#teamName").textContent = D.entry.name;
+    $("#who").textContent = `${D.entry.player_first_name} ${D.entry.player_last_name} · ${D.league.name}`;
+  }
+
+  const squadOf = (m) => (m && m.picks ? m.picks.picks : []);
+  const pos = (el) => D.positions[String(E[el]?.element_type)] || "";
+  const tShort = (id) => T[id]?.short || "?";
+  function fxLabel(f) { const s = tShort(f.opp); return f.home ? s.toUpperCase() + " (H)" : s.toUpperCase() + " (A)"; }
+  function nextFx(teamId, from = gwNext) {
+    for (let g = from; g <= 38; g++) { const l = teamFx[teamId][g]; if (l && l.length) return { gw: g, list: l }; }
+    return null;
+  }
+  function fxStrip(teamId, from, n) {
+    let h = '<span class="strip">';
+    for (let g = from; g < from + n && g <= 38; g++) {
+      const l = teamFx[teamId][g] || [];
+      if (!l.length) h += `<span class="fdr0" title="GW${g}: no fixture">—</span>`;
+      else l.forEach((f) => (h += `<span class="fdr${f.fdr}" title="GW${g}">${esc(f.home ? tShort(f.opp) : tShort(f.opp).toLowerCase())}</span>`));
+    }
+    return h + "</span>";
+  }
+  function availability(p) {
+    if (p.chance_of_playing_next_round == null) return p.status === "a" ? 1 : p.status === "d" ? 0.75 : p.status === "i" || p.status === "s" || p.status === "u" ? 0 : 1;
+    return p.chance_of_playing_next_round / 100;
+  }
+  // Planner projection: blended form/points-per-game, scaled by fixture difficulty per fixture, over `h` gameweeks.
+  function project(p, h) {
+    const rate = (parseFloat(p.form) + parseFloat(p.points_per_game)) / 2 || 0;
+    const a = availability(p);
+    let tot = 0;
+    for (let g = gwNext, i = 0; i < h && g <= 38; g++, i++) {
+      const l = teamFx[p.team][g] || [];
+      const av = i < 2 ? a : Math.max(a, 0.85);
+      l.forEach((f) => (tot += rate * FDR_MULT[f.fdr] * av));
+    }
+    return tot;
+  }
+  function chipsLeft(m) {
+    const used = m.chips;
+    const g = gwNext;
+    return D.chips_def
+      .filter(([, s, e]) => g >= s && g <= e)
+      .map(([name, s, e]) => ({ name, used: used.some(([u, ev]) => u === name && ev >= s && ev <= e) }));
+  }
+  // Free transfers for the next deadline, rebuilt from transfer history (estimate: rollover capped at 5, WC/FH keep banked transfers).
+  function freeTransfers(m, startEv) {
+    let ft = 1;
+    const chipAt = {}; m.chips.forEach(([n, ev]) => (chipAt[ev] = n));
+    m.history.forEach(([ev, , , tr]) => {
+      if (ev <= startEv) { ft = 1; return; }
+      if (chipAt[ev] === "wildcard" || chipAt[ev] === "freehit") ft = Math.min(5, ft + 1);
+      else ft = Math.min(5, Math.max(0, ft - tr) + 1);
+    });
+    return ft;
+  }
+  const lastHist = (m) => m.history[m.history.length - 1] || [0, 0, 0, 0, 0, 0, 0, 0, 0];
+  const seasonSum = (m, idx) => m.history.reduce((a, r) => a + r[idx], 0);
+
+  // ---------- routing ----------
+  function route() {
+    const v = (location.hash || "#overview").slice(1);
+    view = ["overview", "league", "planner", "fixtures"].includes(v) ? v : "overview";
+    document.querySelectorAll(".tabs a").forEach((a) => { if (a.dataset.v === view) a.setAttribute("aria-current", "page"); else a.removeAttribute("aria-current"); });
+    ({ overview: renderOverview, league: renderLeague, planner: renderPlanner, fixtures: renderFixtures })[view]();
+  }
+
+  function tick() {
+    const ev = D.events.find((e) => e.id === gwNext);
+    if (!ev) return;
+    const ms = new Date(ev.deadline) - Date.now();
+    $("#dlLbl").textContent = `GW${ev.id} deadline`;
+    if (ms <= 0) { $("#countdown").textContent = "passed"; return; }
+    const d = Math.floor(ms / 864e5), h = Math.floor((ms % 864e5) / 36e5), mi = Math.floor((ms % 36e5) / 6e4);
+    $("#countdown").textContent = d > 0 ? `${d}d ${h}h ${mi}m` : `${h}h ${mi}m ${Math.floor((ms % 6e4) / 1000)}s`;
+  }
+  function freshness() {
+    const mins = Math.round((Date.now() - new Date(D.generated_at)) / 6e4);
+    const when = mins < 1 ? "just now" : mins < 60 ? `${mins} min ago` : mins < 1440 ? `${Math.round(mins / 60)} h ago` : new Date(D.generated_at).toLocaleString("en-GB");
+    return `<p class="fresh">Data from the official FPL API, updated ${when}. GW${gwCur} ${D.events.find((e) => e.id === gwCur)?.finished ? "finished" : "in progress"}.</p>`;
+  }
+
+  // ---------- overview ----------
+  function renderOverview() {
+    const sorted = [...members].sort((a, b) => b.total - a.total);
+    const meRow = members.find((x) => x.entry === me);
+    const myRank = meRow ? meRow.rank : "–";
+    const leader = sorted[0];
+    const above = sorted.filter((x) => x.total > meRow.total).pop();
+    const lh = lastHist(myM);
+    const avgGw = Math.round(members.reduce((a, x) => a + x.event_total, 0) / members.length);
+    const gwRank = 1 + members.filter((x) => x.event_total > meRow.event_total).length;
+    const ft = freeTransfers(myM, D.entry.started_event || 1);
+    const cl = chipsLeft(myM);
+    const ev = D.events.find((e) => e.id === gwCur);
+    const move = meRow.last_rank ? meRow.last_rank - meRow.rank : 0;
+
+    $("#app").innerHTML = `
+    <section class="view">
+      <div class="kpis">
+        <div class="kpi"><span class="k">League position</span><span class="v">${myRank}<small style="font-size:1rem;color:var(--muted)">/${members.length}</small></span><span class="s ${move > 0 ? "up" : move < 0 ? "down" : ""}">${move > 0 ? "▲ " + move : move < 0 ? "▼ " + -move : "No change"} since last GW</span></div>
+        <div class="kpi"><span class="k">Total points</span><span class="v">${fmt(meRow.total)}</span><span class="s">${leader.entry === me ? "You lead the league" : `${leader.total - meRow.total} behind ${esc(leader.player_name)}`}</span></div>
+        <div class="kpi"><span class="k">GW${gwCur} points</span><span class="v">${meRow.event_total}</span><span class="s">League avg ${avgGw} · ${ordinal(gwRank)} this GW${ev?.avg ? ` · FPL avg ${ev.avg}` : ""}</span></div>
+        <div class="kpi"><span class="k">Overall rank</span><span class="v">${fmt(D.entry.summary_overall_rank || 0)}</span><span class="s">${above ? `${above.total - meRow.total} pts to ${ordinal(above.rank)} in league` : "Top of the league"}</span></div>
+        <div class="kpi"><span class="k">Bank · Value</span><span class="v">£${price(myM.picks?.bank ?? lh[8])}m</span><span class="s">Squad value £${price(myM.picks?.value ?? lh[7])}m</span></div>
+        <div class="kpi"><span class="k">Free transfers</span><span class="v">${ft}</span><span class="s">Estimate for GW${gwNext} · ${cl.filter((c) => !c.used).map((c) => CHIP_LABEL[c.name] || c.name).join(" ") || "no chips"} left</span></div>
+      </div>
+      ${freshness()}
+      <div class="grid-2">
+        <div class="panel">
+          <div class="panel-head"><h2>Your squad</h2><span class="note">GW${gwCur} points · next fixture · % of the league who own him</span></div>
+          ${pitchHTML(myM)}
+        </div>
+        <div class="panel">
+          <div class="panel-head"><h2>What the league tells you</h2></div>
+          <ul class="insights">${insights().map((i) => `<li class="${i.k}"><div><div class="t">${i.t}</div><div class="d">${i.d}</div></div></li>`).join("")}</ul>
+        </div>
+      </div>
+    </section>`;
+  }
+  function ordinal(n) { const s = ["th", "st", "nd", "rd"], v = n % 100; return n + (s[(v - 20) % 10] || s[v] || s[0]); }
+
+  function pitchHTML(m) {
+    const picks = squadOf(m);
+    if (!picks.length) return `<p class="empty">No picks available yet.</p>`;
+    const xi = picks.filter((p) => p[1] <= 11), bench = picks.filter((p) => p[1] > 11);
+    const card = (p) => {
+      const [el, , mult, cap, vc] = p; const e = E[el]; if (!e) return "";
+      const nf = nextFx(e.team); const f = nf?.list[0];
+      const a = availability(e);
+      const flag = a < 1 ? `<span class="flag ${a === 0 ? "out" : ""}" title="${esc(e.news)}">!</span>` : "";
+      const pts = e.event_points * (mult || 1);
+      return `<div class="pc" title="${esc(e.first_name + " " + e.second_name)} · £${price(e.now_cost)}m${e.news ? " · " + esc(e.news) : ""}">
+        ${cap ? '<span class="badge">C</span>' : vc ? '<span class="badge vc">V</span>' : ""}${flag}
+        <span class="nm">${esc(e.web_name)}</span>
+        <span class="pts">${mult === 0 && p[1] <= 11 ? "–" : pts}</span>
+        <span class="fx fdr${f ? f.fdr : 0}">${f ? fxLabel(f) + (nf.list.length > 1 ? " +1" : "") : "No fixture"}</span>
+        <span class="meta">${Math.round((own[el] || 0) * 100)}% league</span>
+      </div>`;
+    };
+    const rows = [1, 2, 3, 4].map((t) => `<div class="row">${xi.filter((p) => E[p[0]]?.element_type === t).map(card).join("")}</div>`).join("");
+    return `<div class="pitch">${rows}</div><div class="bench"><div class="bench-lbl">Bench</div><div class="row">${bench.map(card).join("")}</div></div>`;
+  }
+
+  function insights() {
+    const out = [];
+    const mine = new Set(squadOf(myM).map((p) => p[0]));
+    const meRow = members.find((x) => x.entry === me);
+    const sorted = [...members].sort((a, b) => b.total - a.total);
+    const n = D._n;
+
+    // gap to people around you
+    const above = sorted.filter((x) => x.total > meRow.total);
+    const near = sorted.filter((x) => x.entry !== me && Math.abs(x.total - meRow.total) <= 15);
+    if (above.length) {
+      const nxt = above[above.length - 1];
+      out.push({ k: "info", t: `${nxt.total - meRow.total} pts to climb to ${ordinal(nxt.rank)}`, d: `${esc(nxt.player_name)} (${esc(nxt.entry_name)}) is the next manager above you. The leader is ${sorted[0].total - meRow.total} pts clear.` + (near.length ? ` ${near.length} manager${near.length > 1 ? "s are" : " is"} within 15 pts either side of you.` : "") });
+    }
+
+    // template players you don't own
+    const threats = Object.keys(own).map(Number).filter((el) => !mine.has(el) && own[el] >= 0.4 && E[el])
+      .sort((a, b) => eo[b] - eo[a]).slice(0, 5);
+    if (threats.length) out.push({ k: "bad", t: "League template players you don't own", d: threats.map((el) => `<strong>${esc(E[el].web_name)}</strong> ${Math.round(own[el] * 100)}% owned (form ${E[el].form})`).join(", ") + ". Every point they score costs you ground on most of the league." });
+
+    // differentials you own
+    const diffs = [...mine].filter((el) => (own[el] || 0) <= 0.2 && E[el]).sort((a, b) => parseFloat(E[b].form) - parseFloat(E[a].form));
+    if (diffs.length) out.push({ k: "good", t: `Your ${diffs.length} differential${diffs.length > 1 ? "s" : ""}`, d: diffs.map((el) => `<strong>${esc(E[el].web_name)}</strong> ${Math.round((own[el] || 0) * 100)}%`).join(", ") + ". These are your best chance to gain on rivals, so keep them if their fixtures hold up." });
+
+    // captaincy
+    const caps = Object.entries(capCount).sort((a, b) => b[1] - a[1]);
+    const myCap = squadOf(myM).find((p) => p[3]);
+    if (caps.length) {
+      const [topEl, topN] = caps[0];
+      const mineN = myCap ? capCount[myCap[0]] || 0 : 0;
+      out.push({ k: "info", t: `GW${gwCur} captaincy: ${esc(E[topEl]?.web_name)} on ${topN} of ${n} teams`, d: myCap ? `You captained ${esc(E[myCap[0]]?.web_name)}${myCap[0] == topEl ? ", along with most of the league." : `, along with ${mineN - 1} other manager${mineN - 1 === 1 ? "" : "s"}.`} Other picks: ${caps.slice(1, 4).map(([el, c]) => `${esc(E[el]?.web_name)} (${c})`).join(", ") || "none"}.` : "" });
+    }
+
+    // injuries and doubts
+    const flagged = [...mine].filter((el) => E[el] && availability(E[el]) < 1);
+    if (flagged.length) out.push({ k: "warn", t: `${flagged.length} of your players flagged`, d: flagged.map((el) => `<strong>${esc(E[el].web_name)}</strong>: ${esc(E[el].news || "doubtful")}`).join("; ") });
+
+    // tough fixture runs
+    const tough = [...mine].filter((el) => E[el] && squadOf(myM).find((p) => p[0] === el)[1] <= 11).map((el) => ({ el, f: avgFdr(E[el].team, gwNext, 3) })).filter((x) => x.f >= 3.67).sort((a, b) => b.f - a.f);
+    if (tough.length) out.push({ k: "warn", t: "Starters facing a tough next three", d: tough.map((x) => `<strong>${esc(E[x.el].web_name)}</strong> (avg difficulty ${x.f.toFixed(1)})`).join(", ") + ". Check the Transfer planner for replacements." });
+
+    // chips
+    const myLeft = chipsLeft(myM).filter((c) => !c.used).length;
+    const rivalsMoreChips = sorted.filter((x) => x.entry !== me && x.total >= meRow.total - 30 && chipsLeft(x.m).filter((c) => !c.used).length > myLeft);
+    if (rivalsMoreChips.length) out.push({ k: "warn", t: `${rivalsMoreChips.length} nearby rival${rivalsMoreChips.length > 1 ? "s have" : " has"} more chips left than you`, d: rivalsMoreChips.slice(0, 6).map((x) => `${esc(x.player_name)} (${chipsLeft(x.m).filter((c) => !c.used).map((c) => CHIP_LABEL[c.name]).join(" ")})`).join(", ") + `. You have ${myLeft} left before GW${D.chips_def.find(([, s, e]) => gwNext >= s && gwNext <= e)?.[2] ?? "?"}. Expect them to gain when they use them.` });
+
+    // bench & hits
+    const benchMine = seasonSum(myM, 5), hitsMine = seasonSum(myM, 4);
+    const benchAvg = Math.round(members.reduce((a, x) => a + seasonSum(x.m, 5), 0) / members.length);
+    const hitsAvg = Math.round(members.reduce((a, x) => a + seasonSum(x.m, 4), 0) / members.length);
+    out.push({ k: benchMine > benchAvg * 1.15 ? "warn" : "good", t: `Bench points: ${benchMine} this season (league avg ${benchAvg})`, d: `Hits taken: ${hitsMine ? "−" + hitsMine : "none"} (league avg ${hitsAvg ? "−" + hitsAvg : "0"}). ${benchMine > benchAvg * 1.15 ? "Points are being left on your bench more than most; rethink the order or the fourth defender spot." : "You're using your squad as well as or better than most of the league."}` });
+    return out;
+  }
+  function avgFdr(team, from, n) {
+    const l = []; for (let g = from; g < from + n && g <= 38; g++) (teamFx[team][g] || []).forEach((f) => l.push(f.fdr));
+    return l.length ? l.reduce((a, b) => a + b, 0) / l.length : 3;
+  }
+
+  // ---------- league ----------
+  function renderLeague() {
+    const sorted = [...members].sort((a, b) => a.rank - b.rank);
+    const meRow = members.find((x) => x.entry === me);
+    let rival = store.get("rival", null);
+    if (!members.some((x) => x.entry === rival) || rival === me) {
+      const above = sorted.filter((x) => x.total > meRow.total);
+      rival = (above[above.length - 1] || sorted.find((x) => x.entry !== me)).entry;
+    }
+    const rows = sorted.map((x) => {
+      const mv = x.last_rank ? x.last_rank - x.rank : 0;
+      const cap = squadOf(x.m).find((p) => p[3]);
+      const chip = x.m.picks?.chip;
+      const cl = chipsLeft(x.m);
+      return `<tr class="click ${x.entry === me ? "me" : x.entry === rival ? "rv" : ""}" data-e="${x.entry}">
+        <td class="n">${x.rank} <span class="${mv > 0 ? "up" : mv < 0 ? "down" : ""}" style="font-size:.7rem">${mv > 0 ? "▲" + mv : mv < 0 ? "▼" + -mv : ""}</span></td>
+        <td><span class="mgr">${esc(x.entry_name)}<small>${esc(x.player_name)}</small></span></td>
+        <td class="n">${x.event_total}</td>
+        <td class="n"><strong>${fmt(x.total)}</strong></td>
+        <td class="n ${x.total - meRow.total > 0 ? "down" : x.total - meRow.total < 0 ? "up" : ""}">${x.entry === me ? "–" : sign(x.total - meRow.total)}</td>
+        <td>${cap ? esc(E[cap[0]]?.web_name) : "–"}${chip ? ` <span class="chip on">${CHIP_LABEL[chip] || esc(chip)}</span>` : ""}</td>
+        <td><span class="chips">${cl.map((c) => `<span class="chip ${c.used ? "used" : ""}" title="${c.used ? "Used" : "Available"}">${CHIP_LABEL[c.name] || c.name}</span>`).join("")}</span></td>
+        <td class="n">${seasonSum(x.m, 4) ? "−" + seasonSum(x.m, 4) : "0"}</td>
+        <td class="n">${seasonSum(x.m, 5)}</td>
+      </tr>`;
+    }).join("");
+
+    $("#app").innerHTML = `
+    <section class="view">
+      <div class="panel-head"><h2>${esc(D.league.name)}: standings</h2><span class="note">Tap a manager to compare squads with them</span></div>
+      <div class="tbl-wrap"><table>
+        <thead><tr><th class="n">#</th><th>Team</th><th class="n">GW${gwCur}</th><th class="n">Total</th><th class="n">vs you</th><th>Captain</th><th>Chips (this half)</th><th class="n">Hits</th><th class="n">Bench pts</th></tr></thead>
+        <tbody>${rows}</tbody></table></div>
+      ${freshness()}
+      <div class="panel">
+        <div class="panel-head"><h2>Season race</h2><span class="note">Points above or below the league average after each gameweek</span></div>
+        <div class="legend"><span><i style="background:var(--accent)"></i>You</span><span><i style="background:var(--rival)"></i>${esc(members.find((x) => x.entry === rival)?.player_name)}</span><span><i style="background:var(--chart-other)"></i>Rest of the league</span></div>
+        <div class="chart">${raceChart(rival)}</div>
+      </div>
+      <div class="panel" id="cmp"></div>
+    </section>`;
+    document.querySelectorAll("tbody tr.click").forEach((tr) => tr.addEventListener("click", () => {
+      const e = Number(tr.dataset.e); if (e === me) return; store.set("rival", e); renderLeague(); $("#cmp").scrollIntoView({ behavior: "smooth", block: "start" });
+    }));
+    renderCompare(rival);
+  }
+
+  function raceChart(rival) {
+    const gws = []; for (let g = 1; g <= gwCur; g++) gws.push(g);
+    const totals = {}; members.forEach((x) => { totals[x.entry] = {}; x.m.history.forEach((r) => (totals[x.entry][r[0]] = r[2])); });
+    const avg = {}; gws.forEach((g) => { const v = members.map((x) => totals[x.entry][g]).filter((v) => v != null); avg[g] = v.length ? v.reduce((a, b) => a + b, 0) / v.length : 0; });
+    const series = members.map((x) => ({ e: x.entry, pts: gws.filter((g) => totals[x.entry][g] != null).map((g) => [g, totals[x.entry][g] - avg[g]]) }));
+    let lo = 0, hi = 0; series.forEach((s) => s.pts.forEach(([, v]) => { lo = Math.min(lo, v); hi = Math.max(hi, v); }));
+    const steps = [5, 10, 20, 25, 50, 100, 200]; const step = steps.find((s) => (hi - lo) / s <= 6) || 200;
+    lo = Math.floor(lo / step) * step; hi = Math.ceil(hi / step) * step;
+    const W = 820, H = 320, L = 44, R = 110, Tp = 12, B = 28;
+    const x = (g) => L + ((g - 1) / Math.max(1, gwCur - 1)) * (W - L - R);
+    const y = (v) => Tp + (1 - (v - lo) / (hi - lo || 1)) * (H - Tp - B);
+    let g = "";
+    for (let v = lo; v <= hi; v += step) g += `<line class="${v === 0 ? "zero" : "grid"}" x1="${L}" x2="${W - R}" y1="${y(v)}" y2="${y(v)}"/><text class="ax" x="${L - 6}" y="${y(v) + 4}" text-anchor="end">${v > 0 ? "+" + v : v}</text>`;
+    gws.forEach((gw) => { if (gwCur <= 12 || gw % 2 === 1 || gw === gwCur) g += `<text class="ax" x="${x(gw)}" y="${H - 8}" text-anchor="middle">${gw}</text>`; });
+    const path = (s) => s.pts.map(([gw, v], i) => (i ? "L" : "M") + x(gw).toFixed(1) + "," + y(v).toFixed(1)).join("");
+    series.filter((s) => s.e !== me && s.e !== rival).forEach((s) => (g += `<path class="other" d="${path(s)}"/>`));
+    const sr = series.find((s) => s.e === rival), sm = series.find((s) => s.e === me);
+    const rn = members.find((x) => x.entry === rival)?.player_name.split(" ")[0] || "Rival";
+    if (sr) g += `<path class="riv" d="${path(sr)}"/>`;
+    if (sm) g += `<path class="mine" d="${path(sm)}"/>`;
+    const last = (s) => s && s.pts[s.pts.length - 1];
+    const pm = last(sm), pr = last(sr);
+    // end labels: nudge apart in pixel space when they would overlap
+    let ym = pm ? y(pm[1]) : 0, yr = pr ? y(pr[1]) : 0;
+    if (pm && pr && Math.abs(ym - yr) < 15) { const mid = (ym + yr) / 2, up = pm[1] >= pr[1]; ym = mid + (up ? -8 : 8); yr = mid + (up ? 8 : -8); }
+    const end = (p, ly, cls, colorVar, label) => `<circle cx="${x(p[0])}" cy="${y(p[1])}" r="4" style="fill:var(${colorVar})"/><text class="${cls}" x="${x(p[0]) + 8}" y="${ly + 4}">${esc(label)} ${p[1] > 0 ? "+" : ""}${Math.round(p[1])}</text>`;
+    if (pr) g += end(pr, yr, "lbl-rv", "--rival", rn);
+    if (pm) g += end(pm, ym, "lbl-me", "--accent", "You");
+    return `<svg viewBox="0 0 ${W} ${H}" role="img" aria-label="Season race chart">${g}</svg>`;
+  }
+
+  function renderCompare(rival) {
+    const r = members.find((x) => x.entry === rival); if (!r) return;
+    const mine = new Set(squadOf(myM).map((p) => p[0])), theirs = new Set(squadOf(r.m).map((p) => p[0]));
+    const onlyMe = [...mine].filter((e) => !theirs.has(e)), onlyThem = [...theirs].filter((e) => !mine.has(e)), both = [...mine].filter((e) => theirs.has(e));
+    const li = (el) => `<li><span>${esc(E[el]?.web_name)} <small style="color:var(--muted)">${pos(el)}</small></span><span>form ${E[el]?.form} · ${fxStrip(E[el].team, gwNext, 3)}</span></li>`;
+    const rc = chipsLeft(r.m).filter((c) => !c.used).map((c) => CHIP_LABEL[c.name]).join(" ") || "none";
+    const mc = chipsLeft(myM).filter((c) => !c.used).map((c) => CHIP_LABEL[c.name]).join(" ") || "none";
+    const meRow = members.find((x) => x.entry === me);
+    const rCap = squadOf(r.m).find((p) => p[3]);
+    $("#cmp").innerHTML = `
+      <div class="panel-head"><h2>You vs ${esc(r.player_name)}</h2>
+        <label class="controls"><span class="note">Rival</span><select id="rivalSel">${[...members].sort((a, b) => a.rank - b.rank).filter((x) => x.entry !== me).map((x) => `<option value="${x.entry}" ${x.entry === rival ? "selected" : ""}>${x.rank}. ${esc(x.player_name)}</option>`).join("")}</select></label></div>
+      <p class="note">${esc(r.entry_name)} · ${r.total - meRow.total > 0 ? r.total - meRow.total + " pts ahead of you" : r.total === meRow.total ? "level on points" : meRow.total - r.total + " pts behind you"} · their chips left: ${rc} · yours: ${mc} · their captain: ${rCap ? esc(E[rCap[0]]?.web_name) : "–"} · ${both.length} players in common</p>
+      <div class="cmp">
+        <div><h3>Only you have (${onlyMe.length})</h3><ul class="plist">${onlyMe.map(li).join("") || '<li class="empty">None</li>'}</ul></div>
+        <div><h3>Only they have (${onlyThem.length})</h3><ul class="plist">${onlyThem.map(li).join("") || '<li class="empty">None</li>'}</ul></div>
+        <div><h3>Shared (${both.length})</h3><ul class="plist">${both.map(li).join("") || '<li class="empty">None</li>'}</ul></div>
+      </div>`;
+    $("#rivalSel").addEventListener("change", (ev) => { store.set("rival", Number(ev.target.value)); renderLeague(); });
+  }
+
+  // ---------- planner ----------
+  let selOut = null;
+  function planState() { return store.get("plan:" + gwNext, []); }
+  function setPlan(p) { store.set("plan:" + gwNext, p); }
+  function plannedSquad() {
+    const plan = planState();
+    const sq = squadOf(myM).map((p) => ({ el: p[0], slot: p[1], orig: p[0] }));
+    plan.forEach(({ out, inn }) => { const s = sq.find((x) => x.el === out); if (s) s.el = inn; });
+    return sq;
+  }
+  function renderPlanner() {
+    const h = store.get("horizon", 5);
+    const plan = planState();
+    const sq = plannedSquad();
+    const bank0 = myM.picks?.bank ?? lastHist(myM)[8];
+    const bank = plan.reduce((b, { out, inn }) => b + (E[out]?.now_cost || 0) - (E[inn]?.now_cost || 0), bank0);
+    const ft = freeTransfers(myM, D.entry.started_event || 1);
+    const hits = Math.max(0, plan.length - ft) * 4;
+    const gain = plan.reduce((g, { out, inn }) => g + project(E[inn], h) - project(E[out], h), 0);
+    const teamCount = {}; sq.forEach((s) => (teamCount[E[s.el].team] = (teamCount[E[s.el].team] || 0) + 1));
+    const mine = new Set(sq.map((s) => s.el));
+
+    const sqHTML = [1, 2, 3, 4].map((t) => sq.filter((s) => E[s.el].element_type === t).map((s) => {
+      const e = E[s.el];
+      return `<div class="sq ${selOut === s.el ? "sel" : ""} ${s.el !== s.orig ? "new" : ""}">
+        <span class="pos">${D.positions[t]}</span>
+        <span style="min-width:0"><span class="nm">${esc(e.web_name)}${availability(e) < 1 ? ' <span class="pill" title="' + esc(e.news) + '">' + Math.round(availability(e) * 100) + "%</span>" : ""}</span><br><span class="sub">£${price(e.now_cost)}m · ${tShort(e.team)} · proj ${project(e, h).toFixed(1)}</span><br>${fxStrip(e.team, gwNext, Math.min(h, 5))}</span>
+        <button class="btn sm ${selOut === s.el ? "pri" : ""}" data-out="${s.el}">${selOut === s.el ? "Selling" : "Sell"}</button>
+      </div>`;
+    }).join("")).join("");
+
+    let repl = "";
+    if (selOut) {
+      const o = E[selOut];
+      const budget = bank + o.now_cost;
+      const q = ($("#q")?.value || "").toLowerCase();
+      const cands = Object.values(E).filter((e) => e.element_type === o.element_type && !mine.has(e.id) && e.now_cost <= budget
+        && ((teamCount[e.team] || 0) - (e.team === o.team ? 1 : 0)) < 3 && availability(e) > 0 && (!q || e.web_name.toLowerCase().includes(q)))
+        .map((e) => ({ e, p: project(e, h) })).sort((a, b) => b.p - a.p).slice(0, 25);
+      repl = `<div class="panel">
+        <div class="panel-head"><h3>Replacements for ${esc(o.web_name)} (budget £${price(budget)}m)</h3><input type="search" id="q" placeholder="Filter by name" value="${esc(q)}"></div>
+        <div class="tbl-wrap"><table><thead><tr><th>Player</th><th class="n">£</th><th class="n">Form</th><th class="n">xGI/90</th><th class="n">FPL xP</th><th class="n">Proj ${h}GW</th><th class="n">vs out</th><th class="n">League</th><th>Next fixtures</th><th></th></tr></thead><tbody>
+        ${cands.map(({ e, p }) => `<tr><td><span class="mgr">${esc(e.web_name)}<small>${tShort(e.team)}${e.news ? " · " + esc(e.news) : ""}</small></span></td><td class="n">${price(e.now_cost)}</td><td class="n">${e.form}</td><td class="n">${Number(e.expected_goal_involvements_per_90 || 0).toFixed(2)}</td><td class="n">${e.ep_next}</td><td class="n"><strong>${p.toFixed(1)}</strong></td><td class="n ${p - project(o, h) >= 0 ? "up" : "down"}">${sign(Number((p - project(o, h)).toFixed(1)))}</td><td class="n">${Math.round((own[e.id] || 0) * 100)}%</td><td>${fxStrip(e.team, gwNext, Math.min(h, 6))}</td><td><button class="btn sm pri" data-in="${e.id}">Bring in</button></td></tr>`).join("") || '<tr><td colspan="10" class="empty">Nobody fits this budget and team limit.</td></tr>'}
+        </tbody></table></div></div>`;
+    }
+
+    const capRank = sq.filter((s) => s.slot <= 11).map((s) => E[s.el]).sort((a, b) => parseFloat(b.ep_next) - parseFloat(a.ep_next)).slice(0, 5);
+
+    $("#app").innerHTML = `
+    <section class="view">
+      <div class="panel-head"><h2>GW${gwNext} transfer planner</h2>
+        <label class="controls"><span class="note">Projection window</span><select id="hz">${[3, 5, 8].map((v) => `<option value="${v}" ${v === h ? "selected" : ""}>Next ${v} GWs</option>`).join("")}</select></label></div>
+      <div class="plan-sum">
+        <div><div class="k">In the bank</div><div class="v ${bank < 0 ? "down" : ""}">£${price(bank)}m</div></div>
+        <div><div class="k">Transfers</div><div class="v">${plan.length} / ${ft} free</div></div>
+        <div><div class="k">Hit cost</div><div class="v ${hits ? "down" : ""}">${hits ? "−" + hits : "0"}</div></div>
+        <div><div class="k">Projected gain</div><div class="v ${gain - hits >= 0 ? "up" : "down"}">${sign(Number((gain - hits).toFixed(1)))}</div></div>
+      </div>
+      ${plan.length ? `<ul class="moves">${plan.map(({ out, inn }, i) => `<li><span><span class="down">${esc(E[out].web_name)}</span> → <span class="up">${esc(E[inn].web_name)}</span> <span class="note">£${price(E[out].now_cost)}m → £${price(E[inn].now_cost)}m</span></span><button class="btn sm" data-undo="${i}">Undo</button></li>`).join("")}</ul><div class="controls"><button class="btn" id="reset">Clear plan</button></div>` : `<p class="note">Pick a player to sell, then choose who comes in. Your plan is saved in this browser only.</p>`}
+      <div class="grid-2">
+        <div class="panel"><div class="panel-head"><h3>Your squad after the plan</h3></div><div class="squad-list">${sqHTML}</div></div>
+        <div class="panel">
+          <div class="panel-head"><h3>Captain shortlist for GW${gwNext}</h3><span class="note">By FPL's expected points</span></div>
+          <ul class="plist">${capRank.map((e) => `<li><span><strong>${esc(e.web_name)}</strong> ${nextFx(e.team) ? fxLabel(nextFx(e.team).list[0]) : ""}</span><span>xP ${e.ep_next}${capCount[e.id] ? ` · ${capCount[e.id]} of ${D._n} captained him in GW${gwCur}` : ""}</span></li>`).join("")}</ul>
+          <div class="panel-head"><h3>Chips</h3></div>
+          <p class="note">${chipsLeft(myM).map((c) => `<span class="chip ${c.used ? "used" : ""}">${CHIP_LABEL[c.name]}</span>`).join(" ")} ${chipAdvice()}</p>
+        </div>
+      </div>
+      ${repl}
+      <p class="note">How the projection works: average of form and points per game, scaled per fixture by difficulty (easiest ×1.25 to hardest ×0.7), adjusted for injury flags, summed over the window. Double gameweeks count twice; blanks count zero. Sale prices use the current price; FPL may give you slightly less for players who have risen since you bought them. Free transfers are estimated from your transfer history.</p>
+    </section>`;
+
+    $("#hz").addEventListener("change", (e) => { store.set("horizon", Number(e.target.value)); renderPlanner(); });
+    document.querySelectorAll("[data-out]").forEach((b) => b.addEventListener("click", () => { const v = Number(b.dataset.out); selOut = selOut === v ? null : v; renderPlanner(); if (selOut) $("#q")?.closest(".panel")?.scrollIntoView({ behavior: "smooth", block: "start" }); }));
+    document.querySelectorAll("[data-in]").forEach((b) => b.addEventListener("click", () => { const p = planState(); p.push({ out: selOut, inn: Number(b.dataset.in) }); setPlan(p); selOut = null; renderPlanner(); }));
+    document.querySelectorAll("[data-undo]").forEach((b) => b.addEventListener("click", () => { const p = planState(); p.splice(Number(b.dataset.undo), 1); setPlan(p); renderPlanner(); }));
+    $("#reset")?.addEventListener("click", () => { setPlan([]); selOut = null; renderPlanner(); });
+    const q = $("#q"); if (q) q.addEventListener("input", debounce(() => { const pos = q.selectionStart; renderPlanner(); const nq = $("#q"); nq.focus(); nq.setSelectionRange(pos, pos); }, 250));
+  }
+  function debounce(fn, ms) { let t; return () => { clearTimeout(t); t = setTimeout(fn, ms); }; }
+  function chipAdvice() {
+    const doubles = [], blanks = [];
+    for (let g = gwNext; g <= 38; g++) {
+      const d = D.teams.filter((t) => (teamFx[t.id][g] || []).length > 1).length;
+      const b = D.teams.filter((t) => !(teamFx[t.id][g] || []).length).length;
+      if (d) doubles.push(`GW${g} (${d} teams)`); if (b) blanks.push(`GW${g} (${b} teams)`);
+    }
+    return (doubles.length ? `Double gameweeks scheduled: ${doubles.join(", ")}; save Bench Boost or Triple Captain for these. ` : "No double gameweeks have been scheduled yet. ") + (blanks.length ? `Blank gameweeks: ${blanks.join(", ")}; a Free Hit covers these.` : "");
+  }
+
+  // ---------- fixtures ----------
+  function renderFixtures() {
+    const n = store.get("fxN", 6);
+    const mineTeams = {}; squadOf(myM).forEach((p) => { const t = E[p[0]]?.team; mineTeams[t] = (mineTeams[t] || 0) + 1; });
+    const rows = D.teams.map((t) => ({ t, a: avgFdr(t.id, gwNext, n) })).sort((x, y) => x.a - y.a);
+    const gws = []; for (let g = gwNext; g < gwNext + n && g <= 38; g++) gws.push(g);
+    $("#app").innerHTML = `
+    <section class="view">
+      <div class="panel-head"><h2>Fixture difficulty</h2>
+        <label class="controls"><span class="note">Window</span><select id="fxN">${[4, 6, 8, 10].map((v) => `<option value="${v}" ${v === n ? "selected" : ""}>Next ${v} GWs</option>`).join("")}</select></label></div>
+      <p class="note">Sorted easiest first. Capitals are home games, lower case away. Rows marked with a number are teams you own players from.</p>
+      <div class="tbl-wrap"><table>
+        <thead><tr><th>Team</th><th class="n">Avg</th>${gws.map((g) => `<th>GW${g}</th>`).join("")}</tr></thead>
+        <tbody>${rows.map(({ t, a }) => `<tr class="${mineTeams[t.id] ? "me" : ""}"><td>${esc(t.name)} ${mineTeams[t.id] ? `<span class="pill acc">${mineTeams[t.id]}</span>` : ""}</td><td class="n">${a.toFixed(2)}</td>${gws.map((g) => { const l = teamFx[t.id][g] || []; return `<td>${l.length ? l.map((f) => `<span class="pill fdr${f.fdr}" style="min-width:42px;text-align:center">${esc(f.home ? tShort(f.opp) : tShort(f.opp).toLowerCase())}</span>`).join(" ") : '<span class="note">blank</span>'}</td>`; }).join("")}</tr>`).join("")}</tbody>
+      </table></div>
+      ${freshness()}
+    </section>`;
+    $("#fxN").addEventListener("change", (e) => { store.set("fxN", Number(e.target.value)); renderFixtures(); });
+  }
+})();
+</script>
