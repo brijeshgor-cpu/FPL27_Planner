@@ -775,7 +775,7 @@ select, input[type="search"] { font: inherit; color: var(--ink); background: var
           ${pitchHTML(myM)}
         </div>
         <div class="panel">
-          <div class="panel-head"><h2>What the league tells you</h2></div>
+          <div class="panel-head"><h2>What the league tells you</h2><span class="note">You vs the top 10 · updates every gameweek</span></div>
           <ul class="insights">${insights().map((i) => `<li class="${i.k}"><div><div class="t">${i.t}</div><div class="d">${i.d}</div></div></li>`).join("")}</ul>
         </div>
       </div>
@@ -1356,57 +1356,94 @@ select, input[type="search"] { font: inherit; color: var(--ink); background: var
     return `<div class="pitch">${rows}</div><div class="bench"><div class="bench-lbl">Bench</div><div class="row">${bench.map(card).join("")}</div></div>`;
   }
 
+  // ---- What the league tells you: your team against the top 10 of the mini-league ----
+  // Rebuilt from live data on every load, so after each gameweek points appear, change or drop out on
+  // their own. Every comparison uses the other managers in the top 10 (9 when you are in it).
   function insights() {
     const out = [];
-    const mine = new Set(squadOf(myM).map((p) => p[0]));
+    const sorted = [...members].sort((a, b) => a.rank - b.rank);
     const meRow = members.find((x) => x.entry === me);
-    const sorted = [...members].sort((a, b) => b.total - a.total);
-    const n = D._n;
+    const top = sorted.filter((x) => x.entry !== me).slice(0, meRow.rank <= 10 ? 9 : 10);
+    const T10 = top.length;
+    const group = [...top, meRow].sort((a, b) => b.total - a.total);
+    const myPicks = squadOf(myM), mine = new Set(myPicks.map((p) => p[0]));
+    const own10 = {}, eo10 = {}, cap10 = {};
+    top.forEach((x) => squadOf(x.m).forEach(([el, , mult, cap]) => { own10[el] = (own10[el] || 0) + 1; eo10[el] = (eo10[el] || 0) + mult; if (cap) cap10[el] = (cap10[el] || 0) + 1; }));
+    const hist = (x, g) => x.m.history.find((r) => r[0] === g);
+    const lastDone = D.events.filter((e) => e.finished).map((e) => e.id).pop() || gwCur;
+    const nm = (x) => esc(firstName(x));
+    // "Plays" = has minutes recently (or this season when recent data isn't loaded); excludes bench fodder like a 0-minute keeper.
+    const plays = (e) => { const mi = minutesInfo(e); return e.minutes > 0 && mi.avg >= 20; };
 
-    // gap to people around you
-    const above = sorted.filter((x) => x.total > meRow.total);
-    const near = sorted.filter((x) => x.entry !== me && Math.abs(x.total - meRow.total) <= 15);
-    if (above.length) {
-      const nxt = above[above.length - 1];
-      out.push({ k: "info", t: `${nxt.total - meRow.total} pts to climb to ${ordinal(nxt.rank)}`, d: `${esc(nxt.player_name)} (${esc(nxt.entry_name)}) is the next manager above you. The leader is ${sorted[0].total - meRow.total} pts clear.` + (near.length ? ` ${near.length} manager${near.length > 1 ? "s are" : " is"} within 15 pts either side of you.` : "") });
+    // 1. Where you stand within the top 10, and this gameweek's movement
+    const posNow = group.findIndex((x) => x.entry === me) + 1;
+    const prevTotals = group.map((x) => ({ x, t: (hist(x, gwCur - 1) || [0, 0, 0])[2] })).sort((a, b) => b.t - a.t);
+    const posPrev = prevTotals.findIndex((v) => v.x.entry === me) + 1;
+    const leader = group[0], tenth = group[group.length - 1];
+    const mv = posPrev - posNow;
+    out.push({ k: "info", t: `${ordinal(posNow)} of the top ${group.length}${mv ? ` (${mv > 0 ? "up" : "down"} ${Math.abs(mv)} since GW${gwCur - 1})` : ""}`,
+      d: leader.entry === me ? `You lead the top 10 by ${meRow.total - group[1].total} pts.` : `${leader.total - meRow.total} pts behind ${nm(leader)} in 1st; ${meRow.total - tenth.total} pts clear of ${nm(tenth)} in ${ordinal(group.length)}. In GW${gwCur} you scored ${meRow.event_total} against a top-10 average of ${Math.round(top.reduce((a, x) => a + x.event_total, 0) / T10)}.` });
+
+    // 2. Momentum over the last 3 gameweeks
+    const last3 = (x) => [0, 1, 2].reduce((a, i) => { const r = hist(x, gwCur - i); return a + (r ? r[1] - r[4] : 0); }, 0);
+    const my3 = last3(meRow), avg3 = top.reduce((a, x) => a + last3(x), 0) / T10;
+    const hottest = [...top].sort((a, b) => last3(b) - last3(a))[0];
+    out.push({ k: my3 >= avg3 ? "good" : "warn", t: `Last 3 gameweeks: ${my3} pts vs a top-10 average of ${Math.round(avg3)} (${my3 >= avg3 ? "+" : "−"}${Math.abs(Math.round(my3 - avg3))})`,
+      d: `Hottest in the top 10: ${nm(hottest)} with ${last3(hottest)} pts${hottest.rank < meRow.rank ? "" : ", chasing you from below"}. ${my3 >= avg3 ? "You're gaining on the pack." : "The pack is pulling away; differentials are your route back."}` });
+
+    // 3. Template threats: owned by at least half the top 10, not by you. Keepers/defenders from a club whose
+    // defence you already own count as covered (you share their clean sheets).
+    const tmpl = Object.keys(own10).map(Number).filter((el) => !mine.has(el) && own10[el] / T10 >= 0.5 && E[el]).sort((a, b) => eo10[b] - eo10[a]);
+    const coverOf = (e) => (e.element_type <= 2 ? myPicks.map((p) => E[p[0]]).filter((m) => m && m.team === e.team && m.element_type <= 2) : []);
+    const threats = tmpl.filter((el) => !coverOf(E[el]).length).slice(0, 5), covered = tmpl.filter((el) => coverOf(E[el]).length);
+    const fmtT = (el) => `<strong>${esc(E[el].web_name)}</strong> (${own10[el]} of ${T10}${availability(E[el]) < 1 ? `, ${pct(availability(E[el]))} fit` : ""}, form ${E[el].form})`;
+    const coverTxt = covered.length ? ` ${covered.map((el) => `${esc(E[el].web_name)} (${own10[el]} of ${T10}) is covered: you already share ${esc(T[E[el].team].name)} clean sheets through ${coverOf(E[el]).map((m) => esc(m.web_name)).join(" and ")}.`).join(" ")}` : "";
+    if (threats.length) out.push({ k: "bad", t: `${threats.length} top-10 template player${threats.length > 1 ? "s" : ""} you don't own`, d: threats.map(fmtT).join(", ") + `. Every point they score is ground lost on most of the top 10.` + coverTxt });
+    else out.push({ k: "good", t: "No template gaps against the top 10", d: `You own every player that half or more of the top 10 have, or already cover his club's defence.` + coverTxt });
+
+    // 4. Your differentials: players who actually play and few of the top 10 own
+    const diffs = myPicks.filter((p) => p[1] <= 11).map((p) => p[0]).filter((el) => E[el] && plays(E[el]) && (own10[el] || 0) / T10 <= 0.34);
+    if (!diffs.length) out.push({ k: "warn", t: "No real differentials in your starting XI", d: `Every starter is owned by more than a third of the top 10, so your team largely moves with theirs. To gain ground you need at least one regular starter few of them own.` });
+    if (diffs.length) {
+      const pts = diffs.reduce((a, el) => a + (myPicks.find((p) => p[0] === el)[2] ? E[el].event_points * myPicks.find((p) => p[0] === el)[2] : 0), 0);
+      out.push({ k: "good", t: `Your ${diffs.length} differential${diffs.length > 1 ? "s" : ""} against the top 10`,
+        d: diffs.map((el) => `<strong>${esc(E[el].web_name)}</strong> (${own10[el] || 0} of ${T10}, form ${E[el].form})`).join(", ") + `. Starters owned by a third or fewer of the top 10; they scored ${pts} for you in GW${gwCur}. Bench fodder and players without minutes are left out. Keep them while their fixtures and minutes hold; they're how you gain ground.` });
     }
 
-    // template players you don't own
-    const threats = Object.keys(own).map(Number).filter((el) => !mine.has(el) && own[el] >= 0.4 && E[el])
-      .sort((a, b) => eo[b] - eo[a]).slice(0, 5);
-    if (threats.length) out.push({ k: "bad", t: "League template players you don't own", d: threats.map((el) => `<strong>${esc(E[el].web_name)}</strong> ${Math.round(own[el] * 100)}% owned (form ${E[el].form})`).join(", ") + ". Every point they score costs you ground on most of the league." });
-
-    // differentials you own
-    const diffs = [...mine].filter((el) => (own[el] || 0) <= 0.2 && E[el]).sort((a, b) => parseFloat(E[b].form) - parseFloat(E[a].form));
-    if (diffs.length) out.push({ k: "good", t: `Your ${diffs.length} differential${diffs.length > 1 ? "s" : ""}`, d: diffs.map((el) => `<strong>${esc(E[el].web_name)}</strong> ${Math.round((own[el] || 0) * 100)}%`).join(", ") + ". These are your best chance to gain on rivals, so keep them if their fixtures hold up." });
-
-    // captaincy
-    const caps = Object.entries(capCount).sort((a, b) => b[1] - a[1]);
-    const myCap = squadOf(myM).find((p) => p[3]);
-    if (caps.length) {
-      const [topEl, topN] = caps[0];
-      const mineN = myCap ? capCount[myCap[0]] || 0 : 0;
-      out.push({ k: "info", t: `GW${gwCur} captaincy: ${esc(E[topEl]?.web_name)} on ${topN} of ${n} teams`, d: myCap ? `You captained ${esc(E[myCap[0]]?.web_name)}${myCap[0] == topEl ? ", along with most of the league." : `, along with ${mineN - 1} other manager${mineN - 1 === 1 ? "" : "s"}.`} Other picks: ${caps.slice(1, 4).map(([el, c]) => `${esc(E[el]?.web_name)} (${c})`).join(", ") || "none"}.` : "" });
+    // 5. Captaincy against the top 10
+    const myCap = myPicks.find((p) => p[3]);
+    const caps = Object.entries(cap10).sort((a, b) => b[1] - a[1]);
+    if (caps.length && myCap) {
+      const same = cap10[myCap[0]] || 0, top1 = caps[0];
+      const capPts = (x) => { const c = squadOf(x.m).find((p) => p[3]); return c ? E[c[0]].event_points * c[2] : 0; };
+      const avgCapPts = top.reduce((a, x) => a + capPts(x), 0) / T10;
+      out.push({ k: "info", t: `GW${gwCur} armband: ${esc(E[top1[0]].web_name)} on ${top1[1]} of ${T10} top-10 teams`,
+        d: `You captained ${esc(E[myCap[0]].web_name)}${same ? `, like ${same} of them` : ", a differential pick"}: ${E[myCap[0]].event_points * myCap[2]} pts against a top-10 captain average of ${avgCapPts.toFixed(1)}. Other choices: ${caps.slice(1, 4).map(([el, c]) => `${esc(E[el]?.web_name)} (${c})`).join(", ") || "none"}.` });
     }
 
-    // injuries and doubts
-    const flagged = [...mine].filter((el) => E[el] && availability(E[el]) < 1);
+    // 6. Effective ownership risk next gameweek (captain counts double)
+    const eoRisk = Object.keys(eo10).map(Number).filter((el) => E[el] && availability(E[el]) > 0).map((el) => ({ el, eo: eo10[el] / T10, mineMult: (myPicks.find((p) => p[0] === el) || [0, 0, 0])[2] })).filter((x) => x.eo - x.mineMult >= 0.6).sort((a, b) => (b.eo - b.mineMult) - (a.eo - a.mineMult)).slice(0, 3);
+    if (eoRisk.length) out.push({ k: "warn", t: "Biggest exposure gaps to the top 10", d: eoRisk.map((x) => `<strong>${esc(E[x.el].web_name)}</strong>: top-10 effective ownership ${pct(x.eo)} vs your ${pct(x.mineMult)}${mine.has(x.el) && x.mineMult === 0 ? " (he's on your bench)" : ""}`).join("; ") + ". Effective ownership counts starters, with captains double. If these players haul, you lose ground on the pack; start or cover the biggest one, or go against it knowingly." });
+
+    // 7. Chips
+    const myLeft = chipsLeft(myM).filter((c) => !c.used);
+    const more = top.filter((x) => chipsLeft(x.m).filter((c) => !c.used).length > myLeft.length);
+    out.push({ k: more.length ? "warn" : "good", t: more.length ? `${more.length} of the top 10 have more chips left than you` : "You have as many chips left as anyone in the top 10",
+      d: `You have ${myLeft.map((c) => CHIP_LABEL[c.name]).join(", ") || "none"} left this half. ${more.length ? more.slice(0, 5).map((x) => `${nm(x)} (${chipsLeft(x.m).filter((c) => !c.used).map((c) => CHIP_LABEL[c.name]).join(" ")})`).join(", ") + ". Expect them to gain when they play them; time yours for a double or blank gameweek." : ""}` });
+
+    // 8. Squad structure: value, hits, bench
+    const val = (x) => squadValue(x.m) + bankOf(x.m);
+    const valRank = 1 + top.filter((x) => val(x) > val(meRow)).length;
+    const hits = (x) => seasonSum(x.m, 4), bench = (x) => seasonSum(x.m, 5);
+    const avgHits = top.reduce((a, x) => a + hits(x), 0) / T10, avgBench = top.reduce((a, x) => a + bench(x), 0) / T10;
+    out.push({ k: bench(meRow) > avgBench * 1.15 ? "warn" : "good", t: `Team value £${price(val(meRow))}m: ${ordinal(valRank)} of the top ${T10 + 1}`,
+      d: `Hits taken: ${hits(meRow) ? "−" + hits(meRow) : "none"} (top-10 average ${avgHits >= 0.5 ? "−" + avgHits.toFixed(0) : "none"}). Points left on your bench: ${bench(meRow)} (top-10 average ${avgBench.toFixed(0)})${bench(meRow) > avgBench * 1.15 ? ", more than most; check your bench order and which defender you start" : ""}.` });
+
+    // 9. Your squad: injuries and tough fixtures (only players who play)
+    const flagged = myPicks.map((p) => p[0]).filter((el) => E[el] && availability(E[el]) < 1);
     if (flagged.length) out.push({ k: "warn", t: `${flagged.length} of your players flagged`, d: flagged.map((el) => `<strong>${esc(E[el].web_name)}</strong>: ${esc(E[el].news || "doubtful")}`).join("; ") });
-
-    // tough fixture runs
-    const tough = [...mine].filter((el) => E[el] && squadOf(myM).find((p) => p[0] === el)[1] <= 11).map((el) => ({ el, f: avgFdr(E[el].team, gwNext, 3) })).filter((x) => x.f >= 3.67).sort((a, b) => b.f - a.f);
-    if (tough.length) out.push({ k: "warn", t: "Starters facing a tough next three", d: tough.map((x) => `<strong>${esc(E[x.el].web_name)}</strong> (avg difficulty ${x.f.toFixed(1)})`).join(", ") + ". Check the Transfer planner for replacements." });
-
-    // chips
-    const myLeft = chipsLeft(myM).filter((c) => !c.used).length;
-    const rivalsMoreChips = sorted.filter((x) => x.entry !== me && x.total >= meRow.total - 30 && chipsLeft(x.m).filter((c) => !c.used).length > myLeft);
-    if (rivalsMoreChips.length) out.push({ k: "warn", t: `${rivalsMoreChips.length} nearby rival${rivalsMoreChips.length > 1 ? "s have" : " has"} more chips left than you`, d: rivalsMoreChips.slice(0, 6).map((x) => `${esc(x.player_name)} (${chipsLeft(x.m).filter((c) => !c.used).map((c) => CHIP_LABEL[c.name]).join(" ")})`).join(", ") + `. You have ${myLeft} left before GW${D.chips_def.find(([, s, e]) => gwNext >= s && gwNext <= e)?.[2] ?? "?"}. Expect them to gain when they use them.` });
-
-    // bench & hits
-    const benchMine = seasonSum(myM, 5), hitsMine = seasonSum(myM, 4);
-    const benchAvg = Math.round(members.reduce((a, x) => a + seasonSum(x.m, 5), 0) / members.length);
-    const hitsAvg = Math.round(members.reduce((a, x) => a + seasonSum(x.m, 4), 0) / members.length);
-    out.push({ k: benchMine > benchAvg * 1.15 ? "warn" : "good", t: `Bench points: ${benchMine} this season (league avg ${benchAvg})`, d: `Hits taken: ${hitsMine ? "−" + hitsMine : "none"} (league avg ${hitsAvg ? "−" + hitsAvg : "0"}). ${benchMine > benchAvg * 1.15 ? "Points are being left on your bench more than most; rethink the order or the fourth defender spot." : "You're using your squad as well as or better than most of the league."}` });
+    const tough = myPicks.filter((p) => p[1] <= 11 && E[p[0]] && plays(E[p[0]])).map((p) => ({ el: p[0], f: avgFdr(E[p[0]].team, gwNext, 3) })).filter((x) => x.f >= 3.67).sort((a, b) => b.f - a.f);
+    if (tough.length) out.push({ k: "warn", t: "Starters facing a tough next three", d: tough.map((x) => `<strong>${esc(E[x.el].web_name)}</strong> (average difficulty ${x.f.toFixed(1)}, ${own10[x.el] || 0} of ${T10} top-10 own)`).join(", ") + ". If the top 10 own them too, the damage is shared; if not, consider moving them on." });
     return out;
   }
   function avgFdr(team, from, n) {
