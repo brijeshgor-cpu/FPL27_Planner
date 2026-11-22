@@ -94,6 +94,7 @@ def main():
             "chips": [[c["name"], c["event"]] for c in h["chips"]],
             "past": [[p["season_name"], p["total_points"], p["rank"]] for p in h.get("past", [])][-5:],
             "picks": picks_for(eid, cur_gw) if cur_gw else None,
+            "orank": get(f"entry/{eid}/").get("summary_overall_rank"),
         }
         time.sleep(0.15)
 

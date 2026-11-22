@@ -36,14 +36,15 @@ export default {
 
     const page = url.searchParams.get("page_standings");
     const target = FPL + path + (page && /^\d+$/.test(page) ? `?page_standings=${page}` : "");
-    // Short edge cache: big static-ish files for 5 min, everything else for 1 min.
-    const ttl = /^(bootstrap-static|fixtures)\//.test(path) ? 300 : 60;
+    // Manager data is never cached, so every reload is live. The large shared files
+    // (players, fixtures) may be reused for up to 60 seconds.
+    const shared = /^(bootstrap-static|fixtures)\//.test(path);
 
     let upstream;
     try {
       upstream = await fetch(target, {
         headers: { "User-Agent": "Mozilla/5.0 (compatible; fc27-planner)", Accept: "application/json" },
-        cf: { cacheTtl: ttl, cacheEverything: true },
+        cf: shared ? { cacheTtl: 60, cacheEverything: true } : { cacheTtl: 0, cacheEverything: false },
       });
     } catch (e) {
       return json({ error: "FPL unreachable" }, 502);

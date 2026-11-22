@@ -422,10 +422,11 @@ select, input[type="search"] { font: inherit; color: var(--ink); background: var
     const managers = {};
     await pool(ids, 8, async (eid) => {
       try {
-        const [h, p] = await Promise.all([api(`entry/${eid}/history/`), curGw ? api(`entry/${eid}/event/${curGw}/picks/`).catch(() => null) : null]);
+        const [h, p, en] = await Promise.all([api(`entry/${eid}/history/`), curGw ? api(`entry/${eid}/event/${curGw}/picks/`).catch(() => null) : null, api(`entry/${eid}/`).catch(() => null)]);
         managers[eid] = {
           history: h.current.map((c) => [c.event, c.points, c.total_points, c.event_transfers, c.event_transfers_cost, c.points_on_bench, c.overall_rank, c.value, c.bank]),
           chips: h.chips.map((c) => [c.name, c.event]),
+          orank: en ? en.summary_overall_rank : null,
           picks: p ? { chip: p.active_chip, picks: p.picks.map((x) => [x.element, x.position, x.multiplier, +x.is_captain, +x.is_vice_captain]), bank: p.entry_history.bank, value: p.entry_history.value } : null,
         };
       } catch (e) { if (eid === ENTRY_ID) throw e; }
@@ -466,6 +467,17 @@ select, input[type="search"] { font: inherit; color: var(--ink); background: var
     me = D.me; myM = D.managers[me];
     gwCur = D.current_gw; gwNext = D.next_gw || gwCur;
     members = D.standings.map((s) => ({ ...s, m: D.managers[s.entry] })).filter((x) => x.m);
+
+    // FPL's per-gameweek history isn't updated until a gameweek is fully processed, so overlay the
+    // live figures (league standings totals and each manager's live overall rank) on the current gameweek.
+    members.forEach((x) => {
+      const h = x.m.history, last = h[h.length - 1];
+      if (!last || last[0] !== gwCur) return;
+      const prev = h.length > 1 ? h[h.length - 2][2] : 0;
+      last[2] = x.total; last[1] = x.total - prev + last[4];
+      if (x.m.orank) last[6] = x.m.orank;
+    });
+    if (D.entry.summary_overall_rank && myM.history.length && lastHist(myM)[0] === gwCur) lastHist(myM)[6] = D.entry.summary_overall_rank;
 
     // league ownership, effective ownership and captaincy (current GW picks)
     own = {}; eo = {}; capCount = {};
@@ -529,18 +541,21 @@ select, input[type="search"] { font: inherit; color: var(--ink); background: var
       .filter(([, s, e]) => g >= s && g <= e)
       .map(([name, s, e]) => ({ name, used: used.some(([u, ev]) => u === name && ev >= s && ev <= e) }));
   }
-  // Free transfers for the next deadline, rebuilt from transfer history (estimate: rollover capped at 5, WC/FH keep banked transfers).
+  // Free transfers for the next deadline, rebuilt from transfer history: +1 a week, capped at 5;
+  // a Wildcard or Free Hit week keeps the saved transfers but adds none. (FPL only publishes the real number when logged in.)
   function freeTransfers(m, startEv) {
     let ft = 1;
     const chipAt = {}; m.chips.forEach(([n, ev]) => (chipAt[ev] = n));
     m.history.forEach(([ev, , , tr]) => {
       if (ev <= startEv) { ft = 1; return; }
-      if (chipAt[ev] === "wildcard" || chipAt[ev] === "freehit") ft = Math.min(5, ft + 1);
+      if (chipAt[ev] === "wildcard" || chipAt[ev] === "freehit") ft = Math.min(5, ft); // saved transfers kept, none added
       else ft = Math.min(5, Math.max(0, ft - tr) + 1);
     });
     return ft;
   }
   const lastHist = (m) => m.history[m.history.length - 1] || [0, 0, 0, 0, 0, 0, 0, 0, 0];
+  const squadValue = (m) => squadOf(m).reduce((a, p) => a + (E[p[0]]?.now_cost || 0), 0); // current prices, as FPL shows squad value
+  const bankOf = (m) => m.picks?.bank ?? lastHist(m)[8];
   const seasonSum = (m, idx) => m.history.reduce((a, r) => a + r[idx], 0);
 
   // ---------- routing ----------
@@ -589,8 +604,8 @@ select, input[type="search"] { font: inherit; color: var(--ink); background: var
         <div class="kpi"><span class="k">League position</span><span class="v">${myRank}<small style="font-size:1rem;color:var(--muted)">/${members.length}</small></span><span class="s ${move > 0 ? "up" : move < 0 ? "down" : ""}">${move > 0 ? "▲ " + move : move < 0 ? "▼ " + -move : "No change"} since last GW</span></div>
         <div class="kpi"><span class="k">Total points</span><span class="v">${fmt(meRow.total)}</span><span class="s">${leader.entry === me ? "You lead the league" : `${leader.total - meRow.total} behind ${esc(leader.player_name)}`}</span></div>
         <div class="kpi"><span class="k">GW${gwCur} points</span><span class="v">${meRow.event_total}</span><span class="s">League avg ${avgGw} · ${ordinal(gwRank)} this GW${ev?.avg ? ` · FPL avg ${ev.avg}` : ""}</span></div>
-        <div class="kpi"><span class="k">Overall rank</span><span class="v">${fmt(lh[6] || D.entry.summary_overall_rank || 0)}</span>${rankMove(myM)}<span class="s">${above ? `${above.total - meRow.total} pts to ${ordinal(above.rank)} in league` : "Top of the league"}</span></div>
-        <div class="kpi"><span class="k">Bank · Value</span><span class="v">£${price(myM.picks?.bank ?? lh[8])}m</span><span class="s">Squad value £${price(myM.picks?.value ?? lh[7])}m</span></div>
+        <div class="kpi"><span class="k">Overall rank</span><span class="v">${fmt(D.entry.summary_overall_rank || lh[6] || 0)}</span>${rankMove(myM)}<span class="s">${above ? `${above.total - meRow.total} pts to ${ordinal(above.rank)} in league` : "Top of the league"}</span></div>
+        <div class="kpi"><span class="k">Bank · Squad value</span><span class="v">£${price(bankOf(myM))}m</span><span class="s">Squad value £${price(squadValue(myM))}m · total £${price(squadValue(myM) + bankOf(myM))}m</span></div>
         <div class="kpi"><span class="k">Free transfers</span><span class="v">${ft}</span><span class="s">Estimate for GW${gwNext} · ${cl.filter((c) => !c.used).map((c) => CHIP_LABEL[c.name] || c.name).join(" ") || "no chips"} left</span></div>
       </div>
       ${freshness()}
@@ -1097,9 +1112,9 @@ select, input[type="search"] { font: inherit; color: var(--ink); background: var
       ["Best gameweek", A.best?.[1] ?? 0, B.best?.[1] ?? 0, "hi", null, (v, who) => `${v} <small style="color:var(--muted)">GW${(who === "a" ? A.best : B.best)?.[0]}</small>`],
       ["Worst gameweek", A.worst?.[1] ?? 0, B.worst?.[1] ?? 0, "hi", null, (v, who) => `${v} <small style="color:var(--muted)">GW${(who === "a" ? A.worst : B.worst)?.[0]}</small>`],
       ["Overall rank", lh[6], th[6], "orank", fmt],
-      ["Squad value", lh[7] - lh[8], th[7] - th[8], "hi", money],
-      ["In the bank", lh[8], th[8], "hi", money],
-      ["Total team value", lh[7], th[7], "hi", money],
+      ["Squad value", squadValue(myM), squadValue(them.m), "hi", money],
+      ["In the bank", bankOf(myM), bankOf(them.m), "hi", money],
+      ["Total team value", squadValue(myM) + bankOf(myM), squadValue(them.m) + bankOf(them.m), "hi", money],
       ["Transfers made", sumIdx(myM, 3), sumIdx(them.m, 3), null, String],
       ["Points lost to hits", sumIdx(myM, 4), sumIdx(them.m, 4), "lo", (v) => (v ? "−" + v : "0")],
       ["Points left on bench", sumIdx(myM, 5), sumIdx(them.m, 5), "lo", String],
@@ -1166,7 +1181,7 @@ select, input[type="search"] { font: inherit; color: var(--ink); background: var
         <div class="panel">
           <div class="panel-head"><h3>Head to head</h3><span class="note">Difference is from your side</span></div>
           <div class="tbl-wrap"><table class="h2h"><thead><tr><th></th><th class="n"><span class="sw" style="background:var(--s-me)"></span>You</th><th class="n"><span class="sw" style="background:var(--s-them)"></span>${esc(tn)}</th><th class="n">Difference</th></tr></thead><tbody>${h2hRows}</tbody></table></div>
-          <p class="note">Squad value is what your players are worth to sell; total team value adds the money in the bank.</p>
+          <p class="note">Squad value is your 15 players at today's prices, as FPL shows it; total team value adds the money in the bank.</p>
         </div>
         <div class="panel">
           <div class="panel-head"><h3>Chips</h3><span class="note">You have ${nowLeft(myM)} left this half, ${esc(tn)} has ${nowLeft(them.m)}</span></div>
