@@ -298,6 +298,28 @@ td.why { white-space: normal; min-width: 220px; font-size: .8rem; color: var(--m
 .news li.neg { border-left-color: var(--bad); } .news li.pos { border-left-color: var(--good); }
 .news a { color: var(--ink); text-decoration: underline; text-decoration-color: var(--line); text-underline-offset: 3px; }
 .news a:hover { text-decoration-color: var(--accent); }
+/* Current gameweek team stats */
+.gws-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(270px, 1fr)); gap: 12px; }
+.gws-card { border: 1px solid var(--line); border-radius: var(--r); padding: 12px 14px; display: grid; gap: 8px; align-content: start; background: var(--surface); min-width: 0; }
+.gws-card.bench { background: var(--surface-2); }
+.gws-head { display: flex; justify-content: space-between; gap: 10px; align-items: start; }
+.gws-name { display: grid; line-height: 1.25; min-width: 0; }
+.gws-name strong { font-size: .98rem; }
+.gws-name small { color: var(--muted); font-size: .76rem; }
+.gws-pts { display: grid; text-align: right; line-height: 1; }
+.gws-pts strong { font-family: var(--font-display); font-size: 1.9rem; }
+.gws-pts small { color: var(--muted); font-size: .7rem; }
+.gws-match { font-size: .8rem; font-weight: 600; padding: 3px 8px; border-radius: 6px; background: var(--surface-2); justify-self: start; }
+.gws-match.res-W { background: color-mix(in srgb, var(--good) 18%, var(--surface)); } .gws-match.res-L { background: color-mix(in srgb, var(--bad) 15%, var(--surface)); }
+.gws-match.live { background: color-mix(in srgb, var(--warn) 22%, var(--surface)); }
+.gws-hl { border-radius: 8px; padding: 8px 10px; background: color-mix(in srgb, var(--good) 9%, var(--surface)); display: grid; gap: 4px; }
+.gws-hl .pill { justify-self: start; }
+.gws-hl ul { list-style: none; margin: 0; padding: 0; display: grid; gap: 2px; font-size: .85rem; }
+.gws-hl li + li { border-top: 1px solid var(--line); padding-top: 2px; }
+.gws-stats { list-style: none; margin: 0; padding: 0; display: grid; gap: 3px; font-size: .84rem; }
+.gws-stats li { display: flex; justify-content: space-between; gap: 10px; }
+.gws-stats li span { color: var(--muted); }
+.gws-brk { margin: 0; font-size: .74rem; color: var(--muted); border-top: 1px dashed var(--line); padding-top: 6px; }
 /* Deeper Insights */
 .cs-cell { white-space: nowrap; }
 .cs-chip { display: inline-block; min-width: 52px; text-align: center; padding: 3px 6px; border-radius: 5px; font-weight: 700; font-size: .78rem; background: color-mix(in srgb, var(--good) calc(var(--p) * 75%), var(--surface-2)); }
@@ -789,9 +811,92 @@ select, input[type="search"] { font: inherit; color: var(--ink); background: var
           <ul class="insights">${insights().map((i) => `<li class="${i.k}"><div><div class="t">${i.t}</div><div class="d">${i.d}</div></div></li>`).join("")}</ul>
         </div>
       </div>
+      <div class="panel" id="gwStats"><div class="panel-head"><h2>Current gameweek team stats <span class="note">GW${gwCur}</span></h2></div><p class="empty">Loading your players' match stats…</p></div>
       <div class="panel" id="future"><div class="panel-head"><h2>Future analysis</h2></div><p class="empty">Analysing fixtures, injury news, minutes and bookmaker odds…</p></div>
     </section>`;
     renderFuture();
+    renderGwStats();
+  }
+
+  // ---- Current gameweek team stats: each of your players' match stats, live ----
+  const EXPLAIN = { minutes: "Minutes", goals_scored: "Goal", assists: "Assist", clean_sheets: "Clean sheet", goals_conceded: "Goals conceded", saves: "Saves", bonus: "Bonus", yellow_cards: "Yellow card", red_cards: "Red card", own_goals: "Own goal", penalties_saved: "Penalty saved", penalties_missed: "Penalty missed", defensive_contribution: "Defensive contribution" };
+  async function renderGwStats() {
+    const box = $("#gwStats"); if (!box) return;
+    const picks = squadOf(myM); if (!picks.length) { box.innerHTML = ""; return; }
+    let data = null;
+    try { const r = await fetch(`api/gwplayers/${gwCur}?ids=${picks.map((p) => p[0]).join(",")}`, { cache: "no-store" }); if (r.ok && (r.headers.get("content-type") || "").includes("json")) data = await r.json(); } catch (e) { /* offline */ }
+    if (!document.body.contains(box)) return;
+    if (!data) { box.innerHTML = `<div class="panel-head"><h2>Current gameweek team stats <span class="note">GW${gwCur}</span></h2></div><p class="note">Match stats load on the live site.</p>`; return; }
+    const by = {}; data.players.forEach((x) => (by[x.id] = x));
+    const fxOf = (team) => D.fixtures.filter((f) => f[1] === gwCur && (f[2] === team || f[3] === team));
+    const num = (v) => +v || 0;
+    const rows = picks.map(([el, slot, mult, cap, vc]) => { const e = E[el], x = by[el] || { stats: {}, explain: [] }; return { e, slot, mult, cap, vc, st: x.stats || {}, ex: x.explain || [], fx: fxOf(e.team) }; });
+    const played = rows.filter((r) => num(r.st.minutes) > 0);
+    const best = (k) => { const r = played.slice().sort((a, b) => num(b.st[k]) - num(a.st[k]))[0]; return r && num(r.st[k]) > 0 ? r.e.id : null; };
+    const tops = { xa: best("expected_assists"), xg: best("expected_goals"), bps: best("bps"), def: best("defensive_contribution"), pts: best("total_points") };
+    const status = (r) => {
+      if (!r.fx.length) return { txt: "No fixture", cls: "" };
+      return r.fx.map((f) => { const home = f[2] === r.e.team, opp = home ? f[3] : f[2]; const gs = home ? f[9] : f[10], ga = home ? f[10] : f[9];
+        if (!f[8]) return { txt: `${home ? "v" : "@"} ${tShort(opp)} · ${f[6] ? new Date(f[6]).toLocaleString("en-GB", { timeZone: "Europe/London", weekday: "short", hour: "2-digit", minute: "2-digit" }) : "TBC"}`, cls: "" };
+        const res = gs > ga ? "W" : gs < ga ? "L" : "D";
+        // FPL marks a match finished only once bonus is confirmed; ~2h15 after kick-off it's over either way.
+        const over = f[7] || (f[6] && Date.now() - Date.parse(f[6]) > 2.25 * 3600e3);
+        return { txt: `${tShort(r.e.team)} ${gs}–${ga} ${tShort(opp)} ${home ? "(H)" : "(A)"} · ${f[7] ? "FT" : over ? "FT, bonus provisional" : "Live"}`, cls: over ? "res-" + res : "live" }; })[0];
+    };
+    const highlights = (r) => {
+      const h = [], st = r.st, t = r.e.element_type;
+      if (num(st.goals_scored)) h.push(`Scored ${st.goals_scored > 1 ? st.goals_scored + " goals" : "a goal"}`);
+      if (num(st.assists)) h.push(`${st.assists > 1 ? st.assists + " assists" : "Assist"}`);
+      if (tops.pts === r.e.id) h.push(`Top scorer in your team (${st.total_points} pts)`);
+      if (tops.xa === r.e.id) h.push(`Most xA in your team (${num(st.expected_assists).toFixed(2)})`);
+      if (tops.xg === r.e.id) h.push(`Most xG in your team (${num(st.expected_goals).toFixed(2)})`);
+      if (tops.bps === r.e.id) h.push(`Highest BPS in your team (${st.bps})`);
+      if (num(st.bonus)) h.push(`${st.bonus} bonus point${st.bonus > 1 ? "s" : ""}`);
+      if ((t === 2 && num(st.defensive_contribution) >= 10) || (t >= 3 && num(st.defensive_contribution) >= 12)) h.push(`Earned defensive contribution points (${st.defensive_contribution})`);
+      if (t <= 2 && num(st.clean_sheets)) h.push("Clean sheet");
+      if (num(st.expected_goals) >= 0.5 && !num(st.goals_scored)) h.push(`Unlucky: ${num(st.expected_goals).toFixed(2)} xG without a goal`);
+      if (num(st.expected_assists) >= 0.4 && !num(st.assists)) h.push(`Created ${num(st.expected_assists).toFixed(2)} xA without an assist`);
+      if (t === 1 && num(st.saves) >= 3) h.push(`${st.saves} saves`);
+      return h;
+    };
+    const stat = (label, v) => `<li><span>${label}</span><strong>${v}</strong></li>`;
+    const card = (r) => {
+      const st = r.st, t = r.e.element_type, s2 = status(r), mins = num(st.minutes), pts = num(st.total_points);
+      const hl = highlights(r);
+      const list = [
+        stat("Minutes played", mins), stat("Goals", num(st.goals_scored)), stat("Assists", num(st.assists)),
+        stat("Expected goals (xG)", num(st.expected_goals).toFixed(2)), stat("Expected assists (xA)", num(st.expected_assists).toFixed(2)), stat("xG involvement (xGI)", num(st.expected_goal_involvements).toFixed(2)),
+        ...(t <= 2 ? [stat("xG conceded", num(st.expected_goals_conceded).toFixed(2)), stat("Goals conceded", num(st.goals_conceded)), stat("Clean sheet", num(st.clean_sheets) ? "Yes" : "No")] : []),
+        ...(t === 1 ? [stat("Saves", num(st.saves)), ...(num(st.penalties_saved) ? [stat("Penalties saved", st.penalties_saved)] : [])] : []),
+        ...(t > 1 ? [stat("Defensive contributions", `${num(st.defensive_contribution)} <small class="note">(${num(st.clearances_blocks_interceptions)} CBI · ${num(st.tackles)} tackles · ${num(st.recoveries)} recoveries)</small>`)] : []),
+        stat("Bonus points system (BPS)", num(st.bps)), stat("Bonus", num(st.bonus)),
+        ...(num(st.yellow_cards) || num(st.red_cards) ? [stat("Cards", [num(st.yellow_cards) ? `${st.yellow_cards} yellow` : "", num(st.red_cards) ? `${st.red_cards} red` : ""].filter(Boolean).join(", "))] : []),
+        ...(num(st.ict_index) ? [stat("ICT index", num(st.ict_index).toFixed(1))] : []),
+      ].join("");
+      const brk = r.ex.flatMap((f) => f.stats).filter((x) => x.points).map((x) => `${EXPLAIN[x.identifier] || x.identifier} ${x.points > 0 ? "+" : ""}${x.points}`);
+      return `<div class="gws-card ${r.slot > 11 ? "bench" : ""}">
+        <div class="gws-head"><span class="gws-name"><span><strong>${esc(r.e.first_name)} ${esc(r.e.second_name)}</strong>${r.cap ? ' <span class="pill acc">C</span>' : r.vc ? ' <span class="pill">V</span>' : ""}${r.slot > 11 ? ' <span class="pill">Bench</span>' : ""}</span><small>${esc(T[r.e.team]?.name)} · ${POSN(r.e)}</small></span>
+          <span class="gws-pts"><strong>${r.slot <= 11 && r.mult ? pts * r.mult : pts}</strong><small>${r.mult > 1 ? `${pts} × ${r.mult}` : "pts"}</small></span></div>
+        <span class="gws-match ${s2.cls}">${esc(s2.txt)}</span>
+        ${hl.length ? `<div class="gws-hl"><span class="pill ok">Highlights</span><ul>${hl.map((x) => `<li>${x}</li>`).join("")}</ul></div>` : ""}
+        ${mins || num(st.total_points) ? `<ul class="gws-stats">${list}</ul>${brk.length ? `<p class="gws-brk">${brk.join(" · ")}</p>` : ""}` : `<p class="note">${r.fx.length && !r.fx.some((f) => f[8]) ? "Yet to play" : "Did not play"}</p>`}
+      </div>`;
+    };
+    const xi = rows.filter((r) => r.slot <= 11), bench = rows.filter((r) => r.slot > 11);
+    const order = (a, b) => num(b.st.total_points) * (b.mult || 1) - num(a.st.total_points) * (a.mult || 1) || a.slot - b.slot;
+    const tot = xi.reduce((a, r) => a + num(r.st.total_points) * r.mult, 0);
+    const sum = (k) => xi.reduce((a, r) => a + num(r.st[k]), 0);
+    const toPlay = xi.filter((r) => r.fx.length && !r.fx.some((f) => f[8])).length;
+    box.innerHTML = `
+      <div class="panel-head"><h2>Current gameweek team stats <span class="note">GW${gwCur}</span></h2><span class="note">Each of your players' match stats from FPL's official data (Opta), live while games are on</span></div>
+      <div class="kpis">
+        <div class="kpi"><span class="k">Starting XI points</span><span class="v">${tot}</span><span class="s">Including captain, before auto-subs and hits</span></div>
+        <div class="kpi"><span class="k">Team xG · xA</span><span class="v">${sum("expected_goals").toFixed(2)} · ${sum("expected_assists").toFixed(2)}</span><span class="s">${sum("goals_scored")} goals, ${sum("assists")} assists from your XI</span></div>
+        <div class="kpi"><span class="k">Bonus</span><span class="v">${sum("bonus")}</span><span class="s">Top BPS: ${tops.bps ? esc(E[tops.bps].web_name) + " (" + by[tops.bps].stats.bps + ")" : "–"}</span></div>
+        <div class="kpi"><span class="k">Still to play</span><span class="v">${toPlay}</span><span class="s">Starters whose match hasn't kicked off</span></div>
+      </div>
+      <div class="gws-grid">${[...xi.sort(order), ...bench.sort(order)].map(card).join("")}</div>
+      <p class="note">FPL's official match data covers minutes, goals, assists, xG, xA, xG conceded, saves, defensive actions (clearances, blocks, interceptions, tackles, recoveries), BPS, bonus and cards. Shots, xG on target, passes, chances created, dribbles, distance and top speed (as in FotMob) come from licensed data with no free public source, so they aren't shown. Updated on every reload.</p>`;
   }
 
   // ---------- future analysis ----------

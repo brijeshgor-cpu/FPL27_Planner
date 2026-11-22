@@ -35,6 +35,8 @@ export default {
     const path = url.pathname.slice("/api/".length);
     if (path === "odds" || path === "odds/") return odds(env);
     if (path === "news" || path === "news/") return news();
+    const gpl = /^gwplayers\/(\d+)\/?$/.exec(path);
+    if (gpl) return gwPlayers(Number(gpl[1]), url.searchParams.get("ids"));
     const gwp = /^gw\/(\d+)\/?$/.exec(path);
     if (gwp) return gwData(env, Number(gwp[1]));
     const lp = /^league-picks\/(\d+)\/(\d+)\/?$/.exec(path);
@@ -259,6 +261,18 @@ async function gwData(env, gw) {
     const out = { gw, final, els };
     if (final && env.ODDS) await env.ODDS.put(key, JSON.stringify(out));
     return json(out, 200);
+  } catch (e) {
+    return json({ error: "fpl_unreachable", detail: String(e.message || e) }, 502);
+  }
+}
+
+// ---------- full stats and points breakdown for up to 40 players in one gameweek (always fresh) ----------
+async function gwPlayers(gw, ids) {
+  const want = new Set(String(ids || "").split(",").map(Number).filter((n) => n > 0).slice(0, 40));
+  if (gw < 1 || gw > 38 || !want.size) return json({ error: "bad request" }, 400);
+  try {
+    const live = await fplJson(`event/${gw}/live/`);
+    return json({ gw, players: live.elements.filter((e) => want.has(e.id)).map((e) => ({ id: e.id, stats: e.stats, explain: e.explain })) }, 200);
   } catch (e) {
     return json({ error: "fpl_unreachable", detail: String(e.message || e) }, 502);
   }
