@@ -224,6 +224,8 @@ td .sw { display: inline-block; width: 8px; height: 8px; border-radius: 50%; mar
 .odds-tbl th.grp { text-align: center; border-left: 1px solid var(--line); }
 .odds-tbl td.bl, .odds-tbl th.bl { border-left: 1px solid var(--line); }
 .match { display: grid; line-height: 1.3; }
+.odds-stamp { display: flex; flex-wrap: wrap; gap: 4px 18px; align-items: baseline; padding: 10px 14px; background: var(--surface); border: 1px solid var(--line); border-radius: var(--r); }
+.odds-stamp .k { font-size: .72rem; text-transform: uppercase; letter-spacing: .08em; color: var(--muted); }
 .match small { color: var(--muted); }
 select, input[type="search"] { font: inherit; color: var(--ink); background: var(--surface); border: 1px solid var(--line); border-radius: 8px; padding: 6px 10px; max-width: 100%; }
 .btn { border: 1px solid var(--line); background: var(--surface); border-radius: 8px; padding: 6px 12px; font-weight: 600; }
@@ -1152,10 +1154,12 @@ select, input[type="search"] { font: inherit; color: var(--ink); background: var
     const bestOf = (key) => [top(key, "H"), top(key, "A")].filter(Boolean).sort((a, b) => b.p - a.p)[0];
     const bcs = bestOf("cs"), bsc = bestOf("sc");
     const fav = got.map((r) => (r.pH >= r.pA ? { p: r.pH, team: r.f[2] } : { p: r.pA, team: r.f[3] })).sort((a, b) => b.p - a.p)[0];
-    const mins = Math.round((Date.now() - j.fetched) / 6e4);
+    const uk = (t) => new Date(t).toLocaleString("en-GB", { timeZone: "Europe/London", day: "2-digit", month: "2-digit", year: "numeric", hour: "2-digit", minute: "2-digit" });
+    const nextTxt = j.nextRefresh ? `Next refresh ${uk(j.nextRefresh.at)}, ${j.nextRefresh.days} day${j.nextRefresh.days > 1 ? "s" : ""} before the GW${j.gw} deadline.` : j.gw ? `No more refreshes before the GW${j.gw} deadline.` : "";
     $("#app").innerHTML = `
     <section class="view">
       <div class="panel-head"><h2>GW${gwNext} bookmaker odds</h2><span class="note">Chances implied by UK bookmaker prices, bookmaker margin removed</span></div>
+      <div class="odds-stamp"><span><span class="k">Odds last refreshed</span> <strong>${uk(j.fetched)}</strong> <span class="note">UK time</span></span>${nextTxt ? `<span class="note">${nextTxt}</span>` : ""}${j.stale ? `<span class="note down">The last refresh attempt failed, so these are the most recent odds available.</span>` : ""}</div>
       ${got.length ? `<div class="kpis">
         <div class="kpi"><span class="k">Biggest favourite</span><span class="v">${Math.round(fav.p * 100)}%</span><span class="s">${esc(T[fav.team]?.name)} to win</span></div>
         <div class="kpi"><span class="k">Best clean sheet chance</span><span class="v">${Math.round(bcs.p * 100)}%</span><span class="s">${esc(T[bcs.team]?.name)}</span></div>
@@ -1168,9 +1172,9 @@ select, input[type="search"] { font: inherit; color: var(--ink); background: var
         </thead>
         <tbody>${rows.map((r) => `<tr><td><span class="match"><span>${tm(r.f[2])} v ${tm(r.f[3])}</span><small>${ko(r.f[6])}</small></span></td>${r.o
           ? `${op(r.pH, "bl")}${op(r.pD)}${op(r.pA)}${op(r.csH, "bl")}${op(r.csA)}${op(r.scH, "bl")}${op(r.scA)}`
-          : `<td class="bl" colspan="7"><span class="note">No odds published yet</span></td>`}</tr>`).join("")}</tbody>
+          : `<td class="bl" colspan="7"><span class="note">${j.nextRefresh ? `Odds arrive at the next refresh, ${uk(j.nextRefresh.at)}` : "No odds published yet"}</span></td>`}</tr>`).join("")}</tbody>
       </table></div>
-      <p class="note">Result chances come straight from bookmaker prices (average of ${got.length ? Math.round(got.reduce((a, r) => a + r.o.books, 0) / got.length) : 0} UK bookmakers per match). Clean sheet and to-score chances are worked out from the same prices plus the over/under 2.5 goals line, using a standard goals model. Numbered badges mark teams you own players from. Odds updated ${mins < 1 ? "just now" : mins < 60 ? mins + " min ago" : Math.round(mins / 60) + " h ago"}; they refresh every few hours.</p>
+      <p class="note">Result chances come straight from bookmaker prices (average of ${got.length ? Math.round(got.reduce((a, r) => a + r.o.books, 0) / got.length) : 0} UK bookmakers per match). Clean sheet and to-score chances are worked out from the same prices plus the over/under 2.5 goals line, using a standard goals model. Numbered badges mark teams you own players from. Odds refresh 3 days and 1 day before each gameweek deadline.</p>
     </section>`;
   }
 })();

@@ -14,3 +14,7 @@ fallthrough = true
 [[kv_namespaces]]
 binding = "ODDS"
 id = "1612f48a342645ad8d40ddcb5b9303dc"
+
+# Hourly check so odds refresh soon after each refresh point (3 days and 1 day before a deadline).
+[triggers]
+crons = ["7 * * * *"]
