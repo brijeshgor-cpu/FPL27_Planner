@@ -14,9 +14,11 @@
   --muted: #5d6c62;
   --accent: #1d7a4b;
   --accent-ink: #ffffff;
-  --rival: #4a5fd6;
-  --s-me: #d03b3b;
-  --s-them: #4a5fd6;
+  --rival: #0f9cb3;
+  --s-me: #1d7a4b;
+  --s-them: #0f9cb3;
+  --card-yellow: #f2c200;
+  --card-yellow-ink: #1b1200;
   --good: #1d7a4b;
   --bad: #b8382f;
   --warn: #b7831a;
@@ -38,7 +40,7 @@
 @media (prefers-color-scheme: dark) {
   :root:not([data-theme="light"]) {
     --bg: #0e1411; --surface: #161f1a; --surface-2: #1d2922; --line: #2a3830; --ink: #e6eee8; --muted: #93a499;
-    --accent: #45c283; --accent-ink: #07140d; --rival: #6f86e6; --s-me: #e05a5a; --s-them: #6f86e6; --good: #45c283; --bad: #f0786d; --warn: #e3b55a;
+    --accent: #45c283; --accent-ink: #07140d; --rival: #2a97c0; --s-me: #3aa860; --s-them: #2a97c0; --good: #45c283; --bad: #f0786d; --warn: #e3b55a;
     --pitch-a: #1d4f33; --pitch-b: #1a482e; --pitch-line: rgba(255,255,255,.18); --card-on-pitch: #0f1813; --card-on-pitch-ink: #e6eee8;
     --fdr1: #2c9d61; --fdr1-ink: #ffffff; --fdr2: #2d6a46; --fdr2-ink: #dff3e7; --fdr3: #34403a; --fdr3-ink: #d4ddd7;
     --fdr4: #8a3c30; --fdr4-ink: #ffe3dd; --fdr5: #6e1913; --fdr5-ink: #ffd9d4; --chart-other: #3a4a40;
@@ -47,7 +49,7 @@
 }
 :root[data-theme="dark"] {
   --bg: #0e1411; --surface: #161f1a; --surface-2: #1d2922; --line: #2a3830; --ink: #e6eee8; --muted: #93a499;
-  --accent: #45c283; --accent-ink: #07140d; --rival: #6f86e6; --s-me: #e05a5a; --s-them: #6f86e6; --good: #45c283; --bad: #f0786d; --warn: #e3b55a;
+  --accent: #45c283; --accent-ink: #07140d; --rival: #2a97c0; --s-me: #3aa860; --s-them: #2a97c0; --good: #45c283; --bad: #f0786d; --warn: #e3b55a;
   --pitch-a: #1d4f33; --pitch-b: #1a482e; --pitch-line: rgba(255,255,255,.18); --card-on-pitch: #0f1813; --card-on-pitch-ink: #e6eee8;
   --fdr1: #2c9d61; --fdr1-ink: #ffffff; --fdr2: #2d6a46; --fdr2-ink: #dff3e7; --fdr3: #34403a; --fdr3-ink: #d4ddd7;
   --fdr4: #8a3c30; --fdr4-ink: #ffe3dd; --fdr5: #6e1913; --fdr5-ink: #ffd9d4; --chart-other: #3a4a40;
@@ -81,8 +83,8 @@ section.view { display: grid; gap: 28px; }
 .fresh { font-size: .78rem; color: var(--muted); }
 
 /* KPI strip */
-.kpis { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 1px; background: var(--line); border: 1px solid var(--line); border-radius: var(--r); overflow: hidden; }
-.kpi { background: var(--surface); padding: 14px 16px; display: grid; gap: 2px; align-content: start; }
+.kpis { display: flex; flex-wrap: wrap; gap: 1px; background: var(--line); border: 1px solid var(--line); border-radius: var(--r); overflow: hidden; }
+.kpi { flex: 1 1 150px; background: var(--surface); padding: 14px 16px; display: grid; gap: 2px; align-content: start; }
 .kpi .k { font-size: .72rem; text-transform: uppercase; letter-spacing: .08em; color: var(--muted); }
 .kpi .v { font-family: var(--font-display); font-size: 2rem; font-weight: 700; line-height: 1.05; }
 .kpi .s { font-size: .8rem; color: var(--muted); }
@@ -225,6 +227,13 @@ td .sw { display: inline-block; width: 8px; height: 8px; border-radius: 50%; mar
 .pill.sev3 { background: var(--bad); color: #fff; } .pill.sev2 { background: var(--warn); color: #1b1200; } .pill.sev1 { background: var(--surface-2); color: var(--ink); } .pill.ok { background: color-mix(in srgb, var(--good) 18%, transparent); color: var(--good); }
 td.why { white-space: normal; min-width: 220px; font-size: .8rem; color: var(--muted); }
 .fx-tbl tr.half td { background: var(--surface-2); font-size: .7rem; text-transform: uppercase; letter-spacing: .07em; color: var(--muted); font-weight: 600; }
+.yc { display: inline-flex; align-items: center; justify-content: center; min-width: 15px; height: 19px; padding: 0 3px; margin-left: 6px; border-radius: 3px; font-size: .68rem; font-weight: 800; vertical-align: 1px; border: 1.5px solid var(--card-yellow); color: var(--ink); }
+.yc.hot { background: var(--card-yellow); color: var(--card-yellow-ink); box-shadow: 0 0 0 2px color-mix(in srgb, var(--card-yellow) 35%, transparent); }
+.ban-strip { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 18px; padding: 10px 14px; border-radius: var(--r); border: 1px solid color-mix(in srgb, var(--card-yellow) 60%, var(--line)); background: color-mix(in srgb, var(--card-yellow) 10%, var(--surface)); font-size: .86rem; }
+.ban-strip.ok { border-color: var(--line); background: var(--surface); color: var(--muted); }
+.ban-strip .k { font-size: .72rem; text-transform: uppercase; letter-spacing: .08em; color: var(--muted); font-weight: 600; }
+.ban-item { display: inline-flex; align-items: center; gap: 6px; }
+.ban-item .yc { margin-left: 0; }
 /* Fixtures and odds */
 .fdrc { display: inline-block; min-width: 58px; text-align: center; border-radius: 5px; padding: 4px 6px; font-size: .74rem; font-weight: 700; }
 .fdrc + .fdrc { margin-left: 3px; }
@@ -266,6 +275,58 @@ select, input[type="search"] { font: inherit; color: var(--ink); background: var
 .moves li { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; justify-content: space-between; background: var(--surface-2); border-radius: 8px; padding: 6px 10px; }
 .empty { color: var(--muted); font-size: .86rem; padding: 10px 0; }
 .err { background: var(--surface); border: 1px solid var(--bad); color: var(--ink); border-radius: var(--r); padding: 16px; }
+/* ---------- responsive: tablet and phone ---------- */
+:root { --row-me: color-mix(in srgb, var(--accent) 12%, var(--surface)); --row-rv: color-mix(in srgb, var(--rival) 12%, var(--surface)); }
+/* Wide grids keep the name column pinned while scrolling sideways. */
+.fx-tbl th:first-child, .fx-tbl td:first-child, .gw-tbl th:first-child, .gw-tbl td:first-child, .h2h th:first-child, .h2h td:first-child { position: sticky; left: 0; z-index: 1; }
+.fx-tbl td:first-child, .gw-tbl td:first-child, .h2h td:first-child { background: var(--surface); }
+.fx-tbl th:first-child, .gw-tbl th:first-child, .h2h th:first-child { z-index: 2; }
+.fx-tbl tr.me td:first-child { background: var(--row-me); }
+.fx-tbl tr.half td:first-child { background: var(--surface-2); }
+@media (max-width: 900px) {
+  main { padding-block: 16px 40px; gap: 22px; }
+  section.view { gap: 22px; }
+  .panel { padding: 14px; }
+}
+@media (max-width: 640px) {
+  .brand h1 { font-size: 1.4rem; }
+  .brand .who { font-size: .78rem; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .deadline { margin-left: 0; }
+  .deadline .cd { font-size: 1.15rem; }
+  .tabs a { padding: 12px 10px; }
+  h2 { font-size: 1.35rem; }
+  .kpi { padding: 12px; }
+  .kpi .v { font-size: 1.6rem; }
+  select, input[type="search"] { font-size: 16px; }
+  .btn, .seg button { min-height: 40px; }
+  .btn.sm { min-height: 34px; }
+  .panel { padding: 12px; }
+  .vs { grid-template-columns: 1fr 1fr; }
+  .vs .mid { grid-column: 1 / -1; grid-row: 2; }
+  .vs .big { font-size: 2.1rem; }
+  .picks5 { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .pick .nm { font-size: 1.1rem; }
+  /* Tables marked cards-sm become one card per row. */
+  .tbl-wrap:has(> table.cards-sm) { overflow: visible; }
+  table.cards-sm thead { display: none; }
+  table.cards-sm, table.cards-sm tbody, table.cards-sm tr { display: block; width: 100%; }
+  table.cards-sm tr { padding: 10px 12px; border-bottom: 1px solid var(--line); }
+  table.cards-sm tr:last-child { border-bottom: 0; }
+  table.cards-sm tr.me { background: var(--row-me); }
+  table.cards-sm tr.rv { background: var(--row-rv); }
+  table.cards-sm tr.me td, table.cards-sm tr.rv td { background: transparent; }
+  table.cards-sm td { display: flex; justify-content: flex-end; flex-wrap: wrap; align-items: center; gap: 4px 8px; padding: 4px 0; border: 0; white-space: normal; text-align: right; position: static; }
+  table.cards-sm td::before { content: attr(data-label); flex: none; max-width: 45%; margin-right: auto; color: var(--muted); font-size: .7rem; text-transform: uppercase; letter-spacing: .06em; font-weight: 600; text-align: left; }
+  table.cards-sm td[data-label=""]::before, table.cards-sm td.span::before { display: none; }
+  table.cards-sm td.title { justify-content: flex-start; text-align: left; font-size: .98rem; padding-bottom: 6px; }
+  table.cards-sm td.title::before { display: none; }
+  table.cards-sm td.span { display: block; text-align: left; }
+  table.cards-sm td.why { display: block; text-align: left; min-width: 0; }
+  table.cards-sm td.why::before { display: block; max-width: none; margin-bottom: 2px; }
+  table.cards-sm td.op { padding: 4px 8px; margin-inline: -8px; border-radius: 6px; }
+  table.cards-sm tr.half { padding: 6px 12px; background: var(--surface-2); }
+  .fx-tbl.cards-sm td:first-child { background: transparent; }
+}
 @media (prefers-reduced-motion: reduce) { * { transition: none !important; animation: none !important; } }
 </style>
 
@@ -304,6 +365,21 @@ select, input[type="search"] { font: inherit; color: var(--ink); background: var
   const FDR_MULT = { 1: 1.25, 2: 1.1, 3: 1.0, 4: 0.85, 5: 0.7 };
 
   let D, E, T, me, myM, gwCur, gwNext, members, own, eo, capCount, teamFx, view;
+
+  // ---------- phone cards: copy column headers onto each cell ----------
+  function labelTable(t) {
+    if (!t.tHead || !t.tBodies[0]) return;
+    const grid = [];
+    [...t.tHead.rows].forEach((tr, r) => {
+      grid[r] = grid[r] || []; let c = 0;
+      [...tr.cells].forEach((th) => { while (grid[r][c]) c++; for (let i = 0; i < (th.rowSpan || 1); i++) for (let j = 0; j < (th.colSpan || 1); j++) (grid[r + i] = grid[r + i] || [])[c + j] = th; c += th.colSpan || 1; });
+    });
+    const n = Math.max(0, ...grid.map((g) => g.length)), labels = [];
+    for (let c = 0; c < n; c++) { const parts = []; grid.forEach((g) => { const x = g[c] && g[c].textContent.trim(); if (x && !parts.includes(x)) parts.push(x); }); labels[c] = parts.join(" · "); }
+    const titleCol = labels.findIndex((l) => l && l !== "#");
+    [...t.tBodies[0].rows].forEach((tr) => { let c = 0; [...tr.cells].forEach((td) => { const span = td.colSpan || 1; if (span === 1) { td.dataset.label = labels[c] || ""; if (c === titleCol) td.classList.add("title"); } else td.classList.add("span"); c += span; }); });
+  }
+  new MutationObserver(() => document.querySelectorAll("table.cards-sm:not([data-l])").forEach((t) => { t.dataset.l = "1"; labelTable(t); })).observe(document.getElementById("app"), { childList: true, subtree: true });
 
   // ---------- loading: live through the site's /api/ proxy, else the saved snapshot ----------
   const ENTRY_ID = 1965328, LEAGUE_ID = 111899;
@@ -559,6 +635,27 @@ select, input[type="search"] { font: inherit; color: var(--ink); background: var
     if (d < Date.now() - 60 * 864e5) d = Date.UTC(now.getUTCFullYear() + 1, mon, +m[1]);
     return d;
   }
+  // Yellow-card bans (Premier League): 5 by GW19 = 1 match, 10 by GW32 = 2 matches, 15 by GW38 = 3 matches.
+  const BAN_RULES = [[5, 19, 1], [10, 32, 2], [15, 38, 3]];
+  function banRisk(e) {
+    const y = e.yellow_cards || 0;
+    const rule = BAN_RULES.find(([n, until]) => y < n && gwNext <= until);
+    if (!rule) return null;
+    const [n, until, games] = rule;
+    const apps = Math.max(1, e.starts || Math.round((e.minutes || 0) / 80));
+    const p = Math.min(0.45, Math.max(0.04, y / apps)); // chance of a booking in any one match
+    let pBan = 0; // chance of being banned within the next 5 gameweeks (one booking away only)
+    if (n - y === 1) { const m = Math.max(0, Math.min(until, gwNext + 3) - gwNext + 1); pBan = 1 - (1 - p) ** m; }
+    return { y, n, until, games, away: n - y, p, pBan };
+  }
+  // Chance a player misses gameweek index i through a yellow-card ban picked up in an earlier match.
+  function banMiss(e, i) {
+    const r = banRisk(e); if (!r || r.away !== 1) return 0;
+    let s = 0; for (let k = Math.max(0, i - r.games); k < i; k++) if (gwNext + k <= r.until) s += (1 - r.p) ** k * r.p;
+    return Math.min(1, s);
+  }
+  const ycBadge = (e) => { const r = banRisk(e); return r && r.away <= 2 ? ` <span class="yc ${r.away === 1 ? "hot" : ""}" title="${r.y} yellow cards: ${r.away} more before GW${r.until} means a ${r.games}-match ban">${r.y}</span>` : ""; };
+
   // Chance a player is available for gameweek g (i = index from the next gameweek).
   function availFor(e, g, i) {
     const back = expectedBack(e);
@@ -593,7 +690,7 @@ select, input[type="search"] { font: inherit; color: var(--ink); background: var
         if (o) fac = e.element_type <= 2 ? Math.min(1.4, Math.max(0.7, 0.55 + 1.6 * o.cs)) : Math.min(1.5, Math.max(0.6, o.lam / 1.35));
         p += base * fac;
       });
-      per.push(p * availFor(e, g, i) * mf);
+      per.push(p * availFor(e, g, i) * mf * (1 - banMiss(e, i)));
     }
     return { total: per.reduce((a, b) => a + b, 0), per, mins: mi };
   }
@@ -611,7 +708,9 @@ select, input[type="search"] { font: inherit; color: var(--ink); background: var
       else if (mi.avg < 65) r.push([1, `Rotation risk: ${Math.round(mi.avg)} minutes a game ${where}`]);
       if (mi.src === "recent" && mi.last === 0 && mi.avg >= 45) r.push([1, `Didn't play in GW${mi.lastGw}`]);
     }
-    if ((e.yellow_cards === 4 && gwNext <= 19) || (e.yellow_cards === 9 && gwNext <= 32)) r.push([1, `On ${e.yellow_cards} yellow cards: one more brings a ban`]);
+    const ban = banRisk(e);
+    // A ban risk is a watch item, never a reason to sell on its own: the projection already allows for it.
+    if (ban && ban.away === 1 && e.status !== "s") r.push([1, `On ${ban.y} yellow cards: one more before GW${ban.until} means a ${ban.games}-match ban (booked in ${pct(ban.p)} of his games, ${pct(ban.pBan)} chance of a ban in the next 4 gameweeks)`]);
     const f3 = windowFdr(e.team, 3);
     if (f3 >= 4) r.push([2, `Very hard next 3 fixtures (average FDR ${f3.toFixed(1)})`]);
     else if (f3 >= 3.5) r.push([1, `Hard next 3 fixtures (average FDR ${f3.toFixed(1)})`]);
@@ -753,7 +852,7 @@ select, input[type="search"] { font: inherit; color: var(--ink); background: var
       const oTxt = o ? (mv.c.e.element_type <= 2 ? `${pct(o.cs)} clean sheet chance in GW${gwNext}` : `${tShort(mv.c.e.team)} ${pct(o.score)} to score in GW${gwNext}`) : "";
       pr.push({ tag: mv.hit ? "Transfer (−4 hit)" : "Transfer", cls: mv.m.sev >= 3 ? "bad" : "acc",
         t: `Sell ${esc(mv.m.e.web_name)} (£${price(mv.m.e.now_cost)}m) → buy ${esc(mv.c.e.web_name)} (${tShort(mv.c.e.team)}, £${price(mv.c.e.now_cost)}m)`,
-        d: `<strong>Why sell:</strong> ${why}. <strong>Why ${esc(mv.c.e.web_name)}:</strong> projects ${mv.c.p5.toFixed(1)} pts over 5 gameweeks (${sign1(mv.gain)} on ${esc(mv.m.e.web_name)}), ${Math.round(mv.c.mins.avg)} mins a game, next 3 ${fxStrip(mv.c.e.team, gwNext, 3)}${oTxt ? ", " + oTxt : ""}. ${leaderOwns.has(mv.c.e.id) ? `${lName} owns him, so this protects you rather than gains ground.` : `${lName} doesn't own him: every point he scores is a point gained on the leader.`}` });
+        d: `<strong>Why sell:</strong> ${why}. <strong>Why ${esc(mv.c.e.web_name)}:</strong> projects ${mv.c.p5.toFixed(1)} pts over 5 gameweeks (${sign1(mv.gain)} on ${esc(mv.m.e.web_name)}), ${Math.round(mv.c.mins.avg)} mins a game, next 3 ${fxStrip(mv.c.e.team, gwNext, 3)}${oTxt ? ", " + oTxt : ""}. ${banRisk(mv.c.e)?.away === 1 ? `Note: he's on ${banRisk(mv.c.e).y} yellows, one from a ban (already allowed for in his projection). ` : ""}${leaderOwns.has(mv.c.e.id) ? `${lName} owns him, so this protects you rather than gains ground.` : `${lName} doesn't own him: every point he scores is a point gained on the leader.`}` });
     });
     if (!moves.length) pr.push({ tag: "Transfer", cls: "", t: "No transfer is clearly worth making this week", d: `Nobody in your squad is injured or losing minutes badly, and no replacement projects at least 5 pts more over 5 gameweeks within your £${price(bank)}m budget. Roll the transfer.` });
     const leftFT = ft - moves.filter((m) => !m.hit).length;
@@ -762,12 +861,20 @@ select, input[type="search"] { font: inherit; color: var(--ink); background: var
     const hold = mine.filter((m) => m.sev >= 2 && !moved.has(m.e.id));
     hold.forEach((m) => pr.push({ tag: "Hold", cls: "warn", t: `Hold ${esc(m.e.web_name)} for now`,
       d: `${m.rk.map((r) => r[1]).join("; ")}. But no fit replacement within £3m of his price projects clearly more over 5 gameweeks${leaderOwns.has(m.e.id) && (own[m.e.id] || 0) >= 0.5 ? `, and ${lName} and ${Math.round((own[m.e.id] || 0) * 100)}% of the league own him, so selling would be a gamble against the field` : ""}. Keep him, but don't captain him in these fixtures.` }));
+    // Suspension watch: players one booking from a ban.
+    const banList = mine.filter((m) => !moved.has(m.e.id) && banRisk(m.e)?.away === 1 && m.e.status !== "s");
+    if (banList.length) {
+      const benchCover = (t) => picks.filter((p) => p[1] > 11 && E[p[0]].element_type === t && availability(E[p[0]]) === 1).map((p) => esc(E[p[0]].web_name));
+      pr.push({ tag: "Suspension", cls: "warn", t: `${banList.map((m) => esc(m.e.web_name)).join(" and ")} ${banList.length > 1 ? "are" : "is"} one booking from a ban`,
+        d: banList.map((m) => { const b = banRisk(m.e); const cover = benchCover(m.e.element_type); return `<strong>${esc(m.e.web_name)}</strong> (${POSN(m.e)}, ${b.y} yellows) is booked in ${pct(b.p)} of his games, so the chance he misses a game in the next 4 gameweeks is ${pct(b.pBan)}. ${m.slot > 11 ? "He's on your bench, so a ban costs little." : cover.length ? `Bench cover: ${cover.join(", ")}.` : `You have no fit ${POSN(m.e)} on the bench to cover him${m.e.element_type >= 3 ? ", so a ban means playing a weaker formation" : ""}.`}`; }).join(" ") + ` Don't sell for this alone: the ban is only applied after the 5th card, and FPL marks him suspended, giving you a week to react. Don't add another player on ${banList[0] ? banRisk(banList[0].e).n - 1 : 4} yellows, and avoid captaining a player one card from a ban in a feisty fixture.` });
+    }
     if (chipTxt) pr.push({ tag: "Chip", cls: "", t: "Free Hit timing", d: chipTxt + (leadChips.length ? ` ${lName} still has: ${leadChips.join(", ")}.` : "") });
     if (leftFT > 0) pr.push({ tag: "Transfers", cls: "", t: `Bank ${leftFT} free transfer${leftFT > 1 ? "s" : ""}`, d: `You'll have ${Math.min(5, leftFT + 1)} next week (5 is the cap). Use them for injuries or a double gameweek rather than sideways moves.` });
     const cover = missing.filter((x) => verdict(x)[1] === "Cover him").slice(0, 2);
     if (cover.length) pr.push({ tag: "Top 6", cls: "warn", t: `Plan to cover ${cover.map((x) => esc(x.e.web_name)).join(" and ")}`, d: cover.map((x) => `${esc(x.e.web_name)} is in ${x.n} of the other top-6 squads${x.lead ? `, including ${lName}'s` : ""}, projecting ${x.p5.toFixed(1)} pts over 5 gameweeks`).join(". ") + `. ${cover.length > 1 ? "If they haul" : "If he hauls"} without you, you fall further behind. Use next week's transfer on ${cover.length > 1 ? "one of them" : "him"} once the moves above are done.` });
-    const watch = mine.filter((m) => m.sev === 1 && !moved.has(m.e.id)).slice(0, 5);
-    if (watch.length) pr.push({ tag: "Watch", cls: "", t: "Keep, but check team news before the deadline", d: watch.map((m) => `<strong>${esc(m.e.web_name)}</strong>: ${m.rk.map((r) => r[1]).join("; ")}`).join(". ") });
+    // Watch list, minus yellow-card risks (those have their own Suspension item).
+    const watch = mine.filter((m) => m.sev === 1 && !moved.has(m.e.id)).map((m) => ({ m, rs: m.rk.filter((r) => !/yellow cards/.test(r[1])) })).filter((x) => x.rs.length).slice(0, 5);
+    if (watch.length) pr.push({ tag: "Watch", cls: "", t: "Keep, but check team news before the deadline", d: watch.map(({ m, rs }) => `<strong>${esc(m.e.web_name)}</strong>: ${rs.map((r) => r[1]).join("; ")}`).join(". ") });
 
     // Targets by position.
     const targets = [1, 2, 3, 4].map((t) => {
@@ -788,6 +895,10 @@ select, input[type="search"] { font: inherit; color: var(--ink); background: var
         <div class="kpi"><span class="k">Free transfers</span><span class="v">${ft}</span><span class="s">£${price(myM.picks?.bank ?? lastHist(myM)[8])}m in the bank</span></div>
       </div>
       <p class="lede">${verdictTxt}</p>
+      ${(() => { const near = mine.map((m) => ({ m, b: banRisk(m.e) })).filter((x) => x.b && x.b.away <= 2 && x.m.e.status !== "s").sort((a, b) => a.b.away - b.b.away || b.b.p - a.b.p);
+        const banned = mine.filter((m) => m.e.status === "s");
+        if (!near.length && !banned.length) return `<div class="ban-strip ok"><span class="k">Suspension watch</span> None of your players is close to a yellow-card ban.</div>`;
+        return `<div class="ban-strip"><span class="k">Suspension watch</span>${banned.map((m) => `<span class="ban-item"><span class="yc hot">!</span><strong>${esc(m.e.web_name)}</strong> suspended now</span>`).join("")}${near.map(({ m, b }) => `<span class="ban-item"><span class="yc ${b.away === 1 ? "hot" : ""}">${b.y}</span><strong>${esc(m.e.web_name)}</strong> ${b.away === 1 ? `1 card from a ${b.games}-match ban (${pct(b.pBan)} risk, next 4 GWs)` : `2 cards from a ban`}, deadline GW${b.until}</span>`).join("")}</div>`; })()}
 
       <h3>Your priorities, in order</h3>
       <ol class="prio">${pr.map((p) => `<li><span class="pill ${p.cls === "acc" ? "acc" : p.cls === "bad" ? "sev3" : p.cls === "warn" ? "sev2" : ""}">${p.tag}</span><div><div class="t">${p.t}</div><div class="d">${p.d}</div></div></li>`).join("")}</ol>
@@ -795,25 +906,25 @@ select, input[type="search"] { font: inherit; color: var(--ink); background: var
       <div class="stack">
         <div class="panel">
           <div class="panel-head"><h3>Your squad risk check</h3><span class="note">Next 5 gameweeks</span></div>
-          <div class="tbl-wrap"><table class="fx-tbl">
+          <div class="tbl-wrap"><table class="fx-tbl cards-sm">
             <thead><tr><th>Player</th><th>Verdict</th><th class="n">Mins</th><th class="n">Proj 5</th><th>Next 5</th><th>Why</th></tr></thead>
-            <tbody>${[...mine].sort((a, b) => (moved.has(b.e.id) ? 4 : b.sev) - (moved.has(a.e.id) ? 4 : a.sev) || a.e.element_type - b.e.element_type).map((m) => `<tr><td><span class="mgr">${esc(m.e.web_name)}<small>${POSN(m.e)} · ${tShort(m.e.team)}${m.slot > 11 ? " · bench" : ""}</small></span></td><td>${sevPill(m)}</td><td class="n">${minsTxt(m.mins)}</td><td class="n">${m.p5.toFixed(1)}</td><td>${fxStrip(m.e.team, gwNext, 5)}</td><td class="why">${[...(mvOf(m.e.id) ? [`Upgrade to ${esc(mvOf(m.e.id).c.e.web_name)}: ${sign1(mvOf(m.e.id).gain)} pts over 5 gameweeks`] : []), ...m.rk.map((r) => r[1])].join("; ") || "No concerns"}</td></tr>`).join("")}</tbody>
+            <tbody>${[...mine].sort((a, b) => (moved.has(b.e.id) ? 4 : b.sev) - (moved.has(a.e.id) ? 4 : a.sev) || a.e.element_type - b.e.element_type).map((m) => `<tr><td><span class="mgr"><span>${esc(m.e.web_name)}${ycBadge(m.e)}</span><small>${POSN(m.e)} · ${tShort(m.e.team)}${m.slot > 11 ? " · bench" : ""}</small></span></td><td>${sevPill(m)}</td><td class="n">${minsTxt(m.mins)}</td><td class="n">${m.p5.toFixed(1)}</td><td>${fxStrip(m.e.team, gwNext, 5)}</td><td class="why">${[...(mvOf(m.e.id) ? [`Upgrade to ${esc(mvOf(m.e.id).c.e.web_name)}: ${sign1(mvOf(m.e.id).gain)} pts over 5 gameweeks`] : []), ...m.rk.map((r) => r[1])].join("; ") || "No concerns"}</td></tr>`).join("")}</tbody>
           </table></div>
         </div>
         <div class="panel">
           <div class="panel-head"><h3>Best targets by position</h3><span class="note">Fit, playing 60+ mins, within your budget</span></div>
-          <div class="tbl-wrap"><table class="fx-tbl">
+          <div class="tbl-wrap"><table class="fx-tbl cards-sm">
             <thead><tr><th>Player</th><th class="n">£</th><th class="n">Proj 5</th><th>GW${gwNext} odds</th><th>Next 5</th><th>${esc(lName)}</th></tr></thead>
-            <tbody>${targets.map(({ t, list, maxBudget }) => `<tr class="half"><td colspan="6">${D.positions[t]} · up to £${price(maxBudget)}m</td></tr>` + (list.map((c) => `<tr><td><span class="mgr">${esc(c.e.web_name)}<small>${tShort(c.e.team)} · ${Math.round(c.mins.avg)} mins</small></span></td><td class="n">${price(c.e.now_cost)}</td><td class="n"><strong>${c.p5.toFixed(1)}</strong></td><td>${oddsCell(c.e)}</td><td>${fxStrip(c.e.team, gwNext, 5)}</td><td>${leaderOwns.has(c.e.id) ? "Owns" : "<strong>Doesn't own</strong>"}</td></tr>`).join("") || `<tr><td colspan="6" class="empty">No one fits</td></tr>`)).join("")}</tbody>
+            <tbody>${targets.map(({ t, list, maxBudget }) => `<tr class="half"><td colspan="6">${D.positions[t]} · up to £${price(maxBudget)}m</td></tr>` + (list.map((c) => `<tr><td><span class="mgr"><span>${esc(c.e.web_name)}${ycBadge(c.e)}</span><small>${tShort(c.e.team)} · ${Math.round(c.mins.avg)} mins</small></span></td><td class="n">${price(c.e.now_cost)}</td><td class="n"><strong>${c.p5.toFixed(1)}</strong></td><td>${oddsCell(c.e)}</td><td>${fxStrip(c.e.team, gwNext, 5)}</td><td>${leaderOwns.has(c.e.id) ? "Owns" : "<strong>Doesn't own</strong>"}</td></tr>`).join("") || `<tr><td colspan="6" class="empty">No one fits</td></tr>`)).join("")}</tbody>
           </table></div>
         </div>
       </div>
 
       <div class="panel">
         <div class="panel-head"><h3>What the top 6 have that you don't</h3><span class="note">Players in at least 2 of the other top-6 squads (${top.map((x) => esc(firstName(x))).join(", ")})</span></div>
-        <div class="tbl-wrap"><table class="fx-tbl">
+        <div class="tbl-wrap"><table class="fx-tbl cards-sm">
           <thead><tr><th>Player</th><th class="n">Owned by</th><th>${esc(lName)}</th><th>Verdict</th><th class="n">Proj 5</th><th class="n">Mins</th><th>Next 5</th><th>Notes</th></tr></thead>
-          <tbody>${missing.map((x) => { const [c, v] = verdict(x); return `<tr><td><span class="mgr">${esc(x.e.web_name)}<small>${POSN(x.e)} · ${tShort(x.e.team)} · £${price(x.e.now_cost)}m</small></span></td><td class="n">${x.n} of ${top.length}</td><td>${x.lead ? "Owns" : "–"}</td><td><span class="pill ${c === "acc" ? "acc" : c === "bad" ? "sev3" : c === "warn" ? "sev2" : ""}">${v}</span></td><td class="n">${x.p5.toFixed(1)}</td><td class="n">${minsTxt(x.mins)}</td><td>${fxStrip(x.e.team, gwNext, 5)}</td><td class="why">${x.rk.map((r) => r[1]).join("; ") || "No concerns"}</td></tr>`; }).join("") || `<tr><td colspan="8" class="empty">You already own everything the top 6 share.</td></tr>`}</tbody>
+          <tbody>${missing.map((x) => { const [c, v] = verdict(x); return `<tr><td><span class="mgr"><span>${esc(x.e.web_name)}${ycBadge(x.e)}</span><small>${POSN(x.e)} · ${tShort(x.e.team)} · £${price(x.e.now_cost)}m</small></span></td><td class="n">${x.n} of ${top.length}</td><td>${x.lead ? "Owns" : "–"}</td><td><span class="pill ${c === "acc" ? "acc" : c === "bad" ? "sev3" : c === "warn" ? "sev2" : ""}">${v}</span></td><td class="n">${x.p5.toFixed(1)}</td><td class="n">${minsTxt(x.mins)}</td><td>${fxStrip(x.e.team, gwNext, 5)}</td><td class="why">${x.rk.map((r) => r[1]).join("; ") || "No concerns"}</td></tr>`; }).join("") || `<tr><td colspan="8" class="empty">You already own everything the top 6 share.</td></tr>`}</tbody>
         </table></div>
       </div>
       <p class="note">How this works: projections blend each player's form and points per game, then adjust per fixture (bookmaker clean sheet and scoring odds for GW${gwNext}, FPL difficulty after that), for injury news and expected return dates, and for minutes played over the last 3 gameweeks${Object.keys(FA.summ).length ? "" : " (* season average: recent minutes load on the live site)"}. Injured, suspended, doubtful or rotation-risk players are never recommended. ${FA.odds ? "" : "Bookmaker odds weren't available, so fixture difficulty is used throughout. "}Projections are estimates; check team news before the deadline.</p>`;
@@ -1194,7 +1305,7 @@ select, input[type="search"] { font: inherit; color: var(--ink); background: var
     $("#app").innerHTML = `
     <section class="view">
       <div class="panel-head"><h2>${esc(D.league.name)}: standings</h2><span class="note">Tap a manager to compare squads with them</span></div>
-      <div class="tbl-wrap"><table>
+      <div class="tbl-wrap"><table class="cards-sm">
         <thead><tr><th class="n">#</th><th>Team</th><th class="n">GW${gwCur}</th><th class="n">Total</th><th class="n">vs you</th><th>Captain</th><th>Chips (this half)</th><th class="n">Hits</th><th class="n">Bench pts</th></tr></thead>
         <tbody>${rows}</tbody></table></div>
       ${freshness()}
@@ -1304,7 +1415,7 @@ select, input[type="search"] { font: inherit; color: var(--ink); background: var
         .map((e) => ({ e, p: project(e, h) })).sort((a, b) => b.p - a.p).slice(0, 25);
       repl = `<div class="panel">
         <div class="panel-head"><h3>Replacements for ${esc(o.web_name)} (budget £${price(budget)}m)</h3><input type="search" id="q" placeholder="Filter by name" value="${esc(q)}"></div>
-        <div class="tbl-wrap"><table><thead><tr><th>Player</th><th class="n">£</th><th class="n">Form</th><th class="n">xGI/90</th><th class="n">FPL xP</th><th class="n">Proj ${h}GW</th><th class="n">vs out</th><th class="n">League</th><th>Next fixtures</th><th></th></tr></thead><tbody>
+        <div class="tbl-wrap"><table class="cards-sm"><thead><tr><th>Player</th><th class="n">£</th><th class="n">Form</th><th class="n">xGI/90</th><th class="n">FPL xP</th><th class="n">Proj ${h}GW</th><th class="n">vs out</th><th class="n">League</th><th>Next fixtures</th><th></th></tr></thead><tbody>
         ${cands.map(({ e, p }) => `<tr><td><span class="mgr">${esc(e.web_name)}<small>${tShort(e.team)}${e.news ? " · " + esc(e.news) : ""}</small></span></td><td class="n">${price(e.now_cost)}</td><td class="n">${e.form}</td><td class="n">${Number(e.expected_goal_involvements_per_90 || 0).toFixed(2)}</td><td class="n">${e.ep_next}</td><td class="n"><strong>${p.toFixed(1)}</strong></td><td class="n ${p - project(o, h) >= 0 ? "up" : "down"}">${sign(Number((p - project(o, h)).toFixed(1)))}</td><td class="n">${Math.round((own[e.id] || 0) * 100)}%</td><td>${fxStrip(e.team, gwNext, Math.min(h, 6))}</td><td><button class="btn sm pri" data-in="${e.id}">Bring in</button></td></tr>`).join("") || '<tr><td colspan="10" class="empty">Nobody fits this budget and team limit.</td></tr>'}
         </tbody></table></div></div>`;
     }
@@ -1470,7 +1581,7 @@ select, input[type="search"] { font: inherit; color: var(--ink); background: var
         <div class="kpi"><span class="k">Best clean sheet chance</span><span class="v">${Math.round(bcs.p * 100)}%</span><span class="s">${esc(T[bcs.team]?.name)}</span></div>
         <div class="kpi"><span class="k">Most likely to score</span><span class="v">${Math.round(bsc.p * 100)}%</span><span class="s">${esc(T[bsc.team]?.name)}</span></div>
       </div>` : ""}
-      <div class="tbl-wrap"><table class="odds-tbl">
+      <div class="tbl-wrap"><table class="odds-tbl cards-sm">
         <thead>
           <tr><th rowspan="2">Match</th><th class="grp" colspan="3">Result</th><th class="grp" colspan="2">Clean sheet</th><th class="grp" colspan="2">To score</th></tr>
           <tr><th class="n bl">Home win</th><th class="n">Draw</th><th class="n">Away win</th><th class="n bl">Home</th><th class="n">Away</th><th class="n bl">Home</th><th class="n">Away</th></tr>
