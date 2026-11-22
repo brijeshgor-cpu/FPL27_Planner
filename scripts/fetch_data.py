@@ -128,7 +128,7 @@ def main():
         "next_gw": nxt["id"] if nxt else None,
         "price_deadlines": (boot.get("game_config") or {}).get("settings", {}).get("price_change_deadlines", []),
         "chips_def": [[c["name"], c["start_event"], c["stop_event"]] for c in boot["chips"]],
-        "teams": [{"id": t["id"], "name": t["name"], "short": t["short_name"], "strength": t["strength"]}
+        "teams": [{"id": t["id"], "name": t["name"], "short": t["short_name"], "strength": t["strength"], "code": t["code"]}
                   for t in boot["teams"]],
         "positions": {str(t["id"]): t["singular_name_short"] for t in boot["element_types"]},
         "squad_rules": {str(t["id"]): [t["squad_select"], t["squad_min_play"], t["squad_max_play"]]

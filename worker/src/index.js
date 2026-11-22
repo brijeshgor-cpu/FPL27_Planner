@@ -27,6 +27,8 @@ export default {
 
   async fetch(request, env) {
     const url = new URL(request.url);
+    const kit = /^\/kit\/(\d{1,3})(_1)?\.png$/.exec(url.pathname);
+    if (kit) return kitImage(kit[1], kit[2] || "");
     if (!url.pathname.startsWith("/api/")) return serveStatic(url.pathname);
     if (request.method !== "GET") return new Response("Method not allowed", { status: 405 });
 
@@ -221,4 +223,15 @@ async function news() {
   const week = Date.now() - 8 * 864e5;
   const items = results.flatMap((r) => r.items).filter((x) => !x.date || x.date >= week).sort((a, b) => (b.date || 0) - (a.date || 0));
   return json({ fetched: Date.now(), sources: results.map((r) => ({ source: r.source, ok: !r.error, count: r.items.length })), items }, 200);
+}
+
+// ---------- club kit images (FPL's official shirt artwork) ----------
+async function kitImage(code, gk) {
+  try {
+    const r = await fetch(`https://fantasy.premierleague.com/dist/img/shirts/standard/shirt_${code}${gk}-110.png`, {
+      headers: { "User-Agent": "Mozilla/5.0 (compatible; fc27-planner)" }, cf: { cacheTtl: 604800, cacheEverything: true },
+    });
+    if (!r.ok) return new Response("Not found", { status: 404 });
+    return new Response(r.body, { headers: { "content-type": "image/png", "cache-control": "public, max-age=604800" } });
+  } catch (e) { return new Response("Unavailable", { status: 502 }); }
 }
