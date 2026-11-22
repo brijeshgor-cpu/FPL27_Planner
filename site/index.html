@@ -1063,13 +1063,42 @@ select, input[type="search"] { font: inherit; color: var(--ink); background: var
       .map((id) => { const e = E[id], rk = risks(e, TO), p5 = proj(e, 5, TO); return { e, n: topOwn[id], rk, sev: sevOf(rk), p5: p5.total, mins: p5.mins, lead: leaderOwns.has(id), plan: moves.some((m) => m.c.e.id === id) }; })
       .sort((a, b) => b.n - a.n || b.p5 - a.p5);
     const posTop = {}; [1, 2, 3, 4].forEach((t) => { const v = Object.values(E).filter((e) => e.element_type === t && isFit(e)).map((e) => proj(e, 5, TO).total).sort((a, b) => b - a); posTop[t] = v[Math.min(14, v.length - 1)] || 0; });
+    // Defensive coverage: owning any keeper or defender from a club already pays you when that club
+    // keeps a clean sheet. A second one ("double up") is only suggested when most top-10 rivals hold two
+    // or more from that defence AND the club's clean sheet chance over the next 3 gameweeks is good.
+    const top10 = sortedM.filter((x) => x.entry !== me).slice(0, meRow.rank <= 10 ? 9 : 10);
+    const defOf = (ids, team) => ids.filter((id) => E[id] && E[id].team === team && E[id].element_type <= 2);
+    const teamXgc90 = (team) => {
+      const gk = Object.values(E).filter((e) => e.team === team && e.element_type === 1 && e.minutes >= 450).sort((a, b) => b.minutes - a.minutes)[0];
+      if (gk) return (+gk.expected_goals_conceded || 0) / gk.minutes * 90;
+      const ds = Object.values(E).filter((e) => e.team === team && e.element_type === 2 && e.minutes >= 450);
+      return ds.length ? ds.reduce((a, e) => a + (+e.expected_goals_conceded || 0) / e.minutes * 90, 0) / ds.length : 1.3;
+    };
+    const csNext3 = (team) => { const v = []; for (let i = 0; i < 3; i++) { const g = gwNext + i, fx = teamFx[team][g] || []; v.push(!fx.length ? 0 : i === 0 && TO[team] ? TO[team].cs : Math.exp(-teamXgc90(team) * DEF_MULT[fx[0].fdr])); } return v; };
+    const coverCheck = (x) => {
+      if (x.e.element_type > 2) return null;
+      const mineDef = defOf([...squad], x.e.team);
+      if (!mineDef.length) return null;
+      const doubled = top10.filter((r) => defOf(squadOf(r.m).map((p) => p[0]), x.e.team).length >= 2);
+      const cs = csNext3(x.e.team), avgCs = cs.reduce((a, b) => a + b, 0) / cs.length;
+      const club = T[x.e.team].name, names = mineDef.map((id) => esc(E[id].web_name)).join(" and ");
+      const poss = (n) => esc(n) + (/s$/i.test(n) ? "'" : "'s");
+      const csTxt = `${poss(club)} clean sheet chance over GW${gwNext}–${gwNext + 2} averages ${pct(avgCs)} (${cs.map(pct).join(", ")})`;
+      const dblTxt = `${doubled.length} of your ${top10.length} top-10 rivals have two or more ${esc(club)} defenders or keepers`;
+      const double = doubled.length >= Math.ceil(top10.length / 2) && avgCs >= 0.35;
+      const shaky = availability(x.e) < 1 || newsFor(x.e).some((n) => n.tone === "neg");
+      const end = !double ? "No need to double up." : shaky ? `Doubling up on ${poss(club)} defence is justified, but with a fit player, not ${esc(x.e.web_name)} while he's a doubt.` : "Doubling up is worth it.";
+      return { double: double && !shaky, names, club, note: `You already have ${poss(club)} defence through ${names}. ${dblTxt}; ${csTxt}. ${end}` };
+    };
     const verdict = (x) => {
       if (x.plan) return ["acc", "In your plan"];
       if (x.sev >= 3) return ["bad", "Avoid: unavailable"];
       if (x.sev >= 2) return ["warn", "Avoid for now"];
-      if (x.p5 >= posTop[x.e.element_type] && x.n >= 3 && availability(x.e) === 1) return ["acc", "Cover him"];
-      if (x.p5 >= posTop[x.e.element_type] * 0.8) return ["", "Worth a look"];
-      return ["", "Leave"];
+      const cov = coverCheck(x);
+      if (cov && !cov.double) return ["", `Covered by ${cov.names}`, cov.note];
+      if (x.p5 >= posTop[x.e.element_type] && x.n >= 3 && availability(x.e) === 1) return ["acc", cov ? "Double up" : "Cover him", cov ? cov.note : ""];
+      if (x.p5 >= posTop[x.e.element_type] * 0.8) return ["", "Worth a look", cov ? cov.note : ""];
+      return ["", "Leave", cov ? cov.note : ""];
     };
 
     // Write-up
@@ -1107,8 +1136,8 @@ select, input[type="search"] { font: inherit; color: var(--ink); background: var
     }
     if (chipTxt) pr.push({ tag: "Chip", cls: "", t: "Free Hit timing", d: chipTxt + (leadChips.length ? ` ${lName} still has: ${leadChips.join(", ")}.` : "") });
     if (leftFT > 0) pr.push({ tag: "Transfers", cls: "", t: `Bank ${leftFT} free transfer${leftFT > 1 ? "s" : ""}`, d: `You'll have ${Math.min(5, leftFT + 1)} next week (5 is the cap). Use them for injuries or a double gameweek rather than sideways moves.` });
-    const cover = missing.filter((x) => verdict(x)[1] === "Cover him").slice(0, 2);
-    if (cover.length) pr.push({ tag: "Top 6", cls: "warn", t: `Plan to cover ${cover.map((x) => esc(x.e.web_name)).join(" and ")}`, d: cover.map((x) => `${esc(x.e.web_name)} is in ${x.n} of the other top-6 squads${x.lead ? `, including ${lName}'s` : ""}, projecting ${x.p5.toFixed(1)} pts over 5 gameweeks`).join(". ") + `. ${cover.length > 1 ? "If they haul" : "If he hauls"} without you, you fall further behind. Use next week's transfer on ${cover.length > 1 ? "one of them" : "him"} once the moves above are done.` });
+    const cover = missing.filter((x) => ["Cover him", "Double up"].includes(verdict(x)[1])).slice(0, 2);
+    if (cover.length) pr.push({ tag: "Top 6", cls: "warn", t: `Plan to cover ${cover.map((x) => esc(x.e.web_name)).join(" and ")}`, d: cover.map((x) => { const v = verdict(x); return `${esc(x.e.web_name)} is in ${x.n} of the other top-6 squads${x.lead ? `, including ${lName}'s` : ""}, projecting ${x.p5.toFixed(1)} pts over 5 gameweeks.${v[2] ? " " + v[2] : ""}`; }).join(" ") + ` ${cover.length > 1 ? "If they haul" : "If he hauls"} without you, you fall further behind. Use next week's transfer on ${cover.length > 1 ? "one of them" : "him"} once the moves above are done.` });
     // Watch list, minus yellow-card risks (those have their own Suspension item).
     const watch = mine.filter((m) => m.sev === 1 && !moved.has(m.e.id)).map((m) => ({ m, rs: m.rk.filter((r) => !/yellow cards/.test(r[1])) })).filter((x) => x.rs.length).slice(0, 5);
     if (watch.length) pr.push({ tag: "Watch", cls: "", t: "Keep, but check team news before the deadline", d: watch.map(({ m, rs }) => `<strong>${esc(m.e.web_name)}</strong>: ${rs.map((r) => r[1]).join("; ")}`).join(". ") });
@@ -1176,7 +1205,7 @@ select, input[type="search"] { font: inherit; color: var(--ink); background: var
         <div class="panel-head"><h3>What the top 6 have that you don't</h3><span class="note">Players in at least 2 of the other top-6 squads (${top.map((x) => esc(firstName(x))).join(", ")})</span></div>
         <div class="tbl-wrap"><table class="fx-tbl cards-sm">
           <thead><tr><th>Player</th><th class="n">Owned by</th><th>${esc(lName)}</th><th>Verdict</th><th class="n">Proj 5</th><th class="n">Mins</th><th>Next 5</th><th>Notes</th></tr></thead>
-          <tbody>${missing.map((x) => { const [c, v] = verdict(x); return `<tr><td><span class="mgr"><span>${esc(x.e.web_name)}${ycBadge(x.e)}</span><small>${POSN(x.e)} · ${tShort(x.e.team)} · £${price(x.e.now_cost)}m</small></span></td><td class="n">${x.n} of ${top.length}</td><td>${x.lead ? "Owns" : "–"}</td><td><span class="pill ${c === "acc" ? "acc" : c === "bad" ? "sev3" : c === "warn" ? "sev2" : ""}">${v}</span></td><td class="n">${x.p5.toFixed(1)}</td><td class="n">${minsTxt(x.mins)}</td><td>${fxStrip(x.e.team, gwNext, 5)}</td><td class="why">${x.rk.map((r) => r[1]).join("; ") || "No concerns"}</td></tr>`; }).join("") || `<tr><td colspan="8" class="empty">You already own everything the top 6 share.</td></tr>`}</tbody>
+          <tbody>${missing.map((x) => { const [c, v, note] = verdict(x); return `<tr><td><span class="mgr"><span>${esc(x.e.web_name)}${ycBadge(x.e)}</span><small>${POSN(x.e)} · ${tShort(x.e.team)} · £${price(x.e.now_cost)}m</small></span></td><td class="n">${x.n} of ${top.length}</td><td>${x.lead ? "Owns" : "–"}</td><td><span class="pill ${c === "acc" ? "acc" : c === "bad" ? "sev3" : c === "warn" ? "sev2" : ""}">${v}</span></td><td class="n">${x.p5.toFixed(1)}</td><td class="n">${minsTxt(x.mins)}</td><td>${fxStrip(x.e.team, gwNext, 5)}</td><td class="why">${[note, ...x.rk.map((r) => r[1])].filter(Boolean).join(" ") || "No concerns"}</td></tr>`; }).join("") || `<tr><td colspan="8" class="empty">You already own everything the top 6 share.</td></tr>`}</tbody>
         </table></div>
       </div>
       <p class="note">How this works: projections blend each player's form and points per game, then adjust per fixture (bookmaker clean sheet and scoring odds for GW${gwNext}, FPL difficulty after that), for injury news and expected return dates, and for minutes played over the last 3 gameweeks${Object.keys(FA.summ).length ? "" : " (* season average: recent minutes load on the live site)"}. Every pick and captain choice uses one expert score: a points model from xG and xA per 90, clean sheet chance from xGA, defensive contributions, saves and bonus rate, blended with form, then adjusted for players scoring above or below their xG, BPS per 90, price trend and the latest BBC Sport and Guardian news. Injured, suspended, doubtful or rotation-risk players are never recommended. ${FA.odds ? "" : "Bookmaker odds weren't available, so fixture difficulty is used throughout. "}Projections are estimates; check team news before the deadline.</p>`;
