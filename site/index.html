@@ -259,6 +259,11 @@ td.why { white-space: normal; min-width: 220px; font-size: .8rem; color: var(--m
 .tgt + .tgt { margin-top: 10px; }
 .own-cell { display: grid; gap: 2px; }
 .xgi-tbl th, .xgi-tbl td { padding: 8px 7px; }
+.def-tbl { font-size: .82rem; }
+.def-tbl th, .def-tbl td { padding: 8px 6px; }
+.def-tbl th { white-space: normal; vertical-align: bottom; }
+.def-tbl td small.note { display: block; }
+.own-list { display: flex; flex-wrap: wrap; gap: 3px; max-width: 190px; }
 .ins-tbl td { vertical-align: top; }
 .ins-tbl td small.note { white-space: normal; max-width: 260px; display: block; }
 .rot-ctl { gap: 10px 16px; }
@@ -434,7 +439,8 @@ select, input[type="search"] { font: inherit; color: var(--ink); background: var
     "cost_change_event", "cost_change_start", "transfers_in_event", "transfers_out_event", "penalties_order",
     "yellow_cards", "red_cards", "news_added", "chance_of_playing_this_round",
     "expected_goals_per_90", "expected_assists_per_90", "saves_per_90", "defensive_contribution",
-    "price_change_percent", "price_change_projections", "price_change_locked_until", "price_change_calibrating"];
+    "price_change_percent", "price_change_projections", "price_change_locked_until", "price_change_calibrating",
+    "expected_goals_conceded", "goals_conceded"];
   const setStatus = (t) => { const a = $("#app"); if (a && !D) a.innerHTML = `<p class="empty">${esc(t)}</p>`; };
 
   async function api(path) {
@@ -1901,9 +1907,10 @@ select, input[type="search"] { font: inherit; color: var(--ink); background: var
       </table></div>
       <p class="note">"Most captained" and "top scorer" are FPL's figures across all managers. Points are the player's own score; a captain doubles them. League ownership uses each manager's squad for that gameweek, including the bench.</p>
       <div class="panel" id="xgiTop">${xgiTopHTML()}</div>
+      <div class="panel" id="defTop">${defTopHTML()}</div>
       ${freshness()}
     </section>`;
-    wireXgiTop();
+    wireXgiTop(); wireDefTop();
   }
 
   // Top 20 by season expected goal involvements (Opta xG + xA, as published by FPL).
@@ -1936,6 +1943,46 @@ select, input[type="search"] { font: inherit; color: var(--ink); background: var
         </tr>`).join("")}</tbody>
       </table></div>
       <p class="note">"vs xGI" compares actual goals plus assists with xGI: a big minus means he has been unlucky and could be due returns; a big plus means he is scoring more than his chances suggest. The small figure next to the price is the change since the start of the season. Next 3 shows the coming opponents coloured by FPL difficulty (capitals home, lower case away).</p>`;
+  }
+  // Defenders: best defences first (xGA per 90 in 0.1 bands), then defensive contributions, then xGI.
+  function defTopHTML() {
+    const n = store.get("defN", 20) === 40 ? 40 : 20;
+    const mine = new Set(squadOf(myM).map((p) => p[0]));
+    const meRank = members.find((x) => x.entry === me).rank;
+    const rivals = [...members].sort((a, b) => a.rank - b.rank).filter((x) => x.entry !== me).slice(0, meRank <= 10 ? 9 : 10);
+    const ownersOf = (id) => rivals.filter((x) => squadOf(x.m).some((p) => p[0] === id));
+    const g90 = (e) => (e.minutes ? (+e.expected_goals_conceded || 0) / e.minutes * 90 : 9);
+    const list = Object.values(E).filter((e) => e.element_type === 2 && e.minutes >= 450)
+      .sort((a, b) => Math.round(g90(a) * 10) - Math.round(g90(b) * 10) || (+b.defensive_contribution_per_90) - (+a.defensive_contribution_per_90) || (+b.expected_goal_involvements) - (+a.expected_goal_involvements))
+      .slice(0, n);
+    return `
+      <div class="panel-head"><h3>Defenders: xGA, clean sheets, defensive contributions and attacking threat</h3>
+        <div class="seg" role="group" aria-label="How many">${[20, 40].map((v) => `<button data-defn="${v}" aria-pressed="${v === n}">Top ${v}</button>`).join("")}</div></div>
+      <p class="note">Defenders with 450+ minutes. Ranked by expected goals against per 90 (lower is better, in bands of 0.1), then defensive contributions per 90, then xGI. "Owned by" shows you and your top-10 rivals (${rivals.map((x) => esc(firstName(x))).join(", ")}).</p>
+      <div class="tbl-wrap"><table class="cards-sm def-tbl">
+        <thead><tr><th class="n">#</th><th>Player</th><th class="n">xGA per 90</th><th class="n">xCS chance</th><th class="n">xCS / CS</th><th class="n">Defcons per 90</th><th class="n">xGI</th><th class="n">xA</th><th class="n">Mins</th><th class="n">Price</th><th>Next 3</th><th>Owned by</th></tr></thead>
+        <tbody>${list.map((e, i) => {
+          const csP = Math.exp(-g90(e)), xcs = (e.minutes / 90) * csP, dc = +e.defensive_contribution_per_90 || 0, o = ownersOf(e.id);
+          return `<tr class="${mine.has(e.id) ? "me" : ""}">
+            <td class="n">${i + 1}</td>
+            <td><span class="mgr"><span>${esc(e.web_name)} ${availability(e) < 1 ? statusPill(e) : ""}${ycBadge(e)}</span><small>${esc(T[e.team]?.name)} · ${e.selected_by_percent}% owned</small></span></td>
+            <td class="n"><strong>${g90(e).toFixed(2)}</strong> <small class="note">(${(+e.expected_goals_conceded).toFixed(1)} total)</small></td>
+            <td class="n">${pct(csP)}</td>
+            <td class="n">${xcs.toFixed(1)} / ${e.clean_sheets}</td>
+            <td class="n"><strong>${dc.toFixed(1)}</strong> <small class="note">${pct(poisAtLeast(dc, 10))} of games hit 10+</small></td>
+            <td class="n">${(+e.expected_goal_involvements).toFixed(2)}</td>
+            <td class="n">${(+e.expected_assists).toFixed(2)}</td>
+            <td class="n">${fmt(e.minutes)}</td>
+            <td class="n"><strong>£${price(e.now_cost)}m</strong></td>
+            <td>${fxStrip(e.team, gwNext, 3)}</td>
+            <td><span class="own-list">${mine.has(e.id) ? '<span class="pill acc">You</span>' : ""}${o.map((x) => `<span class="pill">${esc(firstName(x))}</span>`).join("")}${!mine.has(e.id) && !o.length ? '<span class="note">Nobody</span>' : ""}</span></td>
+          </tr>`; }).join("")}</tbody>
+      </table></div>
+      <p class="note">xGA is expected goals against while he is on the pitch (Opta, via FPL). xCS chance is the estimated chance of a clean sheet in a full game from that rate; xCS / CS compares expected clean sheets so far with actual ones. Defenders earn 2 points for 10+ defensive contributions (clearances, blocks, interceptions and tackles) in a match; the small figure is the estimated share of games where he reaches it.</p>`;
+  }
+  function wireDefTop() {
+    const box = $("#defTop"); if (!box) return;
+    box.querySelectorAll("[data-defn]").forEach((b) => b.addEventListener("click", () => { store.set("defN", Number(b.dataset.defn)); box.innerHTML = defTopHTML(); wireDefTop(); }));
   }
   function wireXgiTop() {
     const box = $("#xgiTop"); if (!box) return;
