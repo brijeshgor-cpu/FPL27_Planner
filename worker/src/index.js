@@ -32,6 +32,7 @@ export default {
 
     const path = url.pathname.slice("/api/".length);
     if (path === "odds" || path === "odds/") return odds(env);
+    if (path === "news" || path === "news/") return news();
     const lp = /^league-picks\/(\d+)\/(\d+)\/?$/.exec(path);
     if (lp) return leaguePicks(env, Number(lp[1]), Number(lp[2]));
     if (!ALLOWED.some((re) => re.test(path))) return json({ error: "not allowed" }, 404);
@@ -193,4 +194,31 @@ async function leaguePicks(env, league, gw) {
   } catch (e) {
     return json({ error: "fpl_unreachable", detail: String(e.message || e) }, 502);
   }
+}
+
+// ---------- Premier League news (fetched fresh on every request) ----------
+// Public RSS headline feeds; the page shows each headline with a link to the original story.
+const NEWS_FEEDS = [
+  ["BBC Sport", "https://feeds.bbci.co.uk/sport/football/premier-league/rss.xml"],
+  ["The Guardian", "https://www.theguardian.com/football/premierleague/rss"],
+];
+const decode = (t) => t.replace(/<!\[CDATA\[([\s\S]*?)\]\]>/g, "$1").replace(/<[^>]+>/g, " ")
+  .replace(/&amp;/g, "&").replace(/&quot;/g, '"').replace(/&#39;|&#x27;|&apos;/g, "'").replace(/&lt;/g, "<").replace(/&gt;/g, ">")
+  .replace(/&#(\d+);/g, (_, n) => String.fromCharCode(Number(n))).replace(/\s+/g, " ").trim();
+const tag = (item, name) => { const m = new RegExp(`<${name}[^>]*>([\\s\\S]*?)</${name}>`).exec(item); return m ? decode(m[1]) : ""; };
+async function news() {
+  const results = await Promise.all(NEWS_FEEDS.map(async ([source, url]) => {
+    try {
+      const r = await fetch(url, { headers: { "User-Agent": "Mozilla/5.0 (compatible; fc27-planner)", Accept: "application/rss+xml, application/xml" } });
+      if (!r.ok) return { source, error: r.status, items: [] };
+      const xml = await r.text();
+      const items = (xml.match(/<item[\s>][\s\S]*?<\/item>/g) || []).slice(0, 60).map((it) => ({
+        source, title: tag(it, "title"), link: tag(it, "link"), desc: tag(it, "description").slice(0, 400), date: Date.parse(tag(it, "pubDate")) || null,
+      })).filter((x) => x.title && /^https:\/\//.test(x.link));
+      return { source, items };
+    } catch (e) { return { source, error: "unreachable", items: [] }; }
+  }));
+  const week = Date.now() - 8 * 864e5;
+  const items = results.flatMap((r) => r.items).filter((x) => !x.date || x.date >= week).sort((a, b) => (b.date || 0) - (a.date || 0));
+  return json({ fetched: Date.now(), sources: results.map((r) => ({ source: r.source, ok: !r.error, count: r.items.length })), items }, 200);
 }

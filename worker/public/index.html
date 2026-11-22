@@ -273,6 +273,13 @@ td.why { white-space: normal; min-width: 220px; font-size: .8rem; color: var(--m
 .bps-tbl { font-size: .84rem; }
 .bps-tbl th, .bps-tbl td { padding: 8px 7px; }
 .bps-tbl td small.note { white-space: normal; max-width: 230px; display: block; }
+.news-box { border: 1px solid var(--line); border-radius: var(--r); padding: 10px 14px; display: grid; gap: 6px; background: var(--surface); }
+.news-box .k { font-size: .72rem; text-transform: uppercase; letter-spacing: .08em; color: var(--muted); font-weight: 600; }
+.news { list-style: none; margin: 0; padding: 0; display: grid; gap: 6px; font-size: .86rem; }
+.news li { display: flex; flex-wrap: wrap; align-items: baseline; gap: 4px 8px; padding-left: 10px; border-left: 3px solid var(--line); }
+.news li.neg { border-left-color: var(--bad); } .news li.pos { border-left-color: var(--good); }
+.news a { color: var(--ink); text-decoration: underline; text-decoration-color: var(--line); text-underline-offset: 3px; }
+.news a:hover { text-decoration-color: var(--accent); }
 .own-list { display: flex; flex-wrap: wrap; gap: 3px; max-width: 190px; }
 .ins-tbl td { vertical-align: top; }
 .ins-tbl td small.note { white-space: normal; max-width: 260px; display: block; }
@@ -697,6 +704,7 @@ select, input[type="search"] { font: inherit; color: var(--ink); background: var
       try { const j = await api(`element-summary/${id}/`); FA.summ[id] = j.history.map((h) => [h.round, h.minutes, h.total_points]); const hp = j.history_past || []; FA.past[id] = hp.length ? hp[hp.length - 1].minutes : null; }
       catch (e) { FA.summ[id] = null; }
     });
+    XS.clear();
   }
 
   // ---- Returning players: teammates back from injury (or due back) who can take minutes ----
@@ -717,7 +725,7 @@ select, input[type="search"] { font: inherit; color: var(--ink); background: var
     }).map((e) => e.id);
   }
   function computeCompetition() {
-    FA.comp = {};
+    FA.comp = {}; XS.clear();
     const rets = returneePool().map((id) => E[id]).filter((e) => {
       const past = FA.past[e.id];
       const pedigree = past != null ? past >= 1500 : e.now_cost / 10 >= PRICE_FLOOR[e.element_type] + 1.5;
@@ -863,21 +871,105 @@ select, input[type="search"] { font: inherit; color: var(--ink); background: var
     if (o && e.element_type <= 2 && o.cs < 0.2) r.push([1, `Bookmakers give ${tShort(e.team)} only a ${pct(o.cs)} clean sheet chance in GW${gwNext}`]);
     if (o && e.element_type >= 3 && o.score < 0.62) r.push([1, `${tShort(e.team)} are only ${pct(o.score)} to score in GW${gwNext}`]);
     if (e.cost_change_event < 0) r.push([1, `Price fell £${price(-e.cost_change_event)}m this gameweek`]);
+    newsFor(e).filter((x) => x.tone === "neg").slice(0, 1).forEach((x) => r.push([x.strong ? 2 : 1, `In the news (${esc(x.it.source)}, ${ago(x.it.date)}): "${esc(x.it.title)}"`]));
+    if (teamNews(e.team).length) r.push([1, `${tShort(e.team)} have a new manager (${esc(teamNews(e.team)[0].title)}): expect some rotation while he settles`]);
     return r;
   }
   const sevOf = (rk) => rk.reduce((m, r) => Math.max(m, r[0]), 0);
 
+  // ---- Football news: BBC Sport and Guardian Premier League headlines, matched to players ----
+  // A player matches when his full name appears, or his short name appears alongside his club
+  // (or his short name is unique, 5+ letters). The words around the name decide the tone.
+  const NEWS_NEG = /\b(injur\w*|ruled out|out for|sidelined|scan|hamstring|knee|ankle|groin|calf|thigh|setback|doubt\w*|surgery|limped|stretchered|illness|concussion|suspen\w*|banned|sent off|sees red|red card|dropped|benched|axed|left out|omitted)\b/i;
+  const NEWS_STRONG = /\b(ruled out|out for|surgery|weeks|months|sidelined|suspen\w*|banned|sent off|sees red|red card)\b/i;
+  const NEWS_POS = /\b(returns?|returned|back in training|fit again|available again|boost|recalled|hat-trick|brace|double|scores?d?|stars|shines|impress\w*|winner|player of the match)\b/i;
+  const NEWS_MGR = /\b(sacked|appointed|new (head )?coach|new manager|first game as|caretaker|interim)\b/i;
+  const teamWords = (t) => [T[t]?.name].filter(Boolean).map((x) => x.toLowerCase());
+  const reEsc = (x) => x.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+  const TEAM_ALIASES = { MCI: ["man city", "manchester city"], MUN: ["man utd", "man united", "manchester united"], TOT: ["spurs", "tottenham"], NFO: ["forest", "nottingham"], NEW: ["newcastle"], BHA: ["brighton"], WHU: ["west ham"], WOL: ["wolves"], AVL: ["villa"], CRY: ["palace"], LEE: ["leeds"], IPS: ["ipswich"], COV: ["coventry"], HUL: ["hull"], BOU: ["bournemouth"], SUN: ["sunderland"] };
+  const teamAliases = (t) => [...teamWords(t), ...(TEAM_ALIASES[T[t]?.short] || [])];
+  const mentionsTeam = (text, t) => teamAliases(t).some((w) => new RegExp(`(^|[^a-z])${reEsc(w)}([^a-z]|$)`).test(text));
+  let nameCount = null;
+  const NF = new Map(), XS = new Map(); // per-run caches for news matches and expert scores
+  function newsFor(e) {
+    if (!FA.news || !FA.news.items) return [];
+    if (NF.has(e.id)) return NF.get(e.id);
+    if (!nameCount) { nameCount = {}; Object.values(E).forEach((x) => (nameCount[x.web_name.toLowerCase()] = (nameCount[x.web_name.toLowerCase()] || 0) + 1)); }
+    const short = e.web_name.toLowerCase(), full = `${e.first_name} ${e.second_name}`.toLowerCase();
+    const out = [];
+    FA.news.items.forEach((it) => {
+      const text = `${it.title} . ${it.desc}`, low = text.toLowerCase();
+      let at = low.indexOf(full);
+      if (at < 0) { const re = new RegExp(`(^|[^a-zà-ÿ])${short.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}([^a-zà-ÿ]|$)`); const m = re.exec(low); if (m && (mentionsTeam(low, e.team) || (nameCount[short] === 1 && short.length >= 5))) at = m.index; }
+      if (at < 0) return;
+      const near = text.slice(Math.max(0, at - 90), at + 130);
+      const neg = NEWS_NEG.test(near), pos = !neg && NEWS_POS.test(near);
+      out.push({ it, tone: neg ? "neg" : pos ? "pos" : "info", strong: neg && NEWS_STRONG.test(near), near });
+    });
+    NF.set(e.id, out);
+    return out;
+  }
+  // A club has a new manager only when its name sits right next to the change in a headline,
+  // e.g. "first game as Man Utd boss", "Spurs appoint ...", "Forest sack ...".
+  function teamNews(t) {
+    if (!FA.news || !FA.news.items) return [];
+    const names = teamAliases(t).map(reEsc).join("|");
+    const re = new RegExp(`(first (game|match) as (${names}) (boss|manager|head coach)|new (${names}) (boss|manager|head coach)|(${names})('s)? new (boss|manager|head coach)|(${names}) (sack|appoint|name|confirm)\\w*|(sacked|appointed) (as )?(${names}))`, "i");
+    return FA.news.items.filter((it) => re.test(it.title));
+  }
+  const ago = (t) => { if (!t) return ""; const h = Math.round((Date.now() - t) / 36e5); return h < 1 ? "just now" : h < 24 ? `${h}h ago` : `${Math.round(h / 24)}d ago`; };
+
+  // ---- Expert score: one number used for every recommendation ----
+  // 55% points model (xG/xA, clean sheet chance from xGA, defensive contributions, saves, bonus rate,
+  // fixtures and bookmaker odds) + 45% form-based projection, then: expected regression to xG for
+  // attackers, bonus potential from BPS per 90, price trend, and recent news.
+  function expertScore(e, n, TO) {
+    const key = e.id + ":" + n; if (XS.has(key)) return XS.get(key);
+    const m = modelPts(e, n, TO).total, p = proj(e, n, TO).total;
+    let sc = 0.55 * m + 0.45 * p;
+    if (e.element_type >= 3) { const gap = e.goals_scored - (+e.expected_goals || 0); sc += Math.max(-1.5, Math.min(1.5, -gap * 0.25)) * (n / 5); }
+    const bps90 = e.minutes >= 270 ? (e.bps / e.minutes) * 90 : 20;
+    sc += (bps90 - 20) * 0.03 * n;
+    const pm = priceMove(e); if (pm.cls === "up") sc += 0.2; else if (pm.cls === "down") sc -= 0.2;
+    const nw = newsFor(e);
+    if (nw.some((x) => x.tone === "neg" && x.strong)) sc *= 0.5; else if (nw.some((x) => x.tone === "neg")) sc *= 0.85;
+    if (teamNews(e.team).length) sc *= 0.95; // new manager: some rotation risk
+    XS.set(key, sc);
+    return sc;
+  }
+  // Short evidence list for a player, drawn from the Insights data.
+  function evidence(e, TO, leadOwns, lgOwn) {
+    const t = e.element_type, out = [];
+    const xgi = +e.expected_goal_involvements_per_90 || 0, bps90 = e.minutes ? (e.bps / e.minutes) * 90 : 0;
+    if (t >= 2 && xgi >= (t === 2 ? 0.15 : 0.45)) out.push(`xGI ${xgi.toFixed(2)}/90`);
+    if (t >= 3) { const gap = e.goals_scored - (+e.expected_goals || 0); if (gap <= -1) out.push(`${Math.abs(gap).toFixed(1)} goals below xG (due)`); else if (gap >= 1.5) out.push(`${gap.toFixed(1)} goals above xG (may cool)`); }
+    if (t <= 2) { const g90 = e.minutes ? (+e.expected_goals_conceded || 0) / e.minutes * 90 : 0; if (g90 && g90 <= 1.1) out.push(`xGA ${g90.toFixed(2)}/90`); }
+    if (t >= 2) { const dc = +e.defensive_contribution_per_90 || 0, hit = poisAtLeast(dc, t === 2 ? 10 : 12); if (hit >= 0.3) out.push(`defcon in ~${pct(hit)} of games`); }
+    if (bps90 >= 25) out.push(`BPS ${bps90.toFixed(1)}/90`);
+    const o = TO[e.team]; if (o) out.push(t <= 2 ? `${pct(o.cs)} CS odds GW${gwNext}` : `${tShort(e.team)} ${pct(o.score)} to score GW${gwNext}`);
+    const pm = priceMove(e); if (pm.cls === "up") out.push("price rising"); else if (pm.cls === "down") out.push("price falling");
+    if (lgOwn) out.push(`${lgOwn[e.id] || 0} of ${members.length} in league own`);
+    if (leadOwns) out.push(leadOwns.has(e.id) ? "leader owns" : "leader doesn't own");
+    return out;
+  }
+
   function candidates(type, budget, squad, tc, outTeam, TO, avoid, minPrice = 0) {
     return Object.values(E).filter((e) => e.element_type === type && !squad.has(e.id) && e.now_cost <= budget && e.now_cost >= minPrice && isFit(e)
         && ((tc[e.team] || 0) - (e.team === outTeam ? 1 : 0)) < 3)
-      .map((e) => { const p5 = proj(e, 5, TO), p3 = proj(e, 3, TO); return { e, p5: p5.total, p3: p3.total, mins: p5.mins, swing: p3.total * (avoid.has(e.id) ? 0 : 1) }; })
+      .map((e) => { const p5 = expertScore(e, 5, TO), p3 = expertScore(e, 3, TO); return { e, p5, p3, mins: minutesInfo(e), swing: p3 * (avoid.has(e.id) ? 0 : 1) }; })
       .filter((c) => c.mins.avg >= 60 && sevOf(risks(c.e, TO)) < 2)
       .sort((a, b) => b.p5 + 0.4 * b.swing - (a.p5 + 0.4 * a.swing));
   }
 
+  async function loadNews() {
+    if (FA.news !== undefined) return;
+    NF.clear(); XS.clear();
+    FA.news = await fetch("api/news", { cache: "no-store" }).then((r) => (r.ok && (r.headers.get("content-type") || "").includes("json") ? r.json() : null)).catch(() => null);
+  }
   async function renderFuture() {
     const box = $("#future"); if (!box) return;
     try {
+      await loadNews();
       if (FA.odds === undefined) FA.odds = await (oddsCache ? Promise.resolve(oddsCache) : fetch("api/odds", { cache: "no-store" }).then((r) => (r.ok && (r.headers.get("content-type") || "").includes("json") ? r.json() : null)).catch(() => null));
       if (FA.odds) oddsCache = FA.odds;
       const TO = teamOdds();
@@ -909,7 +1001,7 @@ select, input[type="search"] { font: inherit; color: var(--ink); background: var
     let bank = myM.picks?.bank ?? lastHist(myM)[8];
     const squad = new Set(picks.map((p) => p[0]));
     const tc = {}; picks.forEach((p) => (tc[E[p[0]].team] = (tc[E[p[0]].team] || 0) + 1));
-    const mine = picks.map(([id, slot]) => { const e = E[id], rk = risks(e, TO), p5 = proj(e, 5, TO); return { e, slot, rk, sev: sevOf(rk), p5: p5.total, p3: proj(e, 3, TO).total, mins: p5.mins }; });
+    const mine = picks.map(([id, slot]) => { const e = E[id], rk = risks(e, TO); return { e, slot, rk, sev: sevOf(rk), p5: expertScore(e, 5, TO), p3: expertScore(e, 3, TO), mins: minutesInfo(e) }; });
 
     // Transfer plan: greedy, most urgent first. Bench players count for less unless they're unavailable.
     const moves = []; const pool5 = [...mine];
@@ -935,6 +1027,7 @@ select, input[type="search"] { font: inherit; color: var(--ink); background: var
       pool5.splice(pool5.indexOf(best.m), 1);
     }
     const moved = new Map(moves.map((mv) => [mv.m.e.id, mv.c.e]));
+    const lgOwnAll = {}; members.forEach((x) => squadOf(x.m).forEach((p) => (lgOwnAll[p[0]] = (lgOwnAll[p[0]] || 0) + 1)));
 
     // Projections for the next 3 gameweeks: starting XI plus captain each week.
     const xiProj = (ids) => { let t = 0; for (let i = 0; i < 3; i++) { const v = ids.map((id) => proj(E[id], 3, TO).per[i] || 0); t += v.reduce((a, b) => a + b, 0) + Math.max(0, ...v); } return t; };
@@ -945,7 +1038,7 @@ select, input[type="search"] { font: inherit; color: var(--ink); background: var
     const gap = leader.total - meRow.total;
 
     // Captain for next gameweek, after the transfers.
-    const capList = myXIafter.map((id) => ({ e: E[id], p: proj(E[id], 1, TO).total })).sort((a, b) => b.p - a.p);
+    const capList = myXIafter.map((id) => ({ e: E[id], p: expertScore(E[id], 1, TO) })).sort((a, b) => b.p - a.p);
     const cap = capList[0], vice = capList[1];
     const leadCap = squadOf(leader.m).find((p) => p[3]);
     const capDiff = capList.find((c) => !leaderOwns.has(c.e.id) && c.p >= cap.p * 0.85);
@@ -1048,6 +1141,17 @@ select, input[type="search"] { font: inherit; color: var(--ink); background: var
         if (!hit.length) return `<div class="ban-strip ok"><span class="k">Returning players</span> No injured teammates are coming back to compete with your players.</div>`;
         return `<div class="ban-strip ret"><span class="k">Returning players</span>${hit.map((m) => `<span class="ban-item"><strong>${esc(m.e.web_name)}</strong> <span class="note">(${tShort(m.e.team)})</span> could lose minutes to <span>${FA.comp[m.e.id].map(({ r, kind }) => `${esc(r.web_name)} <span class="note">${returnFrom(r) === 0 ? "back now" : "due " + new Date(expectedBack(r)).toLocaleDateString("en-GB", { day: "numeric", month: "short" })}${kind === "adjacent" ? ", possible" : ""}</span>`).join(", ")}</span></span>`).join("")}</div>`; })()}
 
+      ${(() => {
+        const watch = [...new Set([...picks.map((p) => p[0]), ...moves.map((mv) => mv.c.e.id), ...squadOf(leader.m).map((p) => p[0])])];
+        const seen = new Set(); const rows = [];
+        watch.forEach((id) => newsFor(E[id]).forEach((x) => { const k = x.it.link + id; if (seen.has(k)) return; seen.add(k); rows.push({ e: E[id], x, mine: picks.some((p) => p[0] === id) }); }));
+        const teams = [...new Set(picks.map((p) => E[p[0]].team))].flatMap((t) => teamNews(t).map((it) => ({ t, it })));
+        rows.sort((a, b) => (b.x.tone === "neg") - (a.x.tone === "neg") || b.mine - a.mine || (b.x.it.date || 0) - (a.x.it.date || 0));
+        if (!FA.news) return `<div class="ban-strip ok"><span class="k">In the news</span> Football news loads on the live site.</div>`;
+        if (!rows.length && !teams.length) return `<div class="ban-strip ok"><span class="k">In the news</span> No recent BBC Sport or Guardian stories mention your players, your targets or ${esc(lName)}'s players.</div>`;
+        return `<div class="news-box"><div class="panel-head"><span class="k">In the news</span><span class="note">Latest BBC Sport and Guardian Premier League stories mentioning your players, the suggested signings and ${esc(lName)}'s squad</span></div><ul class="news">${teams.map(({ t, it }) => `<li class="neg"><span class="pill sev2">${esc(T[t].short)} manager</span> <a href="${esc(it.link)}" target="_blank" rel="noopener">${esc(it.title)}</a> <small class="note">${esc(it.source)} · ${ago(it.date)}</small></li>`).join("")}${rows.slice(0, 10).map(({ e, x, mine: m }) => `<li class="${x.tone}"><span class="pill ${x.tone === "neg" ? "sev3" : x.tone === "pos" ? "ok" : ""}">${esc(e.web_name)}${m ? " (yours)" : ""}</span> <a href="${esc(x.it.link)}" target="_blank" rel="noopener">${esc(x.it.title)}</a> <small class="note">${esc(x.it.source)} · ${ago(x.it.date)}</small></li>`).join("")}</ul></div>`;
+      })()}
+
       <h3>Your priorities, in order</h3>
       <ol class="prio">${pr.map((p) => `<li><span class="pill ${p.cls === "acc" ? "acc" : p.cls === "bad" ? "sev3" : p.cls === "warn" ? "sev2" : ""}">${p.tag}</span><div><div class="t">${p.t}</div><div class="d">${p.d}</div></div></li>`).join("")}</ol>
 
@@ -1062,8 +1166,8 @@ select, input[type="search"] { font: inherit; color: var(--ink); background: var
         <div class="panel">
           <div class="panel-head"><h3>Best targets by position</h3><span class="note">Fit, playing 60+ mins, within your budget</span></div>
           <div class="tbl-wrap"><table class="fx-tbl cards-sm">
-            <thead><tr><th>Player</th><th class="n">£</th><th class="n">Proj 5</th><th>GW${gwNext} odds</th><th>Next 5</th><th>${esc(lName)}</th></tr></thead>
-            <tbody>${targets.map(({ t, list, maxBudget }) => `<tr class="half"><td colspan="6">${D.positions[t]} · up to £${price(maxBudget)}m</td></tr>` + (list.map((c) => `<tr><td><span class="mgr"><span>${esc(c.e.web_name)}${ycBadge(c.e)}</span><small>${tShort(c.e.team)} · ${Math.round(c.mins.avg)} mins</small></span></td><td class="n">${price(c.e.now_cost)}</td><td class="n"><strong>${c.p5.toFixed(1)}</strong></td><td>${oddsCell(c.e)}</td><td>${fxStrip(c.e.team, gwNext, 5)}</td><td>${leaderOwns.has(c.e.id) ? "Owns" : "<strong>Doesn't own</strong>"}</td></tr>`).join("") || `<tr><td colspan="6" class="empty">No one fits</td></tr>`)).join("")}</tbody>
+            <thead><tr><th>Player</th><th class="n">£</th><th class="n">Score (5 GW)</th><th>Next 5</th><th>Why (Insights data)</th></tr></thead>
+            <tbody>${targets.map(({ t, list, maxBudget }) => `<tr class="half"><td colspan="5">${D.positions[t]} · up to £${price(maxBudget)}m</td></tr>` + (list.map((c) => `<tr><td><span class="mgr"><span>${esc(c.e.web_name)}${ycBadge(c.e)}</span><small>${tShort(c.e.team)} · ${Math.round(c.mins.avg)} mins</small></span></td><td class="n">${price(c.e.now_cost)}</td><td class="n"><strong>${c.p5.toFixed(1)}</strong></td><td>${fxStrip(c.e.team, gwNext, 5)}</td><td class="why">${evidence(c.e, TO, leaderOwns, lgOwnAll).join(" · ")}${newsFor(c.e).filter((x) => x.tone === "pos" && x.it.title.toLowerCase().includes(c.e.web_name.toLowerCase())).slice(0, 1).map((x) => ` · <a href="${esc(x.it.link)}" target="_blank" rel="noopener">in the news: ${esc(x.it.title)}</a>`).join("")}</td></tr>`).join("") || `<tr><td colspan="5" class="empty">No one fits</td></tr>`)).join("")}</tbody>
           </table></div>
         </div>
       </div>
@@ -1075,7 +1179,7 @@ select, input[type="search"] { font: inherit; color: var(--ink); background: var
           <tbody>${missing.map((x) => { const [c, v] = verdict(x); return `<tr><td><span class="mgr"><span>${esc(x.e.web_name)}${ycBadge(x.e)}</span><small>${POSN(x.e)} · ${tShort(x.e.team)} · £${price(x.e.now_cost)}m</small></span></td><td class="n">${x.n} of ${top.length}</td><td>${x.lead ? "Owns" : "–"}</td><td><span class="pill ${c === "acc" ? "acc" : c === "bad" ? "sev3" : c === "warn" ? "sev2" : ""}">${v}</span></td><td class="n">${x.p5.toFixed(1)}</td><td class="n">${minsTxt(x.mins)}</td><td>${fxStrip(x.e.team, gwNext, 5)}</td><td class="why">${x.rk.map((r) => r[1]).join("; ") || "No concerns"}</td></tr>`; }).join("") || `<tr><td colspan="8" class="empty">You already own everything the top 6 share.</td></tr>`}</tbody>
         </table></div>
       </div>
-      <p class="note">How this works: projections blend each player's form and points per game, then adjust per fixture (bookmaker clean sheet and scoring odds for GW${gwNext}, FPL difficulty after that), for injury news and expected return dates, and for minutes played over the last 3 gameweeks${Object.keys(FA.summ).length ? "" : " (* season average: recent minutes load on the live site)"}. Injured, suspended, doubtful or rotation-risk players are never recommended. ${FA.odds ? "" : "Bookmaker odds weren't available, so fixture difficulty is used throughout. "}Projections are estimates; check team news before the deadline.</p>`;
+      <p class="note">How this works: projections blend each player's form and points per game, then adjust per fixture (bookmaker clean sheet and scoring odds for GW${gwNext}, FPL difficulty after that), for injury news and expected return dates, and for minutes played over the last 3 gameweeks${Object.keys(FA.summ).length ? "" : " (* season average: recent minutes load on the live site)"}. Every pick and captain choice uses one expert score: a points model from xG and xA per 90, clean sheet chance from xGA, defensive contributions, saves and bonus rate, blended with form, then adjusted for players scoring above or below their xG, BPS per 90, price trend and the latest BBC Sport and Guardian news. Injured, suspended, doubtful or rotation-risk players are never recommended. ${FA.odds ? "" : "Bookmaker odds weren't available, so fixture difficulty is used throughout. "}Projections are estimates; check team news before the deadline.</p>`;
   }
   const POSN = (e) => D.positions[String(e.element_type)];
   // Overall rank change between the latest gameweek and the one before it.
@@ -1744,7 +1848,7 @@ select, input[type="search"] { font: inherit; color: var(--ink); background: var
     const leadOwns = new Set(squadOf(lead.m).map((p) => p[0]));
     const blocks = [1, 2, 3, 4].map((t) => {
       const list = pool0(t).filter((e) => minutesInfo(e).avg >= 60 && sevOf(risks(e, TO)) < 2)
-        .map((e) => { const m = modelPts(e, n, TO); const p = proj(e, n, TO).total; return { e, m: m.total, dcP: m.dcP, score: 0.6 * m.total + 0.4 * p, fdr: windowFdr(e.team, n) }; })
+        .map((e) => { const m = modelPts(e, n, TO); return { e, m: m.total, dcP: m.dcP, score: expertScore(e, n, TO), fdr: windowFdr(e.team, n) }; })
         .sort((a, b) => b.score - a.score).slice(0, 6);
       const budget = bank + maxSell(t);
       const rows = list.map((c) => {
@@ -1778,6 +1882,7 @@ select, input[type="search"] { font: inherit; color: var(--ink); background: var
 
   // Top-10 ownership of your (planned) squad, and the players they have that you don't, with next-gameweek projections.
   async function ensureFA(ids) {
+    await loadNews();
     if (FA.odds === undefined) FA.odds = await (oddsCache ? Promise.resolve(oddsCache) : fetch("api/odds", { cache: "no-store" }).then((r) => (r.ok && (r.headers.get("content-type") || "").includes("json") ? r.json() : null)).catch(() => null));
     if (FA.odds) oddsCache = FA.odds;
     await fetchSumm(FA.comp ? ids : [...ids, ...returneePool()]);
