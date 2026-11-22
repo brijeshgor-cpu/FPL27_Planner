@@ -15,7 +15,7 @@
   --accent: #1d7a4b;
   --accent-ink: #ffffff;
   --rival: #4a5fd6;
-  --s-me: #1d7a4b;
+  --s-me: #d03b3b;
   --s-them: #4a5fd6;
   --good: #1d7a4b;
   --bad: #b8382f;
@@ -38,7 +38,7 @@
 @media (prefers-color-scheme: dark) {
   :root:not([data-theme="light"]) {
     --bg: #0e1411; --surface: #161f1a; --surface-2: #1d2922; --line: #2a3830; --ink: #e6eee8; --muted: #93a499;
-    --accent: #45c283; --accent-ink: #07140d; --rival: #6f86e6; --s-me: #35a86e; --s-them: #6f86e6; --good: #45c283; --bad: #f0786d; --warn: #e3b55a;
+    --accent: #45c283; --accent-ink: #07140d; --rival: #6f86e6; --s-me: #e05a5a; --s-them: #6f86e6; --good: #45c283; --bad: #f0786d; --warn: #e3b55a;
     --pitch-a: #1d4f33; --pitch-b: #1a482e; --pitch-line: rgba(255,255,255,.18); --card-on-pitch: #0f1813; --card-on-pitch-ink: #e6eee8;
     --fdr1: #2c9d61; --fdr1-ink: #ffffff; --fdr2: #2d6a46; --fdr2-ink: #dff3e7; --fdr3: #34403a; --fdr3-ink: #d4ddd7;
     --fdr4: #8a3c30; --fdr4-ink: #ffe3dd; --fdr5: #6e1913; --fdr5-ink: #ffd9d4; --chart-other: #3a4a40;
@@ -47,7 +47,7 @@
 }
 :root[data-theme="dark"] {
   --bg: #0e1411; --surface: #161f1a; --surface-2: #1d2922; --line: #2a3830; --ink: #e6eee8; --muted: #93a499;
-  --accent: #45c283; --accent-ink: #07140d; --rival: #6f86e6; --s-me: #35a86e; --s-them: #6f86e6; --good: #45c283; --bad: #f0786d; --warn: #e3b55a;
+  --accent: #45c283; --accent-ink: #07140d; --rival: #6f86e6; --s-me: #e05a5a; --s-them: #6f86e6; --good: #45c283; --bad: #f0786d; --warn: #e3b55a;
   --pitch-a: #1d4f33; --pitch-b: #1a482e; --pitch-line: rgba(255,255,255,.18); --card-on-pitch: #0f1813; --card-on-pitch-ink: #e6eee8;
   --fdr1: #2c9d61; --fdr1-ink: #ffffff; --fdr2: #2d6a46; --fdr2-ink: #dff3e7; --fdr3: #34403a; --fdr3-ink: #d4ddd7;
   --fdr4: #8a3c30; --fdr4-ink: #ffe3dd; --fdr5: #6e1913; --fdr5-ink: #ffd9d4; --chart-other: #3a4a40;
@@ -210,6 +210,21 @@ tbody tr.click:hover td { background: var(--surface-2); }
 .tip .r { display: flex; justify-content: space-between; gap: 12px; }
 td .sw { display: inline-block; width: 8px; height: 8px; border-radius: 50%; margin-right: 6px; vertical-align: middle; }
 .gw-tbl td.n small { color: var(--muted); font-weight: 400; margin-left: 4px; }
+/* Fixtures and odds */
+.fdrc { display: inline-block; min-width: 58px; text-align: center; border-radius: 5px; padding: 4px 6px; font-size: .74rem; font-weight: 700; }
+.fdrc + .fdrc { margin-left: 3px; }
+.fdr-legend { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; font-size: .78rem; color: var(--muted); }
+.fdr-legend .fdrc { min-width: 0; }
+.seg { display: inline-flex; border: 1px solid var(--line); border-radius: 8px; overflow: hidden; }
+.seg button { border: 0; background: var(--surface); padding: 6px 12px; font-weight: 600; color: var(--muted); }
+.seg button + button { border-left: 1px solid var(--line); }
+.seg button[aria-pressed="true"] { background: var(--accent); color: var(--accent-ink); }
+.fx-tbl td { vertical-align: middle; }
+.odds-tbl td.op { text-align: right; font-weight: 600; background: color-mix(in srgb, var(--accent) calc(var(--p) * 40%), transparent); }
+.odds-tbl th.grp { text-align: center; border-left: 1px solid var(--line); }
+.odds-tbl td.bl, .odds-tbl th.bl { border-left: 1px solid var(--line); }
+.match { display: grid; line-height: 1.3; }
+.match small { color: var(--muted); }
 select, input[type="search"] { font: inherit; color: var(--ink); background: var(--surface); border: 1px solid var(--line); border-radius: 8px; padding: 6px 10px; max-width: 100%; }
 .btn { border: 1px solid var(--line); background: var(--surface); border-radius: 8px; padding: 6px 12px; font-weight: 600; }
 .btn.pri { background: var(--accent); color: var(--accent-ink); border-color: var(--accent); }
@@ -248,6 +263,7 @@ select, input[type="search"] { font: inherit; color: var(--ink); background: var
     <a href="#league" data-v="league">Standings</a>
     <a href="#planner" data-v="planner">Transfer planner</a>
     <a href="#fixtures" data-v="fixtures">Fixtures</a>
+    <a href="#odds" data-v="odds">Bookmaker odds</a>
   </nav>
 </header>
 
@@ -436,9 +452,9 @@ select, input[type="search"] { font: inherit; color: var(--ink); background: var
   // ---------- routing ----------
   function route() {
     const v = (location.hash || "#overview").slice(1);
-    view = ["overview", "analysis", "league", "planner", "fixtures"].includes(v) ? v : "overview";
+    view = ["overview", "analysis", "league", "planner", "fixtures", "odds"].includes(v) ? v : "overview";
     document.querySelectorAll(".tabs a").forEach((a) => { if (a.dataset.v === view) a.setAttribute("aria-current", "page"); else a.removeAttribute("aria-current"); });
-    ({ overview: renderOverview, analysis: renderAnalysis, league: renderLeague, planner: renderPlanner, fixtures: renderFixtures })[view]();
+    ({ overview: renderOverview, analysis: renderAnalysis, league: renderLeague, planner: renderPlanner, fixtures: renderFixtures, odds: renderOdds })[view]();
   }
 
   function tick() {
@@ -589,6 +605,7 @@ select, input[type="search"] { font: inherit; color: var(--ink); background: var
 
   // ---------- mini league analysis ----------
   const FRIENDS = ["Dipesh Patel", "Dhruve Gor", "Parit Shah", "Umesh Majithia"];
+  const FAMILY = ["Dhruve Gor", "Parit Shah"];
   const norm = (s) => String(s || "").trim().toLowerCase().replace(/\s+/g, " ");
   const CHIP_NAME = { wildcard: "Wildcard", freehit: "Free Hit", bboost: "Bench Boost", "3xc": "Triple Captain" };
   const firstName = (x) => (x.player_name || "").split(" ")[0] || "Them";
@@ -602,7 +619,8 @@ select, input[type="search"] { font: inherit; color: var(--ink); background: var
       const x = members.find((m) => norm(m.player_name) === norm(name));
       if (!x) { missing.push(name); return; }
       const g = group.find((q) => q.x.entry === x.entry);
-      if (g) g.role = "League leader · friend"; else if (x.entry !== me) group.push({ x, role: "Friend" });
+      const rel = FAMILY.some((f) => norm(f) === norm(name)) ? "Family" : "Friend";
+      if (g) g.role = "League leader · " + rel.toLowerCase(); else if (x.entry !== me) group.push({ x, role: rel });
     });
     return { group, missing };
   }
@@ -626,7 +644,7 @@ select, input[type="search"] { font: inherit; color: var(--ink); background: var
 
   function renderAnalysis() {
     const { group, missing } = analysisGroup();
-    if (!group.length) { $("#app").innerHTML = `<p class="empty">None of your friends were found in ${esc(D.league.name)}.</p>`; return; }
+    if (!group.length) { $("#app").innerHTML = `<p class="empty">None of your friends or family were found in ${esc(D.league.name)}.</p>`; return; }
     let sel = store.get("h2h", null);
     if (!group.some((g) => g.x.entry === sel)) sel = group[0].x.entry;
     const them = group.find((g) => g.x.entry === sel).x;
@@ -714,7 +732,7 @@ select, input[type="search"] { font: inherit; color: var(--ink); background: var
 
     $("#app").innerHTML = `
     <section class="view">
-      <div class="panel-head"><h2>Mini League analysis</h2><span class="note">The league leader and your friends. Pick one to compare with FC27.</span></div>
+      <div class="panel-head"><h2>Mini League analysis</h2><span class="note">The league leader, friends and family. Pick one to compare with FC27.</span></div>
       <div class="picks5">${cards}</div>
       ${missing.length ? `<p class="note">Not found in ${esc(D.league.name)}: ${missing.map(esc).join(", ")}.</p>` : ""}
 
@@ -1029,23 +1047,131 @@ select, input[type="search"] { font: inherit; color: var(--ink); background: var
   }
 
   // ---------- fixtures ----------
+  // FDR over a window; a blank gameweek counts as the hardest rating (5) so it ranks low.
+  function windowFdr(team, n) {
+    const l = []; for (let g = gwNext; g < gwNext + n && g <= 38; g++) { const f = teamFx[team][g] || []; if (!f.length) l.push(5); else f.forEach((x) => l.push(x.fdr)); }
+    return l.length ? l.reduce((a, b) => a + b, 0) / l.length : 3;
+  }
+  const fdrCells = (team, gws) => gws.map((g) => {
+    const l = teamFx[team][g] || [];
+    return `<td>${l.length ? l.map((f) => `<span class="fdrc fdr${f.fdr}" title="FDR ${f.fdr}">${esc(tShort(f.opp))} (${f.home ? "H" : "A"})</span>`).join("") : '<span class="fdrc fdr0">Blank</span>'}</td>`;
+  }).join("");
+  const avgBadge = (a) => `<span class="fdrc fdr${Math.min(5, Math.max(1, Math.round(a)))}" title="Average FDR">${a.toFixed(1)}</span>`;
+
   function renderFixtures() {
-    const n = store.get("fxN", 6);
-    const mineTeams = {}; squadOf(myM).forEach((p) => { const t = E[p[0]]?.team; mineTeams[t] = (mineTeams[t] || 0) + 1; });
-    const rows = D.teams.map((t) => ({ t, a: avgFdr(t.id, gwNext, n) })).sort((x, y) => x.a - y.a);
+    let n = store.get("fxN", 5); if (n !== 3 && n !== 5) n = 5;
     const gws = []; for (let g = gwNext; g < gwNext + n && g <= 38; g++) gws.push(g);
+    const mineTeams = {}; squadOf(myM).forEach((p) => { const t = E[p[0]]?.team; mineTeams[t] = (mineTeams[t] || 0) + 1; });
+    const rows = D.teams.map((t) => ({ t, a: windowFdr(t.id, n) })).sort((x, y) => x.a - y.a || x.t.name.localeCompare(y.t.name));
+    const squad = squadOf(myM).map((p) => ({ e: E[p[0]], slot: p[1] })).filter((x) => x.e)
+      .sort((a, b) => a.e.element_type - b.e.element_type || windowFdr(a.e.team, n) - windowFdr(b.e.team, n));
+    const head = `<th>GW${gws.join("</th><th>GW")}</th>`;
     $("#app").innerHTML = `
     <section class="view">
       <div class="panel-head"><h2>Fixture difficulty</h2>
-        <label class="controls"><span class="note">Window</span><select id="fxN">${[4, 6, 8, 10].map((v) => `<option value="${v}" ${v === n ? "selected" : ""}>Next ${v} GWs</option>`).join("")}</select></label></div>
-      <p class="note">Sorted easiest first. Capitals are home games, lower case away. Rows marked with a number are teams you own players from.</p>
-      <div class="tbl-wrap"><table>
-        <thead><tr><th>Team</th><th class="n">Avg</th>${gws.map((g) => `<th>GW${g}</th>`).join("")}</tr></thead>
-        <tbody>${rows.map(({ t, a }) => `<tr class="${mineTeams[t.id] ? "me" : ""}"><td>${esc(t.name)} ${mineTeams[t.id] ? `<span class="pill acc">${mineTeams[t.id]}</span>` : ""}</td><td class="n">${a.toFixed(2)}</td>${gws.map((g) => { const l = teamFx[t.id][g] || []; return `<td>${l.length ? l.map((f) => `<span class="pill fdr${f.fdr}" style="min-width:42px;text-align:center">${esc(f.home ? tShort(f.opp) : tShort(f.opp).toLowerCase())}</span>`).join(" ") : '<span class="note">blank</span>'}</td>`; }).join("")}</tr>`).join("")}</tbody>
-      </table></div>
+        <div class="controls"><span class="note">Show</span><div class="seg" role="group" aria-label="Gameweeks to show">${[3, 5].map((v) => `<button data-fxn="${v}" aria-pressed="${v === n}">Next ${v} GWs</button>`).join("")}</div></div></div>
+      <div class="fdr-legend"><span>FDR</span>${[1, 2, 3, 4, 5].map((v) => `<span class="fdrc fdr${v}">${v} ${["Very easy", "Easy", "Medium", "Hard", "Very hard"][v - 1]}</span>`).join("")}</div>
+      <div class="panel">
+        <div class="panel-head"><h3>Your players' next ${n} gameweeks</h3><span class="note">Grouped by position, easiest run first</span></div>
+        <div class="tbl-wrap"><table class="fx-tbl">
+          <thead><tr><th>Player</th><th>Team</th><th class="n">Avg FDR</th>${head}</tr></thead>
+          <tbody>${squad.map(({ e, slot }) => `<tr><td><span class="mgr">${esc(e.web_name)}<small>${D.positions[e.element_type]}${slot > 11 ? " · bench" : ""}</small></span></td><td>${tShort(e.team)}</td><td class="n">${avgBadge(windowFdr(e.team, n))}</td>${fdrCells(e.team, gws)}</tr>`).join("")}</tbody>
+        </table></div>
+      </div>
+      <div class="panel">
+        <div class="panel-head"><h3>All teams, best fixtures first</h3><span class="note">Highlighted rows are teams you own players from</span></div>
+        <div class="tbl-wrap"><table class="fx-tbl">
+          <thead><tr><th class="n">#</th><th>Team</th><th class="n">Avg FDR</th>${head}</tr></thead>
+          <tbody>${rows.map(({ t, a }, i) => `<tr class="${mineTeams[t.id] ? "me" : ""}"><td class="n">${i + 1}</td><td>${esc(t.name)} ${mineTeams[t.id] ? `<span class="pill acc" title="Players you own">${mineTeams[t.id]}</span>` : ""}</td><td class="n">${avgBadge(a)}</td>${fdrCells(t.id, gws)}</tr>`).join("")}</tbody>
+        </table></div>
+        <p class="note">FDR is FPL's official fixture difficulty rating. A blank gameweek counts as 5 in the average; a double gameweek shows both games.</p>
+      </div>
       ${freshness()}
     </section>`;
-    $("#fxN").addEventListener("change", (e) => { store.set("fxN", Number(e.target.value)); renderFixtures(); });
+    document.querySelectorAll("[data-fxn]").forEach((b) => b.addEventListener("click", () => { store.set("fxN", Number(b.dataset.fxn)); renderFixtures(); }));
+  }
+
+  // ---------- bookmaker odds ----------
+  // The Worker returns bookmaker 1X2 and over/under 2.5 probabilities (margin removed, averaged across UK bookmakers).
+  // Clean sheet and to-score chances come from a Poisson goals model fitted to those prices.
+  const ODDS_ALIASES = { ARS: ["arsenal"], AVL: ["aston villa"], BOU: ["bournemouth"], BRE: ["brentford"], BHA: ["brighton"], BUR: ["burnley"],
+    CHE: ["chelsea"], COV: ["coventry"], CRY: ["crystal palace"], EVE: ["everton"], FUL: ["fulham"], HUL: ["hull"], IPS: ["ipswich"], LEE: ["leeds"],
+    LEI: ["leicester"], LIV: ["liverpool"], MCI: ["manchester city", "man city"], MUN: ["manchester united", "man utd", "man united"], NEW: ["newcastle"],
+    NFO: ["nottingham", "nott'm forest"], SOU: ["southampton"], SUN: ["sunderland"], TOT: ["tottenham", "spurs"], WHU: ["west ham"], WOL: ["wolverhampton", "wolves"] };
+  function oddsTeamId(name) {
+    const n = norm(name);
+    const t = D.teams.find((t) => (ODDS_ALIASES[t.short] || []).some((a) => n.startsWith(a)))
+      || D.teams.find((t) => n.includes(norm(t.name)) || norm(t.name).includes(n));
+    return t ? t.id : null;
+  }
+  const PMF = (() => { const m = new Map(); return (l) => { const k = l.toFixed(3); if (!m.has(k)) { const a = [Math.exp(-l)]; for (let i = 1; i <= 10; i++) a.push(a[i - 1] * l / i); m.set(k, a); } return m.get(k); }; })();
+  function scoreProbs(lh, la) {
+    const a = PMF(lh), b = PMF(la); let H = 0, Dr = 0, A = 0, O = 0;
+    for (let i = 0; i <= 10; i++) for (let j = 0; j <= 10; j++) { const p = a[i] * b[j]; if (i > j) H += p; else if (i < j) A += p; else Dr += p; if (i + j > 2) O += p; }
+    return { H, D: Dr, A, O };
+  }
+  function fitGoals(pH, pD, pA, pO) {
+    const err = (lh, la) => { const r = scoreProbs(lh, la); return (r.H - pH) ** 2 + (r.D - pD) ** 2 + (r.A - pA) ** 2 + (pO == null ? 0 : (r.O - pO) ** 2); };
+    let best = [1.4, 1.1], be = Infinity;
+    for (let lh = 0.1; lh <= 4; lh += 0.05) for (let la = 0.1; la <= 4; la += 0.05) { const e = err(lh, la); if (e < be) { be = e; best = [lh, la]; } }
+    const [h0, a0] = best;
+    for (let lh = Math.max(0.05, h0 - 0.05); lh <= h0 + 0.05; lh += 0.005) for (let la = Math.max(0.05, a0 - 0.05); la <= a0 + 0.05; la += 0.005) { const e = err(lh, la); if (e < be) { be = e; best = [lh, la]; } }
+    return best;
+  }
+
+  let oddsCache = null;
+  function renderOdds() {
+    $("#app").innerHTML = `<section class="view"><div class="panel-head"><h2>GW${gwNext} bookmaker odds</h2></div><p class="empty">Loading bookmaker odds…</p></section>`;
+    const load = oddsCache ? Promise.resolve(oddsCache) : fetch("api/odds", { cache: "no-store" }).then(async (r) => {
+      const ct = r.headers.get("content-type") || "";
+      if (!ct.includes("json")) throw new Error("offline");
+      const j = await r.json(); if (!r.ok) throw Object.assign(new Error(j.error || "odds"), { info: j }); return j;
+    });
+    load.then((j) => { oddsCache = j; drawOdds(j); }).catch((e) => {
+      const msg = e.message === "offline" ? "Bookmaker odds load on the live site, fc27-planner.fc27-fpl.workers.dev."
+        : e.message === "not_configured" ? "Bookmaker odds aren't switched on yet: the site needs an odds API key."
+        : `Couldn't load bookmaker odds (${esc(e.info?.detail || e.message)}). Try again later.`;
+      $("#app").innerHTML = `<section class="view"><div class="panel-head"><h2>GW${gwNext} bookmaker odds</h2></div><div class="err">${msg}</div></section>`;
+    });
+  }
+  function drawOdds(j) {
+    const fx = D.fixtures.filter((f) => f[1] === gwNext).sort((a, b) => String(a[6]).localeCompare(String(b[6])));
+    const ev = j.events.map((e) => ({ ...e, h: oddsTeamId(e.home), a: oddsTeamId(e.away) }));
+    const mineTeams = {}; squadOf(myM).forEach((p) => { const t = E[p[0]]?.team; mineTeams[t] = (mineTeams[t] || 0) + 1; });
+    const rows = fx.map((f) => {
+      const o = ev.find((e) => e.h === f[2] && e.a === f[3]);
+      if (!o) return { f, o: null };
+      const [pH, pD, pA] = o.h2h; const [lh, la] = fitGoals(pH, pD, pA, o.over25);
+      return { f, o, pH, pD, pA, csH: Math.exp(-la), csA: Math.exp(-lh), scH: 1 - Math.exp(-lh), scA: 1 - Math.exp(-la), lh, la };
+    });
+    const got = rows.filter((r) => r.o);
+    const op = (p, cls = "") => `<td class="op ${cls}" style="--p:${p.toFixed(3)}">${Math.round(p * 100)}%</td>`;
+    const tm = (id) => `${esc(T[id]?.name)}${mineTeams[id] ? ` <span class="pill acc" title="Players you own">${mineTeams[id]}</span>` : ""}`;
+    const ko = (t) => t ? new Date(t).toLocaleString("en-GB", { weekday: "short", day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" }) : "TBC";
+    const top = (key, side) => got.map((r) => ({ r, p: r[key + side], team: side === "H" ? r.f[2] : r.f[3] })).sort((a, b) => b.p - a.p)[0];
+    const bestOf = (key) => [top(key, "H"), top(key, "A")].filter(Boolean).sort((a, b) => b.p - a.p)[0];
+    const bcs = bestOf("cs"), bsc = bestOf("sc");
+    const fav = got.map((r) => (r.pH >= r.pA ? { p: r.pH, team: r.f[2] } : { p: r.pA, team: r.f[3] })).sort((a, b) => b.p - a.p)[0];
+    const mins = Math.round((Date.now() - j.fetched) / 6e4);
+    $("#app").innerHTML = `
+    <section class="view">
+      <div class="panel-head"><h2>GW${gwNext} bookmaker odds</h2><span class="note">Chances implied by UK bookmaker prices, bookmaker margin removed</span></div>
+      ${got.length ? `<div class="kpis">
+        <div class="kpi"><span class="k">Biggest favourite</span><span class="v">${Math.round(fav.p * 100)}%</span><span class="s">${esc(T[fav.team]?.name)} to win</span></div>
+        <div class="kpi"><span class="k">Best clean sheet chance</span><span class="v">${Math.round(bcs.p * 100)}%</span><span class="s">${esc(T[bcs.team]?.name)}</span></div>
+        <div class="kpi"><span class="k">Most likely to score</span><span class="v">${Math.round(bsc.p * 100)}%</span><span class="s">${esc(T[bsc.team]?.name)}</span></div>
+      </div>` : ""}
+      <div class="tbl-wrap"><table class="odds-tbl">
+        <thead>
+          <tr><th rowspan="2">Match</th><th class="grp" colspan="3">Result</th><th class="grp" colspan="2">Clean sheet</th><th class="grp" colspan="2">To score</th></tr>
+          <tr><th class="n bl">Home win</th><th class="n">Draw</th><th class="n">Away win</th><th class="n bl">Home</th><th class="n">Away</th><th class="n bl">Home</th><th class="n">Away</th></tr>
+        </thead>
+        <tbody>${rows.map((r) => `<tr><td><span class="match"><span>${tm(r.f[2])} v ${tm(r.f[3])}</span><small>${ko(r.f[6])}</small></span></td>${r.o
+          ? `${op(r.pH, "bl")}${op(r.pD)}${op(r.pA)}${op(r.csH, "bl")}${op(r.csA)}${op(r.scH, "bl")}${op(r.scA)}`
+          : `<td class="bl" colspan="7"><span class="note">No odds published yet</span></td>`}</tr>`).join("")}</tbody>
+      </table></div>
+      <p class="note">Result chances come straight from bookmaker prices (average of ${got.length ? Math.round(got.reduce((a, r) => a + r.o.books, 0) / got.length) : 0} UK bookmakers per match). Clean sheet and to-score chances are worked out from the same prices plus the over/under 2.5 goals line, using a standard goals model. Numbered badges mark teams you own players from. Odds updated ${mins < 1 ? "just now" : mins < 60 ? mins + " min ago" : Math.round(mins / 60) + " h ago"}; they refresh every few hours.</p>
+    </section>`;
   }
 })();
 </script>

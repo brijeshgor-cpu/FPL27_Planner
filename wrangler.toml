@@ -8,3 +8,9 @@ workers_dev = true
 type = "Text"
 globs = ["**/*.html", "**/*.txt"]
 fallthrough = true
+
+# Cached bookmaker odds (refreshed at most every 4 hours to stay inside the free odds API quota).
+# The odds API key is a Worker secret named ODDS_API_KEY (set in the Cloudflare dashboard).
+[[kv_namespaces]]
+binding = "ODDS"
+id = "1612f48a342645ad8d40ddcb5b9303dc"
