@@ -230,6 +230,7 @@ td.why { white-space: normal; min-width: 220px; font-size: .8rem; color: var(--m
 .yc { display: inline-flex; align-items: center; justify-content: center; min-width: 15px; height: 19px; padding: 0 3px; margin-left: 6px; border-radius: 3px; font-size: .68rem; font-weight: 800; vertical-align: 1px; border: 1.5px solid var(--card-yellow); color: var(--ink); }
 .yc.hot { background: var(--card-yellow); color: var(--card-yellow-ink); box-shadow: 0 0 0 2px color-mix(in srgb, var(--card-yellow) 35%, transparent); }
 .ban-strip { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 18px; padding: 10px 14px; border-radius: var(--r); border: 1px solid color-mix(in srgb, var(--card-yellow) 60%, var(--line)); background: color-mix(in srgb, var(--card-yellow) 10%, var(--surface)); font-size: .86rem; }
+.ban-strip.ret { border-color: color-mix(in srgb, var(--rival) 55%, var(--line)); background: color-mix(in srgb, var(--rival) 8%, var(--surface)); }
 .ban-strip.ok { border-color: var(--line); background: var(--surface); color: var(--muted); }
 .ban-strip .k { font-size: .72rem; text-transform: uppercase; letter-spacing: .08em; color: var(--muted); font-weight: 600; }
 .ban-item { display: inline-flex; align-items: center; gap: 6px; }
@@ -634,7 +635,75 @@ select, input[type="search"] { font: inherit; color: var(--ink); background: var
   // ---------- future analysis ----------
   // Everything here is recomputed on each page load from live FPL data, FPL's official player news,
   // recent minutes (per-player match history) and the cached bookmaker odds.
-  const FA = { summ: {}, odds: undefined, busy: null };
+  const FA = { summ: {}, past: {}, odds: undefined, comp: null };
+  // Per-player match history (minutes by gameweek) and last season's Premier League minutes.
+  async function fetchSumm(ids) {
+    const need = [...new Set(ids)].filter((id) => !(id in FA.summ));
+    if (D.source !== "live" || !need.length) return;
+    await pool(need, 8, async (id) => {
+      try { const j = await api(`element-summary/${id}/`); FA.summ[id] = j.history.map((h) => [h.round, h.minutes]); const hp = j.history_past || []; FA.past[id] = hp.length ? hp[hp.length - 1].minutes : null; }
+      catch (e) { FA.summ[id] = null; }
+    });
+  }
+
+  // ---- Returning players: teammates back from injury (or due back) who can take minutes ----
+  // A returnee is an established player (1,500+ league minutes last season, or priced well above the
+  // position's floor) who is fit or due back within 5 gameweeks but has barely played recently.
+  // He replaces the lowest-priced current starter in his position priced at or below him. A returning
+  // midfielder also threatens attacking defenders, and a returning forward attacking midfielders.
+  const PRICE_FLOOR = { 1: 4.6, 2: 4.8, 3: 5.3, 4: 5.5 };
+  const returnFrom = (r) => {
+    if (availability(r) >= 0.75) return 0;
+    const back = expectedBack(r); if (!back) return 99;
+    return D.events.filter((ev) => ev.id >= gwNext && Date.parse(ev.deadline) < back).length;
+  };
+  function returneePool() {
+    return Object.values(E).filter((e) => {
+      const gp = teamPlayed(e.team); if (!gp) return false;
+      return returnFrom(e) <= 4 && e.now_cost / 10 >= PRICE_FLOOR[e.element_type] && (e.minutes / gp < 45 || e.starts <= gp - 3);
+    }).map((e) => e.id);
+  }
+  function computeCompetition() {
+    FA.comp = {};
+    const rets = returneePool().map((id) => E[id]).filter((e) => {
+      const past = FA.past[e.id];
+      const pedigree = past != null ? past >= 1500 : e.now_cost / 10 >= PRICE_FLOOR[e.element_type] + 1.5;
+      return minutesInfo(e).avg < 30 && pedigree;
+    });
+    const groups = {};
+    rets.forEach((r) => (groups[r.team + ":" + r.element_type] = groups[r.team + ":" + r.element_type] || []).push(r));
+    Object.entries(groups).forEach(([k, rs]) => {
+      const [team, type] = k.split(":").map(Number);
+      const starters = Object.values(E).filter((e) => e.team === team && e.element_type === type && !rs.includes(e) && minutesInfo(e).avg >= 60).sort((a, b) => a.now_cost - b.now_cost);
+      const taken = new Set();
+      [...rs].sort((a, b) => b.now_cost - a.now_cost).forEach((r) => {
+        const v = starters.find((x) => !taken.has(x.id) && x.now_cost <= r.now_cost); if (!v) return;
+        taken.add(v.id); (FA.comp[v.id] = FA.comp[v.id] || []).push({ r, kind: "direct" });
+      });
+      const adj = type === 3 ? 2 : type === 4 ? 3 : null;
+      if (adj) Object.values(E).filter((e) => e.team === team && e.element_type === adj && minutesInfo(e).avg >= 60 && parseFloat(e.expected_goal_involvements_per_90) >= (adj === 2 ? 0.25 : 0.45))
+        .forEach((v) => rs.forEach((r) => (FA.comp[v.id] = FA.comp[v.id] || []).push({ r, kind: "adjacent" })));
+    });
+  }
+  // Share of a player's expected minutes left in gameweek index i once a rival returns.
+  function compFactor(e, i) {
+    const c = FA.comp && FA.comp[e.id]; if (!c) return 1;
+    let f = 1;
+    c.forEach(({ r, kind }) => { const from = returnFrom(r); if (i < from) return; f = Math.min(f, kind === "direct" ? (i === from ? 0.8 : 0.6) : 0.9); });
+    return f;
+  }
+  const listAnd = (xs) => (xs.length > 1 ? xs.slice(0, -1).join(", ") + " and " + xs[xs.length - 1] : xs[0] || "");
+  function compReasons(e) {
+    const c = FA.comp && FA.comp[e.id]; if (!c) return [];
+    const when = (r) => (returnFrom(r) === 0 ? "is fit again" : `is due back ${new Date(expectedBack(r)).toLocaleDateString("en-GB", { day: "numeric", month: "short" })}`);
+    const ped = (r) => (FA.past[r.id] ? `${fmt(FA.past[r.id])} league minutes last season` : `£${price(r.now_cost)}m`);
+    const out = [];
+    c.filter((x) => x.kind === "direct").forEach(({ r }) => out.push([returnFrom(r) === 0 ? 2 : 1,
+      `Minutes risk: ${esc(r.web_name)} (${POSN(r)}, ${ped(r)}) ${when(r)}. ${esc(e.web_name)} has been starting while he was out and is the likeliest to lose his place`]));
+    const adj = c.filter((x) => x.kind === "adjacent");
+    if (adj.length) out.push([1, `Possible minutes risk: ${listAnd(adj.map(({ r }) => `${esc(r.web_name)} ${when(r)}`))}. ${esc(e.web_name)} plays an attacking role (${Number(e.expected_goal_involvements_per_90).toFixed(2)} goal involvements expected per 90) and could be rotated or pushed back when they return`]);
+    return out;
+  }
   const pct = (p) => Math.round(p * 100) + "%";
   const isFit = (e) => e.status === "a" && (e.chance_of_playing_next_round == null || e.chance_of_playing_next_round === 100);
   const teamPlayed = (team) => D.fixtures.filter((f) => f[7] && (f[2] === team || f[3] === team)).length;
@@ -712,7 +781,7 @@ select, input[type="search"] { font: inherit; color: var(--ink); background: var
         if (o) fac = e.element_type <= 2 ? Math.min(1.4, Math.max(0.7, 0.55 + 1.6 * o.cs)) : Math.min(1.5, Math.max(0.6, o.lam / 1.35));
         p += base * fac;
       });
-      per.push(p * availFor(e, g, i) * mf * (1 - banMiss(e, i)));
+      per.push(p * availFor(e, g, i) * mf * (1 - banMiss(e, i)) * compFactor(e, i));
     }
     return { total: per.reduce((a, b) => a + b, 0), per, mins: mi };
   }
@@ -730,6 +799,7 @@ select, input[type="search"] { font: inherit; color: var(--ink); background: var
       else if (mi.avg < 65) r.push([1, `Rotation risk: ${Math.round(mi.avg)} minutes a game ${where}`]);
       if (mi.src === "recent" && mi.last === 0 && mi.avg >= 45) r.push([1, `Didn't play in GW${mi.lastGw}`]);
     }
+    compReasons(e).forEach((x) => r.push(x));
     const ban = banRisk(e);
     // A ban risk is a watch item, never a reason to sell on its own: the projection already allows for it.
     if (ban && ban.away === 1 && e.status !== "s") r.push([1, `On ${ban.y} yellow cards: one more before GW${ban.until} means a ${ban.games}-match ban (booked in ${pct(ban.p)} of his games, ${pct(ban.pBan)} chance of a ban in the next 4 gameweeks)`]);
@@ -767,11 +837,10 @@ select, input[type="search"] { font: inherit; color: var(--ink); background: var
       const top = sortedM.filter((x) => x.entry !== me).slice(0, meRow.rank <= 6 ? 5 : 6);
       const topOwn = {}; top.forEach((x) => squadOf(x.m).forEach((p) => (topOwn[p[0]] = (topOwn[p[0]] || 0) + 1)));
       const topMissing = Object.keys(topOwn).map(Number).filter((id) => !mineIds.includes(id) && topOwn[id] >= 2);
-      const need = [...new Set([...mineIds, ...pre, ...topMissing])].filter((id) => !(id in FA.summ));
-      if (D.source === "live" && need.length) {
-        box.querySelector(".empty") && (box.querySelector(".empty").textContent = `Checking recent minutes for ${need.length} players…`);
-        await pool(need, 8, async (id) => { try { const j = await api(`element-summary/${id}/`); FA.summ[id] = j.history.map((h) => [h.round, h.minutes]); } catch (e) { FA.summ[id] = null; } });
-      }
+      const need = [...new Set([...mineIds, ...pre, ...topMissing, ...returneePool()])].filter((id) => !(id in FA.summ));
+      if (D.source === "live" && need.length) box.querySelector(".empty") && (box.querySelector(".empty").textContent = `Checking recent minutes and returning players for ${need.length} players…`);
+      await fetchSumm(need);
+      computeCompetition();
       drawFuture(box, TO, top, topOwn, sortedM, meRow);
     } catch (err) {
       box.innerHTML = `<div class="panel-head"><h2>Future analysis</h2></div><div class="err">The analysis couldn't be built (${esc(err.message)}). Reload to try again.</div>`;
@@ -921,6 +990,10 @@ select, input[type="search"] { font: inherit; color: var(--ink); background: var
         const banned = mine.filter((m) => m.e.status === "s");
         if (!near.length && !banned.length) return `<div class="ban-strip ok"><span class="k">Suspension watch</span> None of your players is close to a yellow-card ban.</div>`;
         return `<div class="ban-strip"><span class="k">Suspension watch</span>${banned.map((m) => `<span class="ban-item"><span class="yc hot">!</span><strong>${esc(m.e.web_name)}</strong> suspended now</span>`).join("")}${near.map(({ m, b }) => `<span class="ban-item"><span class="yc ${b.away === 1 ? "hot" : ""}">${b.y}</span><strong>${esc(m.e.web_name)}</strong> ${b.away === 1 ? `1 card from a ${b.games}-match ban (${pct(b.pBan)} risk, next 4 GWs)` : `2 cards from a ban`}, deadline GW${b.until}</span>`).join("")}</div>`; })()}
+
+      ${(() => { const hit = mine.filter((m) => FA.comp && FA.comp[m.e.id]);
+        if (!hit.length) return `<div class="ban-strip ok"><span class="k">Returning players</span> No injured teammates are coming back to compete with your players.</div>`;
+        return `<div class="ban-strip ret"><span class="k">Returning players</span>${hit.map((m) => `<span class="ban-item"><strong>${esc(m.e.web_name)}</strong> <span class="note">(${tShort(m.e.team)})</span> could lose minutes to <span>${FA.comp[m.e.id].map(({ r, kind }) => `${esc(r.web_name)} <span class="note">${returnFrom(r) === 0 ? "back now" : "due " + new Date(expectedBack(r)).toLocaleDateString("en-GB", { day: "numeric", month: "short" })}${kind === "adjacent" ? ", possible" : ""}</span>`).join(", ")}</span></span>`).join("")}</div>`; })()}
 
       <h3>Your priorities, in order</h3>
       <ol class="prio">${pr.map((p) => `<li><span class="pill ${p.cls === "acc" ? "acc" : p.cls === "bad" ? "sev3" : p.cls === "warn" ? "sev2" : ""}">${p.tag}</span><div><div class="t">${p.t}</div><div class="d">${p.d}</div></div></li>`).join("")}</ol>
@@ -1511,8 +1584,8 @@ select, input[type="search"] { font: inherit; color: var(--ink); background: var
   async function ensureFA(ids) {
     if (FA.odds === undefined) FA.odds = await (oddsCache ? Promise.resolve(oddsCache) : fetch("api/odds", { cache: "no-store" }).then((r) => (r.ok && (r.headers.get("content-type") || "").includes("json") ? r.json() : null)).catch(() => null));
     if (FA.odds) oddsCache = FA.odds;
-    const need = [...new Set(ids)].filter((id) => !(id in FA.summ));
-    if (D.source === "live" && need.length) await pool(need, 8, async (id) => { try { const j = await api(`element-summary/${id}/`); FA.summ[id] = j.history.map((h) => [h.round, h.minutes]); } catch (e) { FA.summ[id] = null; } });
+    await fetchSumm(FA.comp ? ids : [...ids, ...returneePool()]);
+    if (!FA.comp) computeCompetition();
   }
   async function renderTop10(squadIds) {
     const box = $("#top10"); if (!box) return;
