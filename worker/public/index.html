@@ -18,6 +18,9 @@
   --s-me: #1d7a4b;
   --s-them: #0f9cb3;
   --card-yellow: #f2c200;
+  --c-bank: #1d7a4b;
+  --c-solid: #2f6fd0;
+  --c-punt: #c47f0e;
   --card-yellow-ink: #1b1200;
   --good: #1d7a4b;
   --bad: #b8382f;
@@ -40,7 +43,7 @@
 @media (prefers-color-scheme: dark) {
   :root:not([data-theme="light"]) {
     --bg: #0e1411; --surface: #161f1a; --surface-2: #1d2922; --line: #2a3830; --ink: #e6eee8; --muted: #93a499;
-    --accent: #45c283; --accent-ink: #07140d; --rival: #2a97c0; --s-me: #3aa860; --s-them: #2a97c0; --good: #45c283; --bad: #f0786d; --warn: #e3b55a;
+    --accent: #45c283; --accent-ink: #07140d; --rival: #2a97c0; --s-me: #3aa860; --s-them: #2a97c0; --c-bank: #3aa860; --c-solid: #5b8ff0; --c-punt: #c0841a; --good: #45c283; --bad: #f0786d; --warn: #e3b55a;
     --pitch-a: #1d4f33; --pitch-b: #1a482e; --pitch-line: rgba(255,255,255,.18); --card-on-pitch: #0f1813; --card-on-pitch-ink: #e6eee8;
     --fdr1: #2c9d61; --fdr1-ink: #ffffff; --fdr2: #2d6a46; --fdr2-ink: #dff3e7; --fdr3: #34403a; --fdr3-ink: #d4ddd7;
     --fdr4: #8a3c30; --fdr4-ink: #ffe3dd; --fdr5: #6e1913; --fdr5-ink: #ffd9d4; --chart-other: #3a4a40;
@@ -49,7 +52,7 @@
 }
 :root[data-theme="dark"] {
   --bg: #0e1411; --surface: #161f1a; --surface-2: #1d2922; --line: #2a3830; --ink: #e6eee8; --muted: #93a499;
-  --accent: #45c283; --accent-ink: #07140d; --rival: #2a97c0; --s-me: #3aa860; --s-them: #2a97c0; --good: #45c283; --bad: #f0786d; --warn: #e3b55a;
+  --accent: #45c283; --accent-ink: #07140d; --rival: #2a97c0; --s-me: #3aa860; --s-them: #2a97c0; --c-bank: #3aa860; --c-solid: #5b8ff0; --c-punt: #c0841a; --good: #45c283; --bad: #f0786d; --warn: #e3b55a;
   --pitch-a: #1d4f33; --pitch-b: #1a482e; --pitch-line: rgba(255,255,255,.18); --card-on-pitch: #0f1813; --card-on-pitch-ink: #e6eee8;
   --fdr1: #2c9d61; --fdr1-ink: #ffffff; --fdr2: #2d6a46; --fdr2-ink: #dff3e7; --fdr3: #34403a; --fdr3-ink: #d4ddd7;
   --fdr4: #8a3c30; --fdr4-ink: #ffe3dd; --fdr5: #6e1913; --fdr5-ink: #ffd9d4; --chart-other: #3a4a40;
@@ -280,6 +283,40 @@ td.why { white-space: normal; min-width: 220px; font-size: .8rem; color: var(--m
 .news li.neg { border-left-color: var(--bad); } .news li.pos { border-left-color: var(--good); }
 .news a { color: var(--ink); text-decoration: underline; text-decoration-color: var(--line); text-underline-offset: 3px; }
 .news a:hover { text-decoration-color: var(--accent); }
+/* Captaincy shortlist */
+.cap-chart { display: grid; gap: 4px; }
+.cap-row { display: grid; grid-template-columns: 26px minmax(150px, 230px) minmax(0, 1fr) 118px; align-items: center; gap: 12px; padding: 8px 4px; border-bottom: 1px solid var(--line); }
+.cap-row.mine { background: color-mix(in srgb, var(--accent) 8%, transparent); border-radius: 8px; }
+.cap-head { border-bottom: 0; padding-bottom: 0; }
+.cap-rank { font-family: var(--font-display); font-size: 1.3rem; font-weight: 700; color: var(--muted); text-align: center; }
+.cap-name { display: grid; line-height: 1.25; min-width: 0; }
+.cap-name strong { font-family: var(--font-display); font-size: 1.25rem; }
+.cap-name small { color: var(--muted); font-size: .76rem; }
+.cap-kind { font-weight: 700; }
+.cap-kind.k-bank { color: var(--c-bank); } .cap-kind.k-solid { color: var(--c-solid); } .cap-kind.k-punt { color: var(--c-punt); }
+.cap-track { position: relative; height: 40px; }
+.cap-axis { position: relative; height: 18px; font-size: .72rem; color: var(--muted); }
+.cap-axis i { position: absolute; transform: translateX(-50%); font-style: normal; }
+.cap-grid { position: absolute; top: 0; bottom: 0; width: 1px; background: var(--line); }
+.cap-range { position: absolute; top: 26px; height: 6px; border-radius: 3px; opacity: .55; transform: translateY(-50%); }
+.cap-dot { position: absolute; top: 26px; width: 14px; height: 14px; border-radius: 50%; transform: translate(-50%, -50%); box-shadow: 0 0 0 2px var(--surface); }
+.cap-val { position: absolute; top: 0; transform: translateX(-50%); font-family: var(--font-display); font-weight: 700; font-size: 1.05rem; color: var(--ink); }
+.k-bank.cap-range, .k-bank.cap-dot { background: var(--c-bank); } .k-solid.cap-range, .k-solid.cap-dot { background: var(--c-solid); } .k-punt.cap-range, .k-punt.cap-dot { background: var(--c-punt); }
+.cap-pts { display: grid; text-align: right; line-height: 1.2; }
+.cap-pts strong { font-family: var(--font-display); font-size: 1.3rem; }
+.cap-pts small { color: var(--muted); font-size: .72rem; }
+.cap-pts-h { text-align: right; font-size: .7rem; text-transform: uppercase; letter-spacing: .07em; color: var(--muted); }
+.cap-legend { display: flex; flex-wrap: wrap; gap: 8px 18px; font-size: .82rem; color: var(--muted); }
+.cap-legend span { display: inline-flex; align-items: center; gap: 6px; }
+.cap-legend .cap-dot { position: static; transform: none; display: inline-block; width: 12px; height: 12px; box-shadow: none; }
+.cap-legend strong { color: var(--ink); }
+@media (max-width: 640px) {
+  .cap-row { grid-template-columns: 22px minmax(0, 1fr) 74px; gap: 6px 8px; }
+  .cap-row .cap-track, .cap-row .cap-axis { grid-column: 1 / -1; }
+  .cap-head { grid-template-columns: 1fr; } .cap-head > span:not(.cap-axis) { display: none; }
+  .cap-name strong { font-size: 1.1rem; }
+  .cap-pts { grid-row: 1; grid-column: 3; }
+}
 .own-list { display: flex; flex-wrap: wrap; gap: 3px; max-width: 190px; }
 .ins-tbl td { vertical-align: top; }
 .ins-tbl td small.note { white-space: normal; max-width: 260px; display: block; }
@@ -2035,6 +2072,7 @@ select, input[type="search"] { font: inherit; color: var(--ink); background: var
         <div class="kpi"><span class="k">Top scorer in your league</span><span class="v">${withLg.length ? ownAvg.toFixed(1) : "–"}</span><span class="s">Managers who owned him, on average</span></div>
         <div class="kpi"><span class="k">You owned the top scorer</span><span class="v">${withLg.length ? iOwned : "–"}<small style="font-size:1rem;color:var(--muted)">/${withLg.length || done.length}</small></span><span class="s">Finished gameweeks</span></div>
       </div>
+      <div class="panel" id="capShort"><div class="panel-head"><h3>GW${gwNext} captaincy shortlist</h3></div><p class="empty">Working out each player's chance of scoring…</p></div>
       ${offline ? `<p class="note">League ownership for past gameweeks loads on the live site only.</p>` : ""}
       <div class="tbl-wrap"><table class="cards-sm ins-tbl">
         <thead><tr><th>Gameweek</th><th>Most captained (all FPL)</th><th class="n">His points</th><th>Top scorer</th><th class="n">Points</th><th>Owned in your league</th><th>Captained in your league</th><th>You</th></tr></thead>
@@ -2056,7 +2094,68 @@ select, input[type="search"] { font: inherit; color: var(--ink); background: var
       <div class="panel">${bpsTopHTML()}</div>
       ${freshness()}
     </section>`;
-    wireXgiTop(); wireDefTop();
+    wireXgiTop(); wireDefTop(); renderCaptaincy();
+  }
+
+  // ---- Captaincy shortlist: chance of scoring with a likely range, plus projected captain points ----
+  // Expected goals in the match = xG per 90 x expected minutes share x fitness x (bookmakers' expected
+  // goals for his team in this match / his team's season xG per game). Chance of scoring = 1 - e^-expected.
+  // The range widens with fewer matches played, patchy minutes and fitness doubts.
+  const teamXGpg = (team) => { const gp = teamPlayed(team) || 1; return Object.values(E).filter((e) => e.team === team).reduce((a, e) => a + (+e.expected_goals || 0), 0) / gp; };
+  function scoreChance(e, TO) {
+    const fx = teamFx[e.team][gwNext] || []; if (!fx.length) return null;
+    const xg90 = +e.expected_goals_per_90 || 0, mi = minutesInfo(e);
+    const share = Math.min(1, mi.avg / 90) * availability(e) * (1 - banMiss(e, 0));
+    let lam = 0;
+    fx.forEach((f, k) => { const o = k === 0 ? TO[e.team] : null; const tf = o ? Math.min(1.8, Math.max(0.5, o.lam / Math.max(0.6, teamXGpg(e.team)))) : FDR_MULT[f.fdr]; lam += xg90 * share * tf; });
+    const games = e.minutes / 90;
+    // Uncertainty: fewer matches, swinging minutes, a hot or cold finishing streak and fitness doubts all widen it.
+    const h = FA.summ[e.id]; let vol = 0.03;
+    if (h && h.length >= 3) { const by = {}; h.forEach(([r, m]) => (by[r] = (by[r] || 0) + m)); const ms = Object.keys(by).map(Number).sort((a, b) => b - a).slice(0, 5).map((r) => Math.min(90, by[r])); const mean = ms.reduce((a, b) => a + b, 0) / ms.length; vol = Math.sqrt(ms.reduce((a, b) => a + (b - mean) ** 2, 0) / ms.length) / 90 * 0.35; }
+    const gap = Math.abs(e.goals_scored - (+e.expected_goals || 0));
+    let cv = 0.04 + 0.25 / Math.sqrt(Math.max(1, games)) + vol + 0.03 * gap;
+    if (mi.avg < 75) cv += 0.08; if (availability(e) < 1) cv += 0.12;
+    const P = (l) => 1 - Math.exp(-Math.max(0, l));
+    const lo = P(lam * (1 - 1.645 * cv)), hi = P(lam * (1 + 1.645 * cv)), w = hi - lo;
+    // Banker / Solid / Punt reflects how reliable the player's numbers are, not the fixture.
+    return { p: P(lam), lo, hi, lam, fx, kind: cv <= 0.15 ? "bank" : cv <= 0.21 ? "solid" : "punt" };
+  }
+  async function renderCaptaincy() {
+    const box = $("#capShort"); if (!box) return;
+    const pre = Object.values(E).filter((e) => e.element_type >= 3 && e.minutes >= 450 && availability(e) >= 0.75)
+      .sort((a, b) => (+b.expected_goals_per_90) * Math.min(1, b.minutes / 900) - (+a.expected_goals_per_90) * Math.min(1, a.minutes / 900)).slice(0, 40).map((e) => e.id);
+    try { await ensureFA(pre); } catch (e) { /* season minutes used */ }
+    if (!document.body.contains(box)) return;
+    const TO = teamOdds();
+    const mine = new Set(squadOf(myM).map((p) => p[0]));
+    const lgOwn = {}; members.forEach((x) => squadOf(x.m).forEach((p) => (lgOwn[p[0]] = (lgOwn[p[0]] || 0) + 1)));
+    const rows = pre.map((id) => E[id]).filter((e) => sevOf(risks(e, TO)) < 3).map((e) => { const c = scoreChance(e, TO); return c && { e, c, pts: 2 * expertScore(e, 1, TO) }; }).filter(Boolean);
+    const sort = store.get("capSort", "pts") === "p" ? "p" : "pts";
+    const list = rows.sort((a, b) => (sort === "p" ? b.c.p - a.c.p : b.pts - a.pts)).slice(0, 10);
+    const max = Math.max(0.8, Math.ceil(Math.max(...list.map((r) => r.c.hi)) * 5) / 5);
+    const x = (v) => `${(v / max) * 100}%`;
+    const ticks = []; for (let t = 0; t <= max + 1e-9; t += 0.2) ticks.push(t);
+    const fixTxt = (e, c) => c.fx.map((f) => `${tShort(e.team)} ${f.home ? "v" : "@"} ${tShort(f.opp)} (${f.home ? "H" : "A"})`).join(", ");
+    const KIND = { bank: "Banker", solid: "Solid", punt: "Punt" };
+    box.innerHTML = `
+      <div class="panel-head"><h3>GW${gwNext} captaincy shortlist</h3>
+        <div class="seg" role="group" aria-label="Rank by">${[["pts", "Projected points"], ["p", "Chance of scoring"]].map(([v, l]) => `<button data-capsort="${v}" aria-pressed="${v === sort}">${l}</button>`).join("")}</div></div>
+      <p class="note">Chance of scoring in GW${gwNext}, with the likely range, and projected points as captain (doubled). Ranked by ${sort === "p" ? "chance of scoring" : "projected captain points"}.</p>
+      <div class="cap-chart" role="img" aria-label="Captaincy shortlist: chance of scoring for ${list.length} players">
+        <div class="cap-row cap-head"><span></span><span></span><span class="cap-axis">${ticks.map((t) => `<i style="left:${x(t)}">${Math.round(t * 100)}%</i>`).join("")}</span><span class="cap-pts-h">Captain pts</span></div>
+        ${list.map((r, i) => `<div class="cap-row ${mine.has(r.e.id) ? "mine" : ""}" title="${esc(r.e.web_name)}: ${pct(r.c.p)} chance of scoring (likely range ${pct(r.c.lo)}–${pct(r.c.hi)}), about ${r.c.lam.toFixed(2)} expected goals, projected ${r.pts.toFixed(1)} captain points">
+          <span class="cap-rank">${i + 1}</span>
+          <span class="cap-name"><span><strong>${esc(r.e.web_name)}</strong>${mine.has(r.e.id) ? ' <span class="pill acc">Yours</span>' : ""}</span><small>${esc(fixTxt(r.e, r.c))} · <span class="cap-kind k-${r.c.kind}">${KIND[r.c.kind]}</span></small></span>
+          <span class="cap-track">${ticks.map((t) => `<i class="cap-grid" style="left:${x(t)}"></i>`).join("")}
+            <span class="cap-range k-${r.c.kind}" style="left:${x(r.c.lo)};width:calc(${x(r.c.hi)} - ${x(r.c.lo)})"></span>
+            <span class="cap-dot k-${r.c.kind}" style="left:${x(r.c.p)}"></span>
+            <span class="cap-val" style="left:${x(r.c.p)}">${pct(r.c.p)}</span></span>
+          <span class="cap-pts"><strong>${r.pts.toFixed(1)}</strong><small>${lgOwn[r.e.id] || 0} of ${members.length} own${capCount[r.e.id] ? ` · ${capCount[r.e.id]} captained GW${gwCur}` : ""}</small></span>
+        </div>`).join("")}
+      </div>
+      <div class="cap-legend"><span><i class="cap-dot k-bank"></i><strong>Banker</strong> narrow range</span><span><i class="cap-dot k-solid"></i><strong>Solid</strong></span><span><i class="cap-dot k-punt"></i><strong>Punt</strong> wide range</span></div>
+      <p class="note">Dot = best estimate, bar = likely range (90%). Colour shows how sure the estimate is about the player (matches played, steady minutes, fitness), not how hard the fixture is. Chance of scoring uses each player's xG per 90, expected minutes and fitness, and the bookmakers' expected goals for his team in GW${gwNext}. Projected captain points use the site's expert score (form, xG, xA, bonus, fixtures, odds and news), doubled. Updated on every reload.</p>`;
+    box.querySelectorAll("[data-capsort]").forEach((b) => b.addEventListener("click", () => { store.set("capSort", b.dataset.capsort); renderCaptaincy(); }));
   }
 
   // Top 20 by season expected goal involvements (Opta xG + xA, as published by FPL).
