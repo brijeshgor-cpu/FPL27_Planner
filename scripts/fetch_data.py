@@ -26,6 +26,8 @@ ELEMENT_FIELDS = [
     "defensive_contribution_per_90", "bonus", "status", "news", "chance_of_playing_next_round",
     "cost_change_event", "cost_change_start", "transfers_in_event", "transfers_out_event",
     "penalties_order", "yellow_cards", "red_cards", "news_added", "chance_of_playing_this_round",
+    "expected_goals_per_90", "expected_assists_per_90", "saves_per_90", "defensive_contribution",
+    "price_change_percent", "price_change_projections", "price_change_locked_until", "price_change_calibrating",
 ]
 
 
@@ -121,6 +123,7 @@ def main():
         } for e in events],
         "current_gw": cur_gw,
         "next_gw": nxt["id"] if nxt else None,
+        "price_deadlines": (boot.get("game_config") or {}).get("settings", {}).get("price_change_deadlines", []),
         "chips_def": [[c["name"], c["start_event"], c["stop_event"]] for c in boot["chips"]],
         "teams": [{"id": t["id"], "name": t["name"], "short": t["short_name"], "strength": t["strength"]}
                   for t in boot["teams"]],

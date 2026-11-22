@@ -236,6 +236,27 @@ td.why { white-space: normal; min-width: 220px; font-size: .8rem; color: var(--m
 .ban-item { display: inline-flex; align-items: center; gap: 6px; }
 .ban-item .yc { margin-left: 0; }
 .t10-grid { display: grid; grid-template-columns: minmax(0, 1fr); gap: 24px; }
+.sq-sum { display: flex; flex-wrap: wrap; gap: 6px 22px; font-size: .9rem; }
+.sq-sum .k { font-size: .7rem; text-transform: uppercase; letter-spacing: .07em; color: var(--muted); margin-right: 4px; }
+.squad-tbl tr.click:focus-visible td { outline: 2px solid var(--accent); outline-offset: -2px; }
+.squad-tbl tr.sel td { background: color-mix(in srgb, var(--accent) 14%, var(--surface)); }
+.squad-tbl tr.newrow td:first-child { box-shadow: inset 3px 0 0 var(--accent); }
+.squad-tbl tr.half td { background: var(--surface-2); font-size: .7rem; text-transform: uppercase; letter-spacing: .07em; color: var(--muted); font-weight: 600; }
+.pmove { display: grid; gap: 2px; }
+.pmove > span { display: inline-flex; align-items: center; gap: 8px; }
+.pmove small { font-size: .74rem; color: var(--muted); }
+.pmove small.up { color: var(--good); } .pmove small.down { color: var(--bad); }
+.squad-tbl { font-size: .8rem; }
+.squad-tbl th, .squad-tbl td { padding: 7px 7px; }
+.squad-tbl th { white-space: normal; vertical-align: bottom; }
+.squad-tbl .pill { font-size: .64rem; padding: 1px 6px; }
+.pbar { position: relative; display: inline-block; width: 60px; height: 8px; border-radius: 4px; background: var(--surface-2); }
+.pbar::after { content: ""; position: absolute; left: 50%; top: -2px; bottom: -2px; width: 1px; background: var(--muted); }
+.pbar i { position: absolute; top: 0; bottom: 0; border-radius: 4px; }
+.pbar i.pos { left: 50%; background: var(--good); } .pbar i.neg { right: 50%; background: var(--bad); }
+.yc.sm { height: 16px; min-width: 13px; font-size: .62rem; }
+.tgt { display: grid; gap: 8px; }
+.tgt + .tgt { margin-top: 10px; }
 .obar { display: inline-block; width: 64px; height: 6px; border-radius: 3px; background: var(--surface-2); vertical-align: middle; overflow: hidden; }
 .obar i { display: block; height: 100%; background: var(--accent); border-radius: 3px; }
 .win-tally { display: flex; flex-wrap: wrap; gap: 6px; }
@@ -286,8 +307,8 @@ select, input[type="search"] { font: inherit; color: var(--ink); background: var
 /* ---------- responsive: tablet and phone ---------- */
 :root { --row-me: color-mix(in srgb, var(--accent) 12%, var(--surface)); --row-rv: color-mix(in srgb, var(--rival) 12%, var(--surface)); }
 /* Wide grids keep the name column pinned while scrolling sideways. */
-.fx-tbl th:first-child, .fx-tbl td:first-child, .gw-tbl th:first-child, .gw-tbl td:first-child, .h2h th:first-child, .h2h td:first-child { position: sticky; left: 0; z-index: 1; }
-.fx-tbl td:first-child, .gw-tbl td:first-child, .h2h td:first-child { background: var(--surface); }
+.squad-tbl th:first-child, .squad-tbl td:first-child, .fx-tbl th:first-child, .fx-tbl td:first-child, .gw-tbl th:first-child, .gw-tbl td:first-child, .h2h th:first-child, .h2h td:first-child { position: sticky; left: 0; z-index: 1; }
+.squad-tbl td:first-child, .fx-tbl td:first-child, .gw-tbl td:first-child, .h2h td:first-child { background: var(--surface); }
 .fx-tbl th:first-child, .gw-tbl th:first-child, .h2h th:first-child { z-index: 2; }
 .fx-tbl tr.me td:first-child { background: var(--row-me); }
 .fx-tbl tr.half td:first-child { background: var(--surface-2); }
@@ -333,7 +354,7 @@ select, input[type="search"] { font: inherit; color: var(--ink); background: var
   table.cards-sm td.why::before { display: block; max-width: none; margin-bottom: 2px; }
   table.cards-sm td.op { padding: 4px 8px; margin-inline: -8px; border-radius: 6px; }
   table.cards-sm tr.half { padding: 6px 12px; background: var(--surface-2); }
-  .fx-tbl.cards-sm td:first-child { background: transparent; }
+  .fx-tbl.cards-sm td:first-child, .squad-tbl.cards-sm td:first-child { background: transparent; }
 }
 @media (prefers-reduced-motion: reduce) { * { transition: none !important; animation: none !important; } }
 </style>
@@ -398,7 +419,9 @@ select, input[type="search"] { font: inherit; color: var(--ink); background: var
     "expected_goal_involvements_per_90", "expected_goals_conceded_per_90",
     "defensive_contribution_per_90", "bonus", "status", "news", "chance_of_playing_next_round",
     "cost_change_event", "cost_change_start", "transfers_in_event", "transfers_out_event", "penalties_order",
-    "yellow_cards", "red_cards", "news_added", "chance_of_playing_this_round"];
+    "yellow_cards", "red_cards", "news_added", "chance_of_playing_this_round",
+    "expected_goals_per_90", "expected_assists_per_90", "saves_per_90", "defensive_contribution",
+    "price_change_percent", "price_change_projections", "price_change_locked_until", "price_change_calibrating"];
   const setStatus = (t) => { const a = $("#app"); if (a && !D) a.innerHTML = `<p class="empty">${esc(t)}</p>`; };
 
   async function api(path) {
@@ -416,7 +439,7 @@ select, input[type="search"] { font: inherit; color: var(--ink); background: var
   }
   async function loadLive() {
     setStatus("Fetching live data from FPL…");
-    const [boot, fixtures, entry] = await Promise.all([api("bootstrap-static/"), api("fixtures/"), api(`entry/${ENTRY_ID}/`)]);
+    const [boot, fixtures, entry, transfers] = await Promise.all([api("bootstrap-static/"), api("fixtures/"), api(`entry/${ENTRY_ID}/`), api(`entry/${ENTRY_ID}/transfers/`).catch(() => [])]);
     const events = boot.events, current = events.find((e) => e.is_current), nxt = events.find((e) => e.is_next);
     const curGw = current ? current.id : 0;
     let standings = [], league = null;
@@ -444,7 +467,8 @@ select, input[type="search"] { font: inherit; color: var(--ink); background: var
       generated_at: new Date().toISOString(), source: "live", me: ENTRY_ID, entry,
       league: { id: league.id, name: league.name },
       standings: standings.map((r) => ({ entry: r.entry, entry_name: r.entry_name, player_name: r.player_name, rank: r.rank, last_rank: r.last_rank, total: r.total, event_total: r.event_total })),
-      managers, transfers: [],
+      managers, transfers: transfers.map((t) => [t.event, t.element_in, t.element_in_cost, t.element_out, t.element_out_cost]),
+      price_deadlines: boot.game_config?.settings?.price_change_deadlines || [],
       events: events.map((e) => ({ id: e.id, deadline: e.deadline_time, finished: e.finished, is_current: e.is_current, is_next: e.is_next, avg: e.average_entry_score, high: e.highest_score, data_checked: e.data_checked })),
       current_gw: curGw, next_gw: nxt ? nxt.id : null,
       chips_def: boot.chips.map((c) => [c.name, c.start_event, c.stop_event]),
@@ -864,7 +888,7 @@ select, input[type="search"] { font: inherit; color: var(--ink); background: var
       let best = null;
       pool5.forEach((m) => {
         // Unless a player is unavailable, don't downgrade by more than £3m (that just leaves money idle).
-        const c = candidates(m.e.element_type, bank + m.e.now_cost, squad, tc, m.e.team, TO, leaderOwns, m.sev >= 3 ? 0 : m.e.now_cost - 30)[0]; if (!c) return;
+        const c = candidates(m.e.element_type, bank + sellPrice(m.e.id), squad, tc, m.e.team, TO, leaderOwns, m.sev >= 3 ? 0 : m.e.now_cost - 30)[0]; if (!c) return;
         // Bench players matter less; a backup keeper hardly at all.
         const w = m.slot <= 11 ? 1 : m.e.element_type === 1 ? 0.1 : 0.25, gain = c.p5 - m.p5;
         const score = m.sev * 8 * (m.slot <= 11 ? 1 : 0.5) + gain * w;
@@ -877,7 +901,7 @@ select, input[type="search"] { font: inherit; color: var(--ink); background: var
       const free = moves.length < ft;
       if (!free && !(best.m.sev >= 3 && best.m.slot <= 11 && best.gain >= 8)) break;
       moves.push({ ...best, hit: !free });
-      squad.delete(best.m.e.id); squad.add(best.c.e.id); bank += best.m.e.now_cost - best.c.e.now_cost;
+      squad.delete(best.m.e.id); squad.add(best.c.e.id); bank += sellPrice(best.m.e.id) - best.c.e.now_cost;
       tc[best.m.e.team]--; tc[best.c.e.team] = (tc[best.c.e.team] || 0) + 1;
       pool5.splice(pool5.indexOf(best.m), 1);
     }
@@ -942,7 +966,7 @@ select, input[type="search"] { font: inherit; color: var(--ink); background: var
       const o = TO[mv.c.e.team];
       const oTxt = o ? (mv.c.e.element_type <= 2 ? `${pct(o.cs)} clean sheet chance in GW${gwNext}` : `${tShort(mv.c.e.team)} ${pct(o.score)} to score in GW${gwNext}`) : "";
       pr.push({ tag: mv.hit ? "Transfer (−4 hit)" : "Transfer", cls: mv.m.sev >= 3 ? "bad" : "acc",
-        t: `Sell ${esc(mv.m.e.web_name)} (£${price(mv.m.e.now_cost)}m) → buy ${esc(mv.c.e.web_name)} (${tShort(mv.c.e.team)}, £${price(mv.c.e.now_cost)}m)`,
+        t: `Sell ${esc(mv.m.e.web_name)} (sells for £${price(sellPrice(mv.m.e.id))}m) → buy ${esc(mv.c.e.web_name)} (${tShort(mv.c.e.team)}, £${price(mv.c.e.now_cost)}m)`,
         d: `<strong>Why sell:</strong> ${why}. <strong>Why ${esc(mv.c.e.web_name)}:</strong> projects ${mv.c.p5.toFixed(1)} pts over 5 gameweeks (${sign1(mv.gain)} on ${esc(mv.m.e.web_name)}), ${Math.round(mv.c.mins.avg)} mins a game, next 3 ${fxStrip(mv.c.e.team, gwNext, 3)}${oTxt ? ", " + oTxt : ""}. ${banRisk(mv.c.e)?.away === 1 ? `Note: he's on ${banRisk(mv.c.e).y} yellows, one from a ban (already allowed for in his projection). ` : ""}${leaderOwns.has(mv.c.e.id) ? `${lName} owns him, so this protects you rather than gains ground.` : `${lName} doesn't own him: every point he scores is a point gained on the leader.`}` });
     });
     if (!moves.length) pr.push({ tag: "Transfer", cls: "", t: "No transfer is clearly worth making this week", d: `Nobody in your squad is injured or losing minutes badly, and no replacement projects at least 5 pts more over 5 gameweeks within your £${price(bank)}m budget. Roll the transfer.` });
@@ -969,7 +993,7 @@ select, input[type="search"] { font: inherit; color: var(--ink); background: var
 
     // Targets by position.
     const targets = [1, 2, 3, 4].map((t) => {
-      const maxBudget = bank + Math.max(...picks.filter((p) => E[p[0]].element_type === t).map((p) => E[p[0]].now_cost));
+      const maxBudget = bank + Math.max(...picks.filter((p) => E[p[0]].element_type === t).map((p) => sellPrice(p[0])));
       return { t, list: candidates(t, maxBudget, new Set(picks.map((p) => p[0])), {}, null, TO, leaderOwns).slice(0, 3), maxBudget };
     });
     const mvOf = (id) => moves.find((mv) => mv.m.e.id === id);
@@ -1509,37 +1533,78 @@ select, input[type="search"] { font: inherit; color: var(--ink); background: var
     plan.forEach(({ out, inn }) => { const s = sq.find((x) => x.el === out); if (s) s.el = inn; });
     return sq;
   }
+  // ---- prices: paid (latest transfer in, else opening-day price) and sale price under FPL's 50% rule ----
+  function boughtPrice(id) { let best = null; (D.transfers || []).forEach((t) => { if (t[1] === id && (!best || t[0] >= best[0])) best = t; }); return best ? best[2] : E[id].now_cost - (E[id].cost_change_start || 0); }
+  function sellPrice(id) {
+    if (!squadOf(myM).some((p) => p[0] === id)) return E[id].now_cost; // bought this week: sells at today's price
+    const b = boughtPrice(id), n = E[id].now_cost; return n <= b ? n : b + Math.floor((n - b) / 2);
+  }
+  // FPL's own price-change progress: ±100% means the price changes at the next overnight update.
+  function priceMove(e) {
+    const pct0 = parseFloat(e.price_change_percent) || 0;
+    const pr = Array.isArray(e.price_change_projections) ? e.price_change_projections : [];
+    const dl = D.price_deadlines || [];
+    const by = (off) => (dl[off] ? "by " + new Date(dl[off]).toLocaleDateString("en-GB", { timeZone: "Europe/London", weekday: "short", day: "numeric", month: "short" }) : off === 0 ? "tonight" : `in ${off + 1} nights`);
+    if (e.price_change_locked_until && Date.parse(e.price_change_locked_until) > Date.now()) return { pct: pct0, txt: "Locked after a recent change", cls: "" };
+    if (e.price_change_calibrating) return { pct: pct0, txt: "FPL is recalibrating", cls: "" };
+    const hit = pr.find((x) => Math.abs(parseFloat(x.projected_percent)) >= 100);
+    if (hit) { const up = parseFloat(hit.projected_percent) > 0; return { pct: pct0, txt: `${up ? "Rise" : "Fall"} ${Math.abs(hit.likelihood) >= 3 ? "expected" : "possible"} ${by(hit.offset)}`, cls: up ? "up" : "down" }; }
+    if (Math.abs(pct0) >= 70) return { pct: pct0, txt: pct0 > 0 ? "Close to rising" : "Close to falling", cls: pct0 > 0 ? "up" : "down" };
+    return { pct: pct0, txt: "No change expected soon", cls: "" };
+  }
+  const pbar = (pct) => `<span class="pbar" title="${pct.toFixed(1)}% of the way to a price change"><i class="${pct >= 0 ? "pos" : "neg"}" style="width:${Math.min(50, Math.abs(pct) / 2)}%"></i></span>`;
+  const kfmt = (n) => (Math.abs(n) >= 1000 ? (n / 1000).toFixed(1) + "k" : String(n));
+  const statusPill = (e) => {
+    if (e.status === "s") return `<span class="pill sev3">Suspended</span>`;
+    if (["i", "u", "n"].includes(e.status) || availability(e) === 0) return `<span class="pill sev3">${e.status === "i" ? "Injured" : "Unavailable"}</span>`;
+    if (availability(e) < 1) return `<span class="pill sev2">${pct(availability(e))} to play</span>`;
+    return `<span class="pill ok">Fit</span>`;
+  };
+
   function renderPlanner() {
     const h = store.get("horizon", 5);
     const plan = planState();
     const sq = plannedSquad();
     const bank0 = myM.picks?.bank ?? lastHist(myM)[8];
-    const bank = plan.reduce((b, { out, inn }) => b + (E[out]?.now_cost || 0) - (E[inn]?.now_cost || 0), bank0);
+    const bank = plan.reduce((b, { out, inn }) => b + (E[out] ? sellPrice(out) : 0) - (E[inn]?.now_cost || 0), bank0);
     const ft = freeTransfers(myM, D.entry.started_event || 1);
     const hits = Math.max(0, plan.length - ft) * 4;
     const gain = plan.reduce((g, { out, inn }) => g + project(E[inn], h) - project(E[out], h), 0);
     const teamCount = {}; sq.forEach((s) => (teamCount[E[s.el].team] = (teamCount[E[s.el].team] || 0) + 1));
     const mine = new Set(sq.map((s) => s.el));
 
-    const sqHTML = [1, 2, 3, 4].map((t) => sq.filter((s) => E[s.el].element_type === t).map((s) => {
-      const e = E[s.el];
-      return `<div class="sq ${selOut === s.el ? "sel" : ""} ${s.el !== s.orig ? "new" : ""}">
-        <span class="pos">${D.positions[t]}</span>
-        <span style="min-width:0"><span class="nm">${esc(e.web_name)}${availability(e) < 1 ? ' <span class="pill" title="' + esc(e.news) + '">' + Math.round(availability(e) * 100) + "%</span>" : ""}</span><br><span class="sub">£${price(e.now_cost)}m · ${tShort(e.team)} · proj ${project(e, h).toFixed(1)}</span><br>${fxStrip(e.team, gwNext, Math.min(h, 5))}</span>
-        <button class="btn sm ${selOut === s.el ? "pri" : ""}" data-out="${s.el}">${selOut === s.el ? "Selling" : "Sell"}</button>
-      </div>`;
+    // Squad table
+    const rowsHTML = [1, 2, 3, 4].map((t) => `<tr class="half"><td colspan="13">${{ 1: "Goalkeepers", 2: "Defenders", 3: "Midfielders", 4: "Forwards" }[t]}</td></tr>` + sq.filter((s) => E[s.el].element_type === t).map((s) => {
+      const e = E[s.el], isNew = s.el !== s.orig, pm = priceMove(e);
+      const bought = isNew ? e.now_cost : boughtPrice(e.id), sell = isNew ? e.now_cost : sellPrice(e.id), profit = sell - bought;
+      const net = (e.transfers_in_event || 0) - (e.transfers_out_event || 0);
+      return `<tr class="click ${selOut === s.el ? "sel" : ""} ${isNew ? "newrow" : ""}" data-out="${s.el}" tabindex="0">
+        <td><span class="mgr"><span>${esc(e.web_name)} ${statusPill(e)}${isNew ? ' <span class="pill acc">New</span>' : ""}</span><small>${POSN(e)} · ${tShort(e.team)}${s.slot > 11 ? " · bench" : ""}${e.news ? ` · <span class="down">${esc(e.news)}</span>` : ""}</small></span></td>
+        <td class="n"><strong>£${price(e.now_cost)}m</strong></td>
+        <td class="n">£${price(bought)}m → £${price(sell)}m <span class="${profit > 0 ? "up" : profit < 0 ? "down" : "note"}">(${profit === 0 ? "0.0" : (profit > 0 ? "+" : "−") + price(Math.abs(profit))})</span></td>
+        <td><span class="pmove"><span><strong class="${pm.pct >= 0 ? "up" : "down"}">${pm.pct > 0 ? "+" : ""}${pm.pct.toFixed(0)}%</strong> ${pbar(pm.pct)}</span><small class="${pm.cls}">${pm.txt}</small></span></td>
+        <td class="n ${net > 0 ? "up" : net < 0 ? "down" : ""}">${net > 0 ? "+" : ""}${kfmt(net)}</td>
+        <td class="n">${e.starts}</td>
+        <td class="n">${fmt(e.minutes)}</td>
+        <td class="n">${Number(e.expected_goals).toFixed(2)}</td>
+        <td class="n">${Number(e.expected_assists).toFixed(2)}</td>
+        <td class="n">${Number(e.expected_goal_involvements).toFixed(2)}</td>
+        <td class="n">${ycBadge(e) ? ycBadge(e).replace('class="yc', 'class="yc sm') : e.yellow_cards || 0}${e.red_cards ? ` <span class="note">${e.red_cards} red</span>` : ""}</td>
+        <td class="n"><strong>${e.ep_next}</strong> <small class="note">${e.points_per_game}/g</small></td>
+      </tr>`;
     }).join("")).join("");
+    const tot = sq.reduce((a, s) => { const e = E[s.el], isNew = s.el !== s.orig; a.now += e.now_cost; a.sell += isNew ? e.now_cost : sellPrice(e.id); a.bought += isNew ? e.now_cost : boughtPrice(e.id); return a; }, { now: 0, sell: 0, bought: 0 });
 
     let repl = "";
     if (selOut) {
       const o = E[selOut];
-      const budget = bank + o.now_cost;
+      const budget = bank + sellPrice(o.id);
       const q = ($("#q")?.value || "").toLowerCase();
       const cands = Object.values(E).filter((e) => e.element_type === o.element_type && !mine.has(e.id) && e.now_cost <= budget
         && ((teamCount[e.team] || 0) - (e.team === o.team ? 1 : 0)) < 3 && availability(e) > 0 && (!q || e.web_name.toLowerCase().includes(q)))
         .map((e) => ({ e, p: project(e, h) })).sort((a, b) => b.p - a.p).slice(0, 25);
-      repl = `<div class="panel">
-        <div class="panel-head"><h3>Replacements for ${esc(o.web_name)} (budget £${price(budget)}m)</h3><input type="search" id="q" placeholder="Filter by name" value="${esc(q)}"></div>
+      repl = `<div class="panel" id="replPanel">
+        <div class="panel-head"><h3>Replacements for ${esc(o.web_name)} (sells for £${price(sellPrice(o.id))}m, budget £${price(budget)}m)</h3><div class="controls"><input type="search" id="q" placeholder="Filter by name" value="${esc(q)}"><button class="btn sm" id="closeRepl">Close</button></div></div>
         <div class="tbl-wrap"><table class="cards-sm"><thead><tr><th>Player</th><th class="n">£</th><th class="n">Form</th><th class="n">xGI/90</th><th class="n">FPL xP</th><th class="n">Proj ${h}GW</th><th class="n">vs out</th><th class="n">League</th><th>Next fixtures</th><th></th></tr></thead><tbody>
         ${cands.map(({ e, p }) => `<tr><td><span class="mgr">${esc(e.web_name)}<small>${tShort(e.team)}${e.news ? " · " + esc(e.news) : ""}</small></span></td><td class="n">${price(e.now_cost)}</td><td class="n">${e.form}</td><td class="n">${Number(e.expected_goal_involvements_per_90 || 0).toFixed(2)}</td><td class="n">${e.ep_next}</td><td class="n"><strong>${p.toFixed(1)}</strong></td><td class="n ${p - project(o, h) >= 0 ? "up" : "down"}">${sign(Number((p - project(o, h)).toFixed(1)))}</td><td class="n">${Math.round((own[e.id] || 0) * 100)}%</td><td>${fxStrip(e.team, gwNext, Math.min(h, 6))}</td><td><button class="btn sm pri" data-in="${e.id}">Bring in</button></td></tr>`).join("") || '<tr><td colspan="10" class="empty">Nobody fits this budget and team limit.</td></tr>'}
         </tbody></table></div></div>`;
@@ -1557,29 +1622,131 @@ select, input[type="search"] { font: inherit; color: var(--ink); background: var
         <div><div class="k">Hit cost</div><div class="v ${hits ? "down" : ""}">${hits ? "−" + hits : "0"}</div></div>
         <div><div class="k">Projected gain</div><div class="v ${gain - hits >= 0 ? "up" : "down"}">${sign(Number((gain - hits).toFixed(1)))}</div></div>
       </div>
-      ${plan.length ? `<ul class="moves">${plan.map(({ out, inn }, i) => `<li><span><span class="down">${esc(E[out].web_name)}</span> → <span class="up">${esc(E[inn].web_name)}</span> <span class="note">£${price(E[out].now_cost)}m → £${price(E[inn].now_cost)}m</span></span><button class="btn sm" data-undo="${i}">Undo</button></li>`).join("")}</ul><div class="controls"><button class="btn" id="reset">Clear plan</button></div>` : `<p class="note">Pick a player to sell, then choose who comes in. Your plan is saved in this browser only.</p>`}
+      ${plan.length ? `<ul class="moves">${plan.map(({ out, inn }, i) => `<li><span><span class="down">${esc(E[out].web_name)}</span> → <span class="up">${esc(E[inn].web_name)}</span> <span class="note">sells £${price(sellPrice(out))}m → costs £${price(E[inn].now_cost)}m</span></span><button class="btn sm" data-undo="${i}">Undo</button></li>`).join("")}</ul><div class="controls"><button class="btn" id="reset">Clear plan</button></div>` : ""}
+
+      <div class="panel">
+        <div class="panel-head"><h2>Squad</h2><span class="note">Tap a player to see replacements. Plans are saved in this browser only.</span></div>
+        <div class="sq-sum">
+          <span><span class="k">Squad value</span> <strong>£${price(tot.now)}m</strong></span>
+          <span><span class="k">Sale value</span> <strong>£${price(tot.sell)}m</strong></span>
+          <span><span class="k">Paid</span> <strong>£${price(tot.bought)}m</strong></span>
+          <span><span class="k">Profit if sold</span> <strong class="${tot.sell - tot.bought >= 0 ? "up" : "down"}">${tot.sell - tot.bought >= 0 ? "+" : "−"}£${price(Math.abs(tot.sell - tot.bought))}m</strong></span>
+          <span><span class="k">In the bank</span> <strong>£${price(bank)}m</strong></span>
+        </div>
+        <div class="tbl-wrap"><table class="cards-sm squad-tbl">
+          <thead><tr><th>Player</th><th class="n">Price</th><th class="n">Paid → sells for (profit)</th><th>Price change</th><th class="n">Net transfers this GW</th><th class="n">Starts</th><th class="n">Mins</th><th class="n">xG</th><th class="n">xA</th><th class="n">xGI</th><th class="n">Yellows</th><th class="n">FPL xPts</th></tr></thead>
+          <tbody>${rowsHTML}</tbody>
+        </table></div>
+        <p class="note">Price change is FPL's own progress towards a price change: at +100% the price rises £0.1m at the next overnight update, at −100% it falls. You keep half of any rise when selling (rounded down to £0.1m). xG, xA and xGI are season totals; FPL xPts is FPL's expected points for GW${gwNext}, with points per game alongside.</p>
+      </div>
+      ${repl}
       <div class="grid-2">
-        <div class="panel"><div class="panel-head"><h3>Your squad after the plan</h3></div><div class="squad-list">${sqHTML}</div></div>
         <div class="panel">
           <div class="panel-head"><h3>Captain shortlist for GW${gwNext}</h3><span class="note">By FPL's expected points</span></div>
           <ul class="plist">${capRank.map((e) => `<li><span><strong>${esc(e.web_name)}</strong> ${nextFx(e.team) ? fxLabel(nextFx(e.team).list[0]) : ""}</span><span>xP ${e.ep_next}${capCount[e.id] ? ` · ${capCount[e.id]} of ${D._n} captained him in GW${gwCur}` : ""}</span></li>`).join("")}</ul>
+        </div>
+        <div class="panel">
           <div class="panel-head"><h3>Chips</h3></div>
           <p class="note">${chipsLeft(myM).map((c) => `<span class="chip ${c.used ? "used" : ""}">${CHIP_LABEL[c.name]}</span>`).join(" ")} ${chipAdvice()}</p>
         </div>
       </div>
-      ${repl}
+      <div class="panel" id="targets"><div class="panel-head"><h2>Players to target</h2></div><p class="empty">Ranking players on fixtures, xG, xA, defensive contributions and price…</p></div>
       <div class="panel" id="top10"><div class="panel-head"><h2>What the top 10 own</h2></div><p class="empty">Working out top-10 ownership and next-gameweek projections…</p></div>
-      <p class="note">How the projection works: average of form and points per game, scaled per fixture by difficulty (easiest ×1.25 to hardest ×0.7), adjusted for injury flags, summed over the window. Double gameweeks count twice; blanks count zero. Sale prices use the current price; FPL may give you slightly less for players who have risen since you bought them. Free transfers are estimated from your transfer history.</p>
+      <p class="note">Planner projections: average of form and points per game, scaled per fixture by difficulty (easiest ×1.25 to hardest ×0.7), adjusted for injury flags, summed over the window. Double gameweeks count twice; blanks count zero. Budgets use your real sale prices. Free transfers are estimated from your transfer history.</p>
     </section>`;
 
     $("#hz").addEventListener("change", (e) => { store.set("horizon", Number(e.target.value)); renderPlanner(); });
-    document.querySelectorAll("[data-out]").forEach((b) => b.addEventListener("click", () => { const v = Number(b.dataset.out); selOut = selOut === v ? null : v; renderPlanner(); if (selOut) $("#q")?.closest(".panel")?.scrollIntoView({ behavior: "smooth", block: "start" }); }));
+    const pickOut = (v) => { selOut = selOut === v ? null : v; renderPlanner(); if (selOut) $("#replPanel")?.scrollIntoView({ behavior: "smooth", block: "start" }); };
+    document.querySelectorAll("tr[data-out]").forEach((tr) => { tr.addEventListener("click", () => pickOut(Number(tr.dataset.out))); tr.addEventListener("keydown", (ev) => { if (ev.key === "Enter" || ev.key === " ") { ev.preventDefault(); pickOut(Number(tr.dataset.out)); } }); });
+    $("#closeRepl")?.addEventListener("click", () => { selOut = null; renderPlanner(); });
     document.querySelectorAll("[data-in]").forEach((b) => b.addEventListener("click", () => { const p = planState(); p.push({ out: selOut, inn: Number(b.dataset.in) }); setPlan(p); selOut = null; renderPlanner(); }));
     document.querySelectorAll("[data-undo]").forEach((b) => b.addEventListener("click", () => { const p = planState(); p.splice(Number(b.dataset.undo), 1); setPlan(p); renderPlanner(); }));
     $("#reset")?.addEventListener("click", () => { setPlan([]); selOut = null; renderPlanner(); });
+    renderTargets(sq.map((x) => x.el), bank);
     renderTop10(sq.map((x) => x.el));
     const q = $("#q"); if (q) q.addEventListener("input", debounce(() => { const pos = q.selectionStart; renderPlanner(); const nq = $("#q"); nq.focus(); nq.setSelectionRange(pos, pos); }, 250));
   }
+
+  // ---- Players to target: a points model built from FPL's scoring rules ----
+  // Per match: appearance (2 for 60+ mins), goals x position goal points plus assists x 3 (from xG/xA per 90,
+  // scaled by fixture or bookmaker odds), clean sheet chance (team xG conceded, scaled by fixture or odds),
+  // defensive contribution points (chance of 10+ actions for defenders, 12+ for midfielders and forwards),
+  // saves for keepers, bonus rate, minus goals conceded. Then minutes share, availability, bans and
+  // returning rivals. Ranked on 60% this model and 40% form-based projection.
+  const poisAtLeast = (l, k) => { let p = Math.exp(-l), c = p; for (let i = 1; i < k; i++) { p *= l / i; c += p; } return Math.max(0, 1 - c); };
+  const DEF_MULT = { 1: 0.7, 2: 0.85, 3: 1, 4: 1.2, 5: 1.4 };
+  const SCORE = { 1: { g: 10, cs: 4 }, 2: { g: 6, cs: 4 }, 3: { g: 5, cs: 1 }, 4: { g: 4, cs: 0 } };
+  function modelPts(e, n, TO) {
+    const t = e.element_type, S = SCORE[t];
+    const xg = +e.expected_goals_per_90 || 0, xa = +e.expected_assists_per_90 || 0, xgc = +e.expected_goals_conceded_per_90 || 1.3;
+    const dc = +e.defensive_contribution_per_90 || 0, sv = +e.saves_per_90 || 0;
+    const share = Math.min(1, minutesInfo(e).avg / 90), full = share >= 0.66;
+    const bonus90 = e.minutes > 0 ? (e.bonus / e.minutes) * 90 : 0;
+    const dcP = t === 1 ? 0 : poisAtLeast(dc, t === 2 ? 10 : 12);
+    let tot = 0;
+    for (let g = gwNext, i = 0; i < n && g <= 38; g++, i++) {
+      let pts = 0;
+      (teamFx[e.team][g] || []).forEach((f, k) => {
+        const o = i === 0 && k === 0 ? TO[e.team] : null;
+        const am = o ? Math.min(1.5, Math.max(0.6, o.lam / 1.35)) : FDR_MULT[f.fdr];
+        const conceded = o ? -Math.log(Math.max(0.01, o.cs)) : xgc * DEF_MULT[f.fdr];
+        pts += (full ? 2 : 1) + (xg * S.g + xa * 3) * am * share + (full ? S.cs * Math.exp(-conceded) : 0) + 2 * dcP * share + (t === 1 ? (sv / 3) * share : 0) + bonus90 * am * share - (t <= 2 ? (conceded / 2) * 0.6 * share : 0);
+      });
+      tot += pts * availFor(e, g, i) * (1 - banMiss(e, i)) * compFactor(e, i);
+    }
+    return { total: tot, dcP };
+  }
+  async function renderTargets(squadIds, bank) {
+    const box = $("#targets"); if (!box) return;
+    let n = store.get("recN", 5); if (n !== 3 && n !== 5) n = 5;
+    const mine = new Set(squadIds);
+    try { await ensureFA([]); } catch (e) { /* fall back to season data */ }
+    if (!document.body.contains(box)) return;
+    const TO = teamOdds();
+    const pool0 = (t) => Object.values(E).filter((e) => e.element_type === t && !mine.has(e.id) && isFit(e) && e.minutes >= 270);
+    const pre = [1, 2, 3, 4].flatMap((t) => pool0(t).map((e) => [e.id, modelPts(e, n, TO).total]).sort((a, b) => b[1] - a[1]).slice(0, 14).map((x) => x[0]));
+    try { await fetchSumm(pre); } catch (e) { /* season minutes used */ }
+    if (!document.body.contains(box)) return;
+    const pctl = {}; // percentile of a stat within the position (players with 450+ minutes)
+    const rankIn = (t, key, v) => { const k = t + key; if (!pctl[k]) pctl[k] = Object.values(E).filter((e) => e.element_type === t && e.minutes >= 450).map((e) => +e[key] || 0).sort((a, b) => a - b); const arr = pctl[k]; let i = 0; while (i < arr.length && arr[i] <= v) i++; return arr.length ? i / arr.length : 0; };
+    const maxSell = (t) => Math.max(0, ...squadIds.filter((id) => E[id].element_type === t).map((id) => sellPrice(id)));
+    const POSNAME = { 1: "Goalkeepers", 2: "Defenders", 3: "Midfielders", 4: "Forwards" };
+    const lead = [...members].sort((a, b) => a.rank - b.rank).find((x) => x.entry !== me);
+    const leadOwns = new Set(squadOf(lead.m).map((p) => p[0]));
+    const blocks = [1, 2, 3, 4].map((t) => {
+      const list = pool0(t).filter((e) => minutesInfo(e).avg >= 60 && sevOf(risks(e, TO)) < 2)
+        .map((e) => { const m = modelPts(e, n, TO); const p = proj(e, n, TO).total; return { e, m: m.total, dcP: m.dcP, score: 0.6 * m.total + 0.4 * p, fdr: windowFdr(e.team, n) }; })
+        .sort((a, b) => b.score - a.score).slice(0, 6);
+      const budget = bank + maxSell(t);
+      const rows = list.map((c) => {
+        const e = c.e, why = [];
+        if (c.fdr <= 2.6) why.push(`kind run (average FDR ${c.fdr.toFixed(1)})`);
+        if (t >= 2) { const r = rankIn(t, "expected_goal_involvements_per_90", +e.expected_goal_involvements_per_90); if (r >= 0.8) why.push(`xGI ${(+e.expected_goal_involvements_per_90).toFixed(2)} per 90, top ${Math.max(1, Math.round((1 - r) * 100))}% of ${POSN(e)}s`); }
+        if (t >= 2 && c.dcP >= 0.3) why.push(`earns defensive contribution points in about ${pct(c.dcP)} of games (${(+e.defensive_contribution_per_90).toFixed(1)} actions per 90)`);
+        if (t === 1 && +e.saves_per_90 >= 3) why.push(`${(+e.saves_per_90).toFixed(1)} saves per 90`);
+        if (t <= 2 && TO[e.team]) why.push(`${pct(TO[e.team].cs)} clean sheet chance in GW${gwNext}`);
+        if (t >= 3 && TO[e.team] && TO[e.team].score >= 0.75) why.push(`${tShort(e.team)} ${pct(TO[e.team].score)} to score in GW${gwNext}`);
+        why.push(`${(c.score / (e.now_cost / 10)).toFixed(1)} projected pts per £m`);
+        const aff = e.now_cost <= budget;
+        return `<tr><td><span class="mgr"><span>${esc(e.web_name)}${ycBadge(e)}</span><small>${tShort(e.team)} · £${price(e.now_cost)}m · ${e.selected_by_percent}% owned${leadOwns.has(e.id) ? ` · ${esc(firstName(lead))} owns` : ""}</small></span></td>
+          <td>${fxStrip(e.team, gwNext, n)}</td><td class="n">${avgBadge(c.fdr)}</td>
+          ${t === 1 ? `<td class="n note">–</td><td class="n note">–</td><td class="n note">–</td>` : `<td class="n">${(+e.expected_goals_per_90).toFixed(2)}</td><td class="n">${(+e.expected_assists_per_90).toFixed(2)}</td><td class="n"><strong>${(+e.expected_goal_involvements_per_90).toFixed(2)}</strong></td>`}
+          <td class="n">${t === 1 ? (+e.saves_per_90).toFixed(1) : (+e.defensive_contribution_per_90).toFixed(1)}</td>
+          <td class="n">${Math.round(minutesInfo(e).avg)}</td><td class="n"><strong>${c.score.toFixed(1)}</strong></td>
+          <td class="why"><span class="pill ${aff ? "ok" : ""}">${aff ? "Affordable now" : `Needs £${price(e.now_cost - budget)}m more`}</span> ${why.slice(0, 3).join("; ")}.</td></tr>`;
+      }).join("");
+      return `<div class="tgt"><h3>${POSNAME[t]}</h3><div class="tbl-wrap"><table class="fx-tbl cards-sm">
+        <thead><tr><th>Player</th><th>Next ${n}</th><th class="n">Avg FDR</th><th class="n">xG/90</th><th class="n">xA/90</th><th class="n">xGI/90</th><th class="n">${t === 1 ? "Saves/90" : "Defcon/90"}</th><th class="n">Mins</th><th class="n">Proj ${n} GW</th><th>Why</th></tr></thead>
+        <tbody>${rows || `<tr><td colspan="10" class="empty">No fit, nailed-on players found.</td></tr>`}</tbody></table></div></div>`;
+    }).join("");
+    box.innerHTML = `
+      <div class="panel-head"><h2>Players to target</h2>
+        <div class="controls"><span class="note">Fixtures over</span><div class="seg" role="group" aria-label="Fixture window">${[3, 5].map((v) => `<button data-recn="${v}" aria-pressed="${v === n}">Next ${v} GWs</button>`).join("")}</div></div></div>
+      <p class="note">Players you don't own, ranked by projected points from fixtures, xG and xA per 90, defensive contributions, saves, clean sheet chances, bookmaker odds for GW${gwNext} and minutes. Only fit players averaging 60+ minutes with no injury, ban or returning-rival risk are listed. "Affordable now" means you could buy him by selling your priciest player in that position.</p>
+      ${blocks}`;
+    box.querySelectorAll("[data-recn]").forEach((b) => b.addEventListener("click", () => { store.set("recN", Number(b.dataset.recn)); renderTargets(squadIds, bank); }));
+  }
+
   // Top-10 ownership of your (planned) squad, and the players they have that you don't, with next-gameweek projections.
   async function ensureFA(ids) {
     if (FA.odds === undefined) FA.odds = await (oddsCache ? Promise.resolve(oddsCache) : fetch("api/odds", { cache: "no-store" }).then((r) => (r.ok && (r.headers.get("content-type") || "").includes("json") ? r.json() : null)).catch(() => null));
