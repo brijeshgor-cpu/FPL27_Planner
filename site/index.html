@@ -828,87 +828,101 @@ select, input[type="search"] { font: inherit; color: var(--ink); background: var
 
   // ---- Current gameweek team stats: each of your players' match stats, live ----
   const EXPLAIN = { minutes: "Minutes", goals_scored: "Goal", assists: "Assist", clean_sheets: "Clean sheet", goals_conceded: "Goals conceded", saves: "Saves", bonus: "Bonus", yellow_cards: "Yellow card", red_cards: "Red card", own_goals: "Own goal", penalties_saved: "Penalty saved", penalties_missed: "Penalty missed", defensive_contribution: "Defensive contribution" };
+  // ---- One shared plan for the Overview (Future analysis and Current gameweek team stats) ----
+  // Combines this gameweek's match stats with the Insights data and Transfer planner projections:
+  // sales (starters only, by gain, within free transfers, distinct replacements, running bank),
+  // start/bench calls made after the sales, and next gameweek's captain.
+  function getPlan() {
+    if (FA.planP) return FA.planP;
+    return (FA.planP = (async () => {
+      const picks = squadOf(myM);
+      let data = null;
+      try { const r = await fetch(`api/gwplayers/${gwCur}?ids=${picks.map((p) => p[0]).join(",")}`, { cache: "no-store" }); if (r.ok && (r.headers.get("content-type") || "").includes("json")) data = await r.json(); } catch (e) { /* offline */ }
+      const by = {}; if (data) data.players.forEach((x) => (by[x.id] = x));
+      try { await ensureFA(picks.map((p) => p[0])); } catch (e) { /* season data used */ }
+      const fxOf = (team) => D.fixtures.filter((f) => f[1] === gwCur && (f[2] === team || f[3] === team));
+      const num = (v) => +v || 0;
+      const rows = picks.map(([el, slot, mult, cap, vc]) => { const e = E[el], x = by[el] || { stats: {}, explain: [] }; return { e, slot, mult, cap, vc, st: x.stats || {}, ex: x.explain || [], fx: fxOf(e.team) }; });
+
+      // ---- Next-gameweek verdict per player: this gameweek + Insights data + Transfer planner projections ----
+      const TOv = teamOdds();
+      const bank = bankOf(myM);
+      const sqSet = new Set(picks.map((p) => p[0]));
+      const tcount = {}; picks.forEach((p) => (tcount[E[p[0]].team] = (tcount[E[p[0]].team] || 0) + 1));
+      rows.forEach((r) => {
+        const e = r.e, st = r.st;
+        r.p1 = expertScore(e, 1, TOv); r.p5 = expertScore(e, 5, TOv);
+        r.rk = risks(e, TOv); r.sev = sevOf(r.rk);
+        r.pm = priceMove(e); r.mi = minutesInfo(e);
+        r.gap = e.goals_scored - (+e.expected_goals || 0);
+        r.formD = parseFloat(e.form) - parseFloat(e.points_per_game);
+        r.sc = e.element_type >= 3 ? scoreChance(e, TOv) : null;
+        r.sp = [e.penalties_order === 1 ? "pens" : "", e.corners_and_indirect_freekicks_order === 1 ? "corners" : "", e.direct_freekicks_order === 1 ? "free kicks" : ""].filter(Boolean);
+        const c = candidates(e.element_type, bank + sellPrice(e.id), sqSet, tcount, e.team, TOv, new Set(), r.sev >= 3 ? 0 : e.now_cost - 30)[0];
+        r.rep = c ? { e: c.e, gain: c.p5 - r.p5 } : null;
+        r.quiet = num(st.minutes) >= 60 && num(st.total_points) <= 2 && num(st.expected_goal_involvements) < 0.25 && e.element_type >= 3;
+      });
+      // 1. Sales: starters (or anyone unavailable) with a clearly better affordable replacement, in priority order,
+      //    up to your free transfers, each with a different replacement and the bank updated after every move.
+      const ft = freeTransfers(myM, D.entry.started_event || 1);
+      const trig = (r) => r.sev >= 3 || r.quiet || r.formD <= -1.5 || r.pm.cls === "down" || r.sev >= 2;
+      const cands = rows.filter((r) => (r.slot <= 11 || r.sev >= 3) && r.rep && (r.sev >= 3 || (r.rep.gain >= 6 && trig(r))))
+        .sort((a, b) => (b.sev >= 3) - (a.sev >= 3) || b.rep.gain - a.rep.gain);
+      const used = new Set(), sold = new Set(); let bankLeft = bank; const tc2 = { ...tcount };
+      cands.forEach((r) => {
+        const squadNow = new Set([...sqSet, ...used]);
+        const c = candidates(r.e.element_type, bankLeft + sellPrice(r.e.id), squadNow, tc2, r.e.team, TOv, new Set(), r.sev >= 3 ? 0 : r.e.now_cost - 30)[0];
+        if (!c) return;
+        const gain = c.p5 - r.p5;
+        if (!(r.sev >= 3 || gain >= 6)) return;
+        if (sold.size < ft || (r.sev >= 3 && r.slot <= 11)) {
+          r.sellTo = { e: c.e, gain, hit: sold.size >= ft };
+          sold.add(r.e.id); used.add(c.e.id); bankLeft += sellPrice(r.e.id) - c.e.now_cost;
+          tc2[r.e.team]--; tc2[c.e.team] = (tc2[c.e.team] || 0) + 1;
+        } else r.upgrade = { e: c.e, gain };
+      });
+      // 2. Starting decisions after the sales: a bench outfielder who projects clearly more than the weakest remaining starter.
+      const outfieldXI = rows.filter((r) => r.slot <= 11 && r.e.element_type > 1 && !sold.has(r.e.id));
+      rows.filter((r) => r.slot > 11 && r.e.element_type > 1 && r.sev < 2).sort((a, b) => b.p1 - a.p1).forEach((b) => {
+        const weak = outfieldXI.filter((x) => !x.benchFor && (x.e.element_type === b.e.element_type || (x.e.element_type > 2 && b.e.element_type > 2))).sort((a, c) => a.p1 - c.p1)[0];
+        if (weak && b.p1 - weak.p1 >= 1.2) { b.startOver = weak; weak.benchFor = b; }
+      });
+      const why = (r) => {
+        const st = r.st, bits = [];
+        if (num(st.minutes)) bits.push(`GW${gwCur}: ${num(st.total_points)} pts, ${num(st.expected_goal_involvements).toFixed(2)} xGI${num(st.minutes) < 60 ? `, ${st.minutes}'` : ""}`);
+        if (r.e.element_type >= 3 && Math.abs(r.gap) >= 1) bits.push(r.gap < 0 ? `${Math.abs(r.gap).toFixed(1)} goals below his xG (due)` : `${r.gap.toFixed(1)} above his xG (may cool)`);
+        if (Math.abs(r.formD) >= 1.5) bits.push(`form ${r.e.form} vs ${r.e.points_per_game}/g`);
+        if (r.sp.length) bits.push(`on ${r.sp.join(", ")}`);
+        if (r.pm.cls) bits.push(`price ${r.pm.cls === "up" ? "rising" : "falling"}`);
+        bits.push(`next GW ${r.p1.toFixed(1)} pts${r.sc ? `, ${pct(r.sc.p)} to score` : ""}${(teamFx[r.e.team][gwNext] || [])[0] ? ` ${fxLabel(teamFx[r.e.team][gwNext][0])}` : ""}`);
+        return bits;
+      };
+      rows.forEach((r) => {
+        const risk = r.rk.find((x) => x[0] >= 2) || r.rk.find((x) => x[0] === 1 && !/yellow|fixtures|clean sheet|to score|Backup keeper/i.test(x[1]));
+        const reason = r.sev >= 3 ? r.rk.find((x) => x[0] >= 3)[1] : r.quiet ? "Blanked with little threat" : r.formD <= -1.5 ? `Form ${r.e.form} vs ${r.e.points_per_game}/g season` : r.pm.cls === "down" ? "Price falling" : risk ? risk[1] : "";
+        if (r.sellTo) r.v = { k: "sell", label: r.sellTo.hit ? "Sell (−4)" : "Sell", txt: `${reason ? reason + ". " : ""}Replace with ${esc(r.sellTo.e.web_name)} (£${price(r.sellTo.e.now_cost)}m), +${r.sellTo.gain.toFixed(1)} pts over 5 GWs` };
+        else if (r.startOver) r.v = { k: "start", label: "Start", txt: `Projects ${r.p1.toFixed(1)} next GW vs ${esc(r.startOver.e.web_name)}'s ${r.startOver.p1.toFixed(1)}: start him instead` };
+        else if (r.benchFor) r.v = { k: "watch", label: "Bench", txt: `${esc(r.benchFor.e.web_name)} on your bench projects more next GW (${r.benchFor.p1.toFixed(1)} vs ${r.p1.toFixed(1)})` };
+        else if (r.slot > 11 && r.sev < 3) r.v = { k: "keep", label: "Bench", txt: r.e.element_type === 1 ? "Backup keeper: fine as long as your first choice plays" : `Bench cover${risk ? `; ${risk[1].charAt(0).toLowerCase() + risk[1].slice(1)}` : ""}` };
+        else if (r.upgrade) r.v = { k: "watch", label: "Upgrade option", txt: `${esc(r.upgrade.e.web_name)} (£${price(r.upgrade.e.now_cost)}m) would add +${r.upgrade.gain.toFixed(1)} over 5 GWs: use a spare transfer once the sales above are done` };
+        else if (risk) r.v = { k: "watch", label: "Watch", txt: risk[1] };
+        else if (r.e.element_type >= 3 && r.gap <= -1 && num(r.st.expected_goal_involvements) >= 0.4) r.v = { k: "keep", label: "Keep", txt: "Creating chances without the returns; points should follow" };
+        else r.v = { k: "keep", label: "Keep", txt: r.rep && r.rep.gain >= 3 ? `Keep: ${esc(r.rep.e.web_name)} would add +${r.rep.gain.toFixed(1)} over 5 GWs, but his numbers don't justify a transfer yet` : "Performing well; no clearly better option within budget" };
+        r.v.why = why(r);
+      });
+      const capNext = rows.filter((r) => (r.slot <= 11 && !sold.has(r.e.id)) || r.startOver).filter((r) => r.sev < 2).sort((a, b) => b.p1 - a.p1)[0] || null;
+      return { live: !!data, by, rows, fxOf, num, sold, bankLeft, ft, capNext };
+    })());
+  }
+
   async function renderGwStats() {
     const box = $("#gwStats"); if (!box) return;
     const picks = squadOf(myM); if (!picks.length) { box.innerHTML = ""; return; }
-    let data = null;
-    try { const r = await fetch(`api/gwplayers/${gwCur}?ids=${picks.map((p) => p[0]).join(",")}`, { cache: "no-store" }); if (r.ok && (r.headers.get("content-type") || "").includes("json")) data = await r.json(); } catch (e) { /* offline */ }
+    const plan = await getPlan();
     if (!document.body.contains(box)) return;
-    if (!data) { box.innerHTML = `<div class="panel-head"><h2>Current gameweek team stats <span class="note">GW${gwCur}</span></h2></div><p class="note">Match stats load on the live site.</p>`; return; }
-    const by = {}; data.players.forEach((x) => (by[x.id] = x));
-    try { await ensureFA(picks.map((p) => p[0])); } catch (e) { /* season data used */ }
-    if (!document.body.contains(box)) return;
-    const fxOf = (team) => D.fixtures.filter((f) => f[1] === gwCur && (f[2] === team || f[3] === team));
-    const num = (v) => +v || 0;
-    const rows = picks.map(([el, slot, mult, cap, vc]) => { const e = E[el], x = by[el] || { stats: {}, explain: [] }; return { e, slot, mult, cap, vc, st: x.stats || {}, ex: x.explain || [], fx: fxOf(e.team) }; });
+    if (!plan.live) { box.innerHTML = `<div class="panel-head"><h2>Current gameweek team stats <span class="note">GW${gwCur}</span></h2></div><p class="note">Match stats load on the live site.</p>`; return; }
+    const { by, rows, fxOf, num, sold, bankLeft, ft } = plan;
     const played = rows.filter((r) => num(r.st.minutes) > 0);
-
-    // ---- Next-gameweek verdict per player: this gameweek + Insights data + Transfer planner projections ----
-    const TOv = teamOdds();
-    const bank = bankOf(myM);
-    const sqSet = new Set(picks.map((p) => p[0]));
-    const tcount = {}; picks.forEach((p) => (tcount[E[p[0]].team] = (tcount[E[p[0]].team] || 0) + 1));
-    rows.forEach((r) => {
-      const e = r.e, st = r.st;
-      r.p1 = expertScore(e, 1, TOv); r.p5 = expertScore(e, 5, TOv);
-      r.rk = risks(e, TOv); r.sev = sevOf(r.rk);
-      r.pm = priceMove(e); r.mi = minutesInfo(e);
-      r.gap = e.goals_scored - (+e.expected_goals || 0);
-      r.formD = parseFloat(e.form) - parseFloat(e.points_per_game);
-      r.sc = e.element_type >= 3 ? scoreChance(e, TOv) : null;
-      r.sp = [e.penalties_order === 1 ? "pens" : "", e.corners_and_indirect_freekicks_order === 1 ? "corners" : "", e.direct_freekicks_order === 1 ? "free kicks" : ""].filter(Boolean);
-      const c = candidates(e.element_type, bank + sellPrice(e.id), sqSet, tcount, e.team, TOv, new Set(), r.sev >= 3 ? 0 : e.now_cost - 30)[0];
-      r.rep = c ? { e: c.e, gain: c.p5 - r.p5 } : null;
-      r.quiet = num(st.minutes) >= 60 && num(st.total_points) <= 2 && num(st.expected_goal_involvements) < 0.25 && e.element_type >= 3;
-    });
-    // 1. Sales: starters (or anyone unavailable) with a clearly better affordable replacement, in priority order,
-    //    up to your free transfers, each with a different replacement and the bank updated after every move.
-    const ft = freeTransfers(myM, D.entry.started_event || 1);
-    const trig = (r) => r.sev >= 3 || r.quiet || r.formD <= -1.5 || r.pm.cls === "down" || r.sev >= 2;
-    const cands = rows.filter((r) => (r.slot <= 11 || r.sev >= 3) && r.rep && (r.sev >= 3 || (r.rep.gain >= 6 && trig(r))))
-      .sort((a, b) => (b.sev >= 3) - (a.sev >= 3) || b.rep.gain - a.rep.gain);
-    const used = new Set(), sold = new Set(); let bankLeft = bank; const tc2 = { ...tcount };
-    cands.forEach((r) => {
-      const squadNow = new Set([...sqSet, ...used]);
-      const c = candidates(r.e.element_type, bankLeft + sellPrice(r.e.id), squadNow, tc2, r.e.team, TOv, new Set(), r.sev >= 3 ? 0 : r.e.now_cost - 30)[0];
-      if (!c) return;
-      const gain = c.p5 - r.p5;
-      if (!(r.sev >= 3 || gain >= 6)) return;
-      if (sold.size < ft || (r.sev >= 3 && r.slot <= 11)) {
-        r.sellTo = { e: c.e, gain, hit: sold.size >= ft };
-        sold.add(r.e.id); used.add(c.e.id); bankLeft += sellPrice(r.e.id) - c.e.now_cost;
-        tc2[r.e.team]--; tc2[c.e.team] = (tc2[c.e.team] || 0) + 1;
-      } else r.upgrade = { e: c.e, gain };
-    });
-    // 2. Starting decisions after the sales: a bench outfielder who projects clearly more than the weakest remaining starter.
-    const outfieldXI = rows.filter((r) => r.slot <= 11 && r.e.element_type > 1 && !sold.has(r.e.id));
-    rows.filter((r) => r.slot > 11 && r.e.element_type > 1 && r.sev < 2).sort((a, b) => b.p1 - a.p1).forEach((b) => {
-      const weak = outfieldXI.filter((x) => !x.benchFor && (x.e.element_type === b.e.element_type || (x.e.element_type > 2 && b.e.element_type > 2))).sort((a, c) => a.p1 - c.p1)[0];
-      if (weak && b.p1 - weak.p1 >= 1.2) { b.startOver = weak; weak.benchFor = b; }
-    });
-    const why = (r) => {
-      const st = r.st, bits = [];
-      if (num(st.minutes)) bits.push(`GW${gwCur}: ${num(st.total_points)} pts, ${num(st.expected_goal_involvements).toFixed(2)} xGI${num(st.minutes) < 60 ? `, ${st.minutes}'` : ""}`);
-      if (r.e.element_type >= 3 && Math.abs(r.gap) >= 1) bits.push(r.gap < 0 ? `${Math.abs(r.gap).toFixed(1)} goals below his xG (due)` : `${r.gap.toFixed(1)} above his xG (may cool)`);
-      if (Math.abs(r.formD) >= 1.5) bits.push(`form ${r.e.form} vs ${r.e.points_per_game}/g`);
-      if (r.sp.length) bits.push(`on ${r.sp.join(", ")}`);
-      if (r.pm.cls) bits.push(`price ${r.pm.cls === "up" ? "rising" : "falling"}`);
-      bits.push(`next GW ${r.p1.toFixed(1)} pts${r.sc ? `, ${pct(r.sc.p)} to score` : ""}${(teamFx[r.e.team][gwNext] || [])[0] ? ` ${fxLabel(teamFx[r.e.team][gwNext][0])}` : ""}`);
-      return bits;
-    };
-    rows.forEach((r) => {
-      const risk = r.rk.find((x) => x[0] >= 2) || r.rk.find((x) => x[0] === 1 && !/yellow|fixtures|clean sheet|to score|Backup keeper/i.test(x[1]));
-      const reason = r.sev >= 3 ? r.rk.find((x) => x[0] >= 3)[1] : r.quiet ? "Blanked with little threat" : r.formD <= -1.5 ? `Form ${r.e.form} vs ${r.e.points_per_game}/g season` : r.pm.cls === "down" ? "Price falling" : risk ? risk[1] : "";
-      if (r.sellTo) r.v = { k: "sell", label: r.sellTo.hit ? "Sell (−4)" : "Sell", txt: `${reason ? reason + ". " : ""}Replace with ${esc(r.sellTo.e.web_name)} (£${price(r.sellTo.e.now_cost)}m), +${r.sellTo.gain.toFixed(1)} pts over 5 GWs` };
-      else if (r.startOver) r.v = { k: "start", label: "Start", txt: `Projects ${r.p1.toFixed(1)} next GW vs ${esc(r.startOver.e.web_name)}'s ${r.startOver.p1.toFixed(1)}: start him instead` };
-      else if (r.benchFor) r.v = { k: "watch", label: "Bench", txt: `${esc(r.benchFor.e.web_name)} on your bench projects more next GW (${r.benchFor.p1.toFixed(1)} vs ${r.p1.toFixed(1)})` };
-      else if (r.slot > 11 && r.sev < 3) r.v = { k: "keep", label: "Bench", txt: r.e.element_type === 1 ? "Backup keeper: fine as long as your first choice plays" : `Bench cover${risk ? `; ${risk[1].charAt(0).toLowerCase() + risk[1].slice(1)}` : ""}` };
-      else if (r.upgrade) r.v = { k: "watch", label: "Upgrade option", txt: `${esc(r.upgrade.e.web_name)} (£${price(r.upgrade.e.now_cost)}m) would add +${r.upgrade.gain.toFixed(1)} over 5 GWs: use a spare transfer once the sales above are done` };
-      else if (risk) r.v = { k: "watch", label: "Watch", txt: risk[1] };
-      else if (r.e.element_type >= 3 && r.gap <= -1 && num(r.st.expected_goal_involvements) >= 0.4) r.v = { k: "keep", label: "Keep", txt: "Creating chances without the returns; points should follow" };
-      else r.v = { k: "keep", label: "Keep", txt: r.rep && r.rep.gain >= 3 ? `Keep: ${esc(r.rep.e.web_name)} would add +${r.rep.gain.toFixed(1)} over 5 GWs, but his numbers don't justify a transfer yet` : "Performing well; no clearly better option within budget" };
-      r.v.why = why(r);
-    });
     const best = (k) => { const r = played.slice().sort((a, b) => num(b.st[k]) - num(a.st[k]))[0]; return r && num(r.st[k]) > 0 ? r.e.id : null; };
     const tops = { xa: best("expected_assists"), xg: best("expected_goals"), bps: best("bps"), def: best("defensive_contribution"), pts: best("total_points") };
     const status = (r) => {
@@ -970,7 +984,7 @@ select, input[type="search"] { font: inherit; color: var(--ink); background: var
     const take = [];
     {
       const sells = rows.filter((r) => r.sellTo), starts = rows.filter((r) => r.v && r.v.label === "Start");
-      const capNext = rows.filter((r) => r.slot <= 11 || r.startOver).filter((r) => r.sev < 2).sort((a, b) => b.p1 - a.p1)[0];
+      const capNext = plan.capNext;
       const lines = [
         ...sells.map((r) => `<strong>Sell ${esc(r.e.web_name)} → ${esc(r.sellTo.e.web_name)}</strong> (+${r.sellTo.gain.toFixed(1)} over 5 GWs${r.sellTo.hit ? ", −4 hit" : ""})`),
         ...(sells.length ? [`${sells.length} of your ${ft} free transfers, £${price(bankLeft)}m left in the bank`] : [`No sale is clearly worth a transfer: roll it`]),
@@ -1359,13 +1373,16 @@ select, input[type="search"] { font: inherit; color: var(--ink); background: var
       if (D.source === "live" && need.length) box.querySelector(".empty") && (box.querySelector(".empty").textContent = `Checking recent minutes and returning players for ${need.length} players…`);
       await fetchSumm(need);
       computeCompetition();
-      drawFuture(box, TO, top, topOwn, sortedM, meRow);
+      const plan = await getPlan();
+      if (!document.body.contains(box)) return;
+      drawFuture(box, TO, top, topOwn, sortedM, meRow, plan);
     } catch (err) {
       box.innerHTML = `<div class="panel-head"><h2>Future analysis</h2></div><div class="err">The analysis couldn't be built (${esc(err.message)}). Reload to try again.</div>`;
     }
   }
 
-  function drawFuture(box, TO, top, topOwn, sortedM, meRow) {
+  const num0 = (v) => +v || 0;
+  function drawFuture(box, TO, top, topOwn, sortedM, meRow, plan) {
     const leader = sortedM[0].entry === me ? sortedM[1] : sortedM[0];
     const lName = firstName(leader);
     const leaderOwns = new Set(squadOf(leader.m).map((p) => p[0]));
@@ -1376,29 +1393,14 @@ select, input[type="search"] { font: inherit; color: var(--ink); background: var
     const tc = {}; picks.forEach((p) => (tc[E[p[0]].team] = (tc[E[p[0]].team] || 0) + 1));
     const mine = picks.map(([id, slot]) => { const e = E[id], rk = risks(e, TO); return { e, slot, rk, sev: sevOf(rk), p5: expertScore(e, 5, TO), p3: expertScore(e, 3, TO), mins: minutesInfo(e) }; });
 
-    // Transfer plan: greedy, most urgent first. Bench players count for less unless they're unavailable.
-    const moves = []; const pool5 = [...mine];
-    for (let k = 0; k < 4 && moves.length < 3; k++) {
-      let best = null;
-      pool5.forEach((m) => {
-        // Unless a player is unavailable, don't downgrade by more than £3m (that just leaves money idle).
-        const c = candidates(m.e.element_type, bank + sellPrice(m.e.id), squad, tc, m.e.team, TO, leaderOwns, m.sev >= 3 ? 0 : m.e.now_cost - 30)[0]; if (!c) return;
-        // Bench players matter less; a backup keeper hardly at all.
-        const w = m.slot <= 11 ? 1 : m.e.element_type === 1 ? 0.1 : 0.25, gain = c.p5 - m.p5;
-        const score = m.sev * 8 * (m.slot <= 11 ? 1 : 0.5) + gain * w;
-        // Selling a template player the leader owns is a big gamble: only for a clear gain.
-        const template = leaderOwns.has(m.e.id) && (own[m.e.id] || 0) >= 0.5 && m.sev < 2;
-        const ok = m.sev >= 3 || (m.sev >= 2 && gain > 0) || gain * w >= (template ? 10 : 5);
-        if (ok && (!best || score > best.score)) best = { m, c, gain, score };
-      });
-      if (!best) break;
-      const free = moves.length < ft;
-      if (!free && !(best.m.sev >= 3 && best.m.slot <= 11 && best.gain >= 8)) break;
-      moves.push({ ...best, hit: !free });
-      squad.delete(best.m.e.id); squad.add(best.c.e.id); bank += sellPrice(best.m.e.id) - best.c.e.now_cost;
-      tc[best.m.e.team]--; tc[best.c.e.team] = (tc[best.c.e.team] || 0) + 1;
-      pool5.splice(pool5.indexOf(best.m), 1);
-    }
+    // Transfer plan: the Overview's shared plan (the same one Current gameweek team stats shows).
+    const moves = (plan ? plan.rows.filter((r) => r.sellTo) : []).map((r) => {
+      const ce = r.sellTo.e;
+      const reason = [r.quiet ? `blanked in GW${gwCur} with little threat (${num0(r.st.expected_goal_involvements).toFixed(2)} xGI)` : "", r.formD <= -1.5 ? `form ${r.e.form} against ${r.e.points_per_game} a game this season` : "", r.pm.cls === "down" ? "price falling" : ""].filter(Boolean).join("; ");
+      return { m: mine.find((x) => x.e.id === r.e.id), c: { e: ce, p5: expertScore(ce, 5, TO), p3: expertScore(ce, 3, TO), mins: minutesInfo(ce) }, gain: r.sellTo.gain, hit: r.sellTo.hit, reason };
+    });
+    moves.forEach((mv) => { squad.delete(mv.m.e.id); squad.add(mv.c.e.id); bank += sellPrice(mv.m.e.id) - mv.c.e.now_cost; tc[mv.m.e.team]--; tc[mv.c.e.team] = (tc[mv.c.e.team] || 0) + 1; });
+    const starts = plan ? plan.rows.filter((r) => r.startOver) : [];
     const moved = new Map(moves.map((mv) => [mv.m.e.id, mv.c.e]));
     const lgOwnAll = {}; members.forEach((x) => squadOf(x.m).forEach((p) => (lgOwnAll[p[0]] = (lgOwnAll[p[0]] || 0) + 1)));
 
@@ -1412,7 +1414,8 @@ select, input[type="search"] { font: inherit; color: var(--ink); background: var
 
     // Captain for next gameweek, after the transfers.
     const capList = myXIafter.map((id) => ({ e: E[id], p: expertScore(E[id], 1, TO) })).sort((a, b) => b.p - a.p);
-    const cap = capList[0], vice = capList[1];
+    const planCap = plan && plan.capNext ? capList.find((c) => c.e.id === plan.capNext.e.id) || { e: plan.capNext.e, p: plan.capNext.p1 } : null;
+    const cap = planCap || capList[0], vice = capList.find((c) => c.e.id !== cap.e.id);
     const leadCap = squadOf(leader.m).find((p) => p[3]);
     const capDiff = capList.find((c) => !leaderOwns.has(c.e.id) && c.p >= cap.p * 0.85);
 
@@ -1486,7 +1489,7 @@ select, input[type="search"] { font: inherit; color: var(--ink); background: var
       // Fixture reasons only count if the replacement's fixtures are actually easier.
       const easier = mv.c.e.team !== mv.m.e.team && windowFdr(mv.c.e.team, 3) < windowFdr(mv.m.e.team, 3);
       const rs = mv.m.rk.filter((r) => easier || !/fixtures/.test(r[1])).slice(0, 2).map((r) => r[1]);
-      const why = [...rs, `projects ${mv.m.p5.toFixed(1)} pts over the next 5 gameweeks`].join("; ");
+      const why = [...(mv.reason ? [mv.reason.charAt(0).toUpperCase() + mv.reason.slice(1)] : []), ...rs, `projects ${mv.m.p5.toFixed(1)} pts over the next 5 gameweeks`].join("; ");
       const o = TO[mv.c.e.team];
       const oTxt = o ? (mv.c.e.element_type <= 2 ? `${pct(o.cs)} clean sheet chance in GW${gwNext}` : `${tShort(mv.c.e.team)} ${pct(o.score)} to score in GW${gwNext}`) : "";
       pr.push({ tag: mv.hit ? "Transfer (−4 hit)" : "Transfer", cls: mv.m.sev >= 3 ? "bad" : "acc",
@@ -1494,6 +1497,7 @@ select, input[type="search"] { font: inherit; color: var(--ink); background: var
         d: `<strong>Why sell:</strong> ${why}. <strong>Why ${esc(mv.c.e.web_name)}:</strong> projects ${mv.c.p5.toFixed(1)} pts over 5 gameweeks (${sign1(mv.gain)} on ${esc(mv.m.e.web_name)}), ${Math.round(mv.c.mins.avg)} mins a game, next 3 ${fxStrip(mv.c.e.team, gwNext, 3)}${oTxt ? ", " + oTxt : ""}. ${banRisk(mv.c.e)?.away === 1 ? `Note: he's on ${banRisk(mv.c.e).y} yellows, one from a ban (already allowed for in his projection). ` : ""}${leaderOwns.has(mv.c.e.id) ? `${lName} owns him, so this protects you rather than gains ground.` : `${lName} doesn't own him: every point he scores is a point gained on the leader.`}` });
     });
     if (!moves.length) pr.push({ tag: "Transfer", cls: "", t: "No transfer is clearly worth making this week", d: `Nobody in your squad is injured or losing minutes badly, and no replacement projects at least 5 pts more over 5 gameweeks within your £${price(bank)}m budget. Roll the transfer.` });
+    starts.forEach((r) => pr.push({ tag: "Line-up", cls: "acc", t: `Start ${esc(r.e.web_name)} over ${esc(r.startOver.e.web_name)}`, d: `${esc(r.e.web_name)} projects ${r.p1.toFixed(1)} pts next gameweek against ${esc(r.startOver.e.web_name)}'s ${r.startOver.p1.toFixed(1)}${r.sc ? ` and has a ${pct(r.sc.p)} chance of scoring` : ""}${num0(r.st.total_points) ? `, after ${r.st.total_points} pts on your bench in GW${gwCur}` : ""}.` }));
     const leftFT = ft - moves.filter((m) => !m.hit).length;
     pr.push({ tag: "Captain", cls: "acc", t: `Captain ${esc(cap.e.web_name)} in GW${gwNext}, vice ${esc(vice.e.web_name)}`,
       d: `${esc(cap.e.web_name)} has the highest projection in your XI (${cap.p.toFixed(1)} pts${nextFx(cap.e.team) ? ", " + fxLabel(nextFx(cap.e.team).list[0]) : ""}). ${leadCap ? `${lName} captained ${esc(E[leadCap[0]]?.web_name)} last week. ` : ""}${capDiff && capDiff.e.id !== cap.e.id ? `If you want to gamble on the gap, ${esc(capDiff.e.web_name)} (${capDiff.p.toFixed(1)} pts) is a captain ${lName} doesn't own.` : leaderOwns.has(cap.e.id) ? `${lName} owns him too, so this is the safe pick: it won't lose you ground.` : `${lName} doesn't own him, so a big haul swings the gap directly.`}` });
@@ -1555,6 +1559,7 @@ select, input[type="search"] { font: inherit; color: var(--ink); background: var
       })()}
 
       <h3>Your priorities, in order</h3>
+      <p class="note">The same plan as Current gameweek team stats: it weighs this gameweek's performances alongside the season data, projections and news.</p>
       <ol class="prio">${pr.map((p) => `<li><span class="pill ${p.cls === "acc" ? "acc" : p.cls === "bad" ? "sev3" : p.cls === "warn" ? "sev2" : ""}">${p.tag}</span><div><div class="t">${p.t}</div><div class="d">${p.d}</div></div></li>`).join("")}</ol>
 
       <div class="stack">
