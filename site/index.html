@@ -229,10 +229,80 @@ select, input[type="search"] { font: inherit; color: var(--ink); background: var
 
   let D, E, T, me, myM, gwCur, gwNext, members, own, eo, capCount, teamFx, view;
 
-  fetch("data.json", { cache: "no-store" })
-    .then((r) => { if (!r.ok) throw new Error("data.json returned " + r.status); return r.json(); })
+  // ---------- loading: live through the site's /api/ proxy, else the saved snapshot ----------
+  const ENTRY_ID = 1965328, LEAGUE_ID = 111899;
+  const EL_FIELDS = ["id", "web_name", "first_name", "second_name", "team", "element_type", "now_cost",
+    "total_points", "event_points", "form", "points_per_game", "ep_next", "ep_this",
+    "selected_by_percent", "minutes", "starts", "goals_scored", "assists", "clean_sheets",
+    "expected_goals", "expected_assists", "expected_goal_involvements",
+    "expected_goal_involvements_per_90", "expected_goals_conceded_per_90",
+    "defensive_contribution_per_90", "bonus", "status", "news", "chance_of_playing_next_round",
+    "cost_change_event", "cost_change_start", "transfers_in_event", "transfers_out_event", "penalties_order"];
+  const setStatus = (t) => { const a = $("#app"); if (a && !D) a.innerHTML = `<p class="empty">${esc(t)}</p>`; };
+
+  async function api(path) {
+    const r = await fetch("api/" + path, { cache: "no-store" });
+    if (r.status === 404 && path === "bootstrap-static/") throw new Error("no live API on this host");
+    if (!r.ok) throw new Error(`FPL request ${path} returned ${r.status}`);
+    const ct = r.headers.get("content-type") || "";
+    if (!ct.includes("json")) throw new Error("no live API on this host");
+    return r.json();
+  }
+  async function pool(items, n, fn) {
+    const out = new Array(items.length); let i = 0;
+    await Promise.all(Array.from({ length: Math.min(n, items.length) }, async () => { while (i < items.length) { const k = i++; out[k] = await fn(items[k], k); } }));
+    return out;
+  }
+  async function loadLive() {
+    setStatus("Fetching live data from FPL…");
+    const [boot, fixtures, entry] = await Promise.all([api("bootstrap-static/"), api("fixtures/"), api(`entry/${ENTRY_ID}/`)]);
+    const events = boot.events, current = events.find((e) => e.is_current), nxt = events.find((e) => e.is_next);
+    const curGw = current ? current.id : 0;
+    let standings = [], league = null;
+    for (let page = 1; page <= 5; page++) {
+      const lg = await api(`leagues-classic/${LEAGUE_ID}/standings/?page_standings=${page}`);
+      league = lg.league; standings = standings.concat(lg.standings.results);
+      if (!lg.standings.has_next) break;
+    }
+    const ids = standings.map((r) => r.entry); if (!ids.includes(ENTRY_ID)) ids.push(ENTRY_ID);
+    let done = 0;
+    const managers = {};
+    await pool(ids, 8, async (eid) => {
+      try {
+        const [h, p] = await Promise.all([api(`entry/${eid}/history/`), curGw ? api(`entry/${eid}/event/${curGw}/picks/`).catch(() => null) : null]);
+        managers[eid] = {
+          history: h.current.map((c) => [c.event, c.points, c.total_points, c.event_transfers, c.event_transfers_cost, c.points_on_bench, c.overall_rank, c.value, c.bank]),
+          chips: h.chips.map((c) => [c.name, c.event]),
+          picks: p ? { chip: p.active_chip, picks: p.picks.map((x) => [x.element, x.position, x.multiplier, +x.is_captain, +x.is_vice_captain]), bank: p.entry_history.bank, value: p.entry_history.value } : null,
+        };
+      } catch (e) { if (eid === ENTRY_ID) throw e; }
+      setStatus(`Fetching live data from FPL… ${++done} of ${ids.length} managers`);
+    });
+    return {
+      generated_at: new Date().toISOString(), source: "live", me: ENTRY_ID, entry,
+      league: { id: league.id, name: league.name },
+      standings: standings.map((r) => ({ entry: r.entry, entry_name: r.entry_name, player_name: r.player_name, rank: r.rank, last_rank: r.last_rank, total: r.total, event_total: r.event_total })),
+      managers, transfers: [],
+      events: events.map((e) => ({ id: e.id, deadline: e.deadline_time, finished: e.finished, is_current: e.is_current, is_next: e.is_next, avg: e.average_entry_score, high: e.highest_score, data_checked: e.data_checked })),
+      current_gw: curGw, next_gw: nxt ? nxt.id : null,
+      chips_def: boot.chips.map((c) => [c.name, c.start_event, c.stop_event]),
+      teams: boot.teams.map((t) => ({ id: t.id, name: t.name, short: t.short_name, strength: t.strength })),
+      positions: Object.fromEntries(boot.element_types.map((t) => [String(t.id), t.singular_name_short])),
+      elements: boot.elements.filter((e) => !e.removed).map((e) => EL_FIELDS.map((f) => e[f] ?? null)),
+      element_fields: EL_FIELDS,
+      fixtures: fixtures.map((f) => [f.id, f.event, f.team_h, f.team_a, f.team_h_difficulty, f.team_a_difficulty, f.kickoff_time, +!!f.finished, +!!f.started, f.team_h_score, f.team_a_score]),
+    };
+  }
+  async function loadSnapshot(liveErr) {
+    const r = await fetch("data.json", { cache: "no-store" });
+    if (!r.ok) throw new Error(liveErr ? liveErr.message : "data.json returned " + r.status);
+    const d = await r.json(); d.source = "snapshot"; d.liveError = liveErr && !/no live API/.test(liveErr.message) ? liveErr.message : null;
+    return d;
+  }
+  loadLive()
+    .catch((e) => loadSnapshot(e))
     .then((d) => { D = d; prepare(); route(); window.addEventListener("hashchange", route); tick(); setInterval(tick, 1000); })
-    .catch((e) => { $("#app").innerHTML = `<div class="err"><strong>Couldn't load the FPL data.</strong><br>${esc(e.message)}. Reload the page; if it keeps failing, the data refresh job may not have run yet.</div>`; });
+    .catch((e) => { $("#app").innerHTML = `<div class="err"><strong>Couldn't load the FPL data.</strong><br>${esc(e.message)}. FPL may be updating (this happens between gameweeks); try reloading in a few minutes.</div>`; });
 
   // ---------- data prep ----------
   function prepare() {
@@ -340,7 +410,9 @@ select, input[type="search"] { font: inherit; color: var(--ink); background: var
   function freshness() {
     const mins = Math.round((Date.now() - new Date(D.generated_at)) / 6e4);
     const when = mins < 1 ? "just now" : mins < 60 ? `${mins} min ago` : mins < 1440 ? `${Math.round(mins / 60)} h ago` : new Date(D.generated_at).toLocaleString("en-GB");
-    return `<p class="fresh">Data from the official FPL API, updated ${when}. GW${gwCur} ${D.events.find((e) => e.id === gwCur)?.finished ? "finished" : "in progress"}.</p>`;
+    const gwState = `GW${gwCur} ${D.events.find((e) => e.id === gwCur)?.finished ? "finished" : "in progress"}.`;
+    if (D.source === "live") return `<p class="fresh">Live from the official FPL API, loaded at ${new Date(D.generated_at).toLocaleTimeString("en-GB", { hour: "2-digit", minute: "2-digit" })}. Reload the page for the latest. ${gwState}</p>`;
+    return `<p class="fresh">Saved snapshot from the official FPL API, taken ${when}${D.liveError ? ` (live data unavailable: ${esc(D.liveError)})` : ""}. ${gwState}</p>`;
   }
 
   // ---------- overview ----------

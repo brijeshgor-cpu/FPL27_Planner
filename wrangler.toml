@@ -1,0 +1,7 @@
+name = "fc27-planner"
+main = "worker/src/index.js"
+compatibility_date = "2025-06-01"
+
+[assets]
+directory = "./worker/public"
+binding = "ASSETS"
