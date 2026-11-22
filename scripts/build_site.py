@@ -23,6 +23,8 @@ for out in ("worker/public", "dist"):
     with open(os.path.join(d, "index.html"), "w") as f:
         f.write(page)
     shutil.copy(os.path.join(SRC, "data.json"), os.path.join(d, "data.json"))
+    if out == "worker/public":  # imported as text by the Worker
+        shutil.copy(os.path.join(SRC, "data.json"), os.path.join(d, "data.json.txt"))
     with open(os.path.join(d, "robots.txt"), "w") as f:
         f.write("User-agent: *\nDisallow: /\n")
 print("built worker/public/ and dist/")

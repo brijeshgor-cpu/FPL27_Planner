@@ -1,7 +1,10 @@
 // FC27 Planner on Cloudflare Workers.
-// Serves the static page from ./worker/public and passes a fixed set of read-only
+// Serves the page (bundled from ./worker/public at deploy time) and passes a fixed set of read-only
 // FPL API requests through /api/*, so the page can load live data on every visit.
 // (The FPL API does not allow browsers to call it directly.)
+
+import PAGE from "../public/index.html";
+import SNAPSHOT from "../public/data.json.txt";
 
 const FPL = "https://fantasy.premierleague.com/api/";
 const ALLOWED = [
@@ -19,7 +22,7 @@ const ALLOWED = [
 export default {
   async fetch(request, env) {
     const url = new URL(request.url);
-    if (!url.pathname.startsWith("/api/")) return env.ASSETS.fetch(request);
+    if (!url.pathname.startsWith("/api/")) return serveStatic(url.pathname);
     if (request.method !== "GET") return new Response("Method not allowed", { status: 405 });
 
     const path = url.pathname.slice("/api/".length);
@@ -49,4 +52,13 @@ export default {
 
 function json(obj, status) {
   return new Response(JSON.stringify(obj), { status, headers: { "content-type": "application/json" } });
+}
+
+function serveStatic(path) {
+  if (path === "/" || path === "/index.html")
+    return new Response(PAGE, { headers: { "content-type": "text/html; charset=utf-8", "cache-control": "no-cache" } });
+  if (path === "/data.json")
+    return new Response(SNAPSHOT, { headers: { "content-type": "application/json", "cache-control": "no-cache" } });
+  if (path === "/robots.txt") return new Response("User-agent: *\nDisallow: /\n", { headers: { "content-type": "text/plain" } });
+  return new Response("Not found", { status: 404 });
 }

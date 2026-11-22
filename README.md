@@ -9,11 +9,16 @@ A live FPL planner for **FC27** (entry 1965328) and the **Bring It On!** mini-le
 
 ## Deploy on Cloudflare (free)
 
-1. Create a free account at dash.cloudflare.com.
-2. Workers & Pages → Create → Import a repository → connect GitHub and pick this repo and branch.
-3. Keep the defaults (deploy command `npx wrangler deploy`) and deploy. The site is at `https://fc27-planner.<your-subdomain>.workers.dev`.
+Live at **https://fc27-planner.fc27-fpl.workers.dev**.
 
-Every push to the branch redeploys. After editing `site/index.html`, run `python3 scripts/build_site.py` and commit `worker/public/`.
+The page and the data snapshot are bundled into the Worker as text (see `wrangler.toml`), so there is no separate asset upload. To redeploy after changing `site/index.html`:
+
+```sh
+python3 scripts/build_site.py
+CLOUDFLARE_API_TOKEN=... npx wrangler deploy
+```
+
+Data is fetched live on each page load, so redeploying is only needed for page changes.
 To limit who can open it, add Cloudflare Access (Zero Trust → Access → Applications) with the emails you want to allow.
 
 ## Run locally
