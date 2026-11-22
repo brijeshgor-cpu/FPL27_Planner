@@ -257,6 +257,17 @@ td.why { white-space: normal; min-width: 220px; font-size: .8rem; color: var(--m
 .yc.sm { height: 16px; min-width: 13px; font-size: .62rem; }
 .tgt { display: grid; gap: 8px; }
 .tgt + .tgt { margin-top: 10px; }
+.own-cell { display: grid; gap: 2px; }
+.ins-tbl td { vertical-align: top; }
+.ins-tbl td small.note { white-space: normal; max-width: 260px; display: block; }
+.rot-ctl { gap: 10px 16px; }
+.rot-ctl label { display: inline-flex; align-items: center; gap: 6px; }
+.rot-tbl td.rot-pick { box-shadow: inset 0 0 0 2px var(--accent); border-radius: 6px; }
+.rot-tbl tr.rot-best td { background: var(--surface-2); }
+.rot-sugg { display: flex; flex-wrap: wrap; gap: 6px; }
+.rot-chip { border: 1px solid var(--line); background: var(--surface); border-radius: 999px; padding: 6px 12px; font-weight: 600; min-height: 36px; }
+.rot-chip.on { background: var(--accent); color: var(--accent-ink); border-color: var(--accent); }
+.rot-chip.on .note { color: inherit; }
 .obar { display: inline-block; width: 64px; height: 6px; border-radius: 3px; background: var(--surface-2); vertical-align: middle; overflow: hidden; }
 .obar i { display: block; height: 100%; background: var(--accent); border-radius: 3px; }
 .win-tally { display: flex; flex-wrap: wrap; gap: 6px; }
@@ -369,6 +380,7 @@ select, input[type="search"] { font: inherit; color: var(--ink); background: var
     <a href="#analysis" data-v="analysis">Mini League analysis</a>
     <a href="#league" data-v="league">Standings</a>
     <a href="#planner" data-v="planner">Transfer planner</a>
+    <a href="#insights" data-v="insights">Insights</a>
     <a href="#fixtures" data-v="fixtures">Fixtures</a>
     <a href="#odds" data-v="odds">Bookmaker odds</a>
   </nav>
@@ -469,7 +481,7 @@ select, input[type="search"] { font: inherit; color: var(--ink); background: var
       standings: standings.map((r) => ({ entry: r.entry, entry_name: r.entry_name, player_name: r.player_name, rank: r.rank, last_rank: r.last_rank, total: r.total, event_total: r.event_total })),
       managers, transfers: transfers.map((t) => [t.event, t.element_in, t.element_in_cost, t.element_out, t.element_out_cost]),
       price_deadlines: boot.game_config?.settings?.price_change_deadlines || [],
-      events: events.map((e) => ({ id: e.id, deadline: e.deadline_time, finished: e.finished, is_current: e.is_current, is_next: e.is_next, avg: e.average_entry_score, high: e.highest_score, data_checked: e.data_checked })),
+      events: events.map((e) => ({ id: e.id, deadline: e.deadline_time, finished: e.finished, is_current: e.is_current, is_next: e.is_next, avg: e.average_entry_score, high: e.highest_score, data_checked: e.data_checked, most_captained: e.most_captained, top_element: e.top_element, top_points: e.top_element_info ? e.top_element_info.points : null })),
       current_gw: curGw, next_gw: nxt ? nxt.id : null,
       chips_def: boot.chips.map((c) => [c.name, c.start_event, c.stop_event]),
       teams: boot.teams.map((t) => ({ id: t.id, name: t.name, short: t.short_name, strength: t.strength })),
@@ -593,9 +605,9 @@ select, input[type="search"] { font: inherit; color: var(--ink); background: var
   // ---------- routing ----------
   function route() {
     const v = (location.hash || "#overview").slice(1);
-    view = ["overview", "analysis", "league", "planner", "fixtures", "odds"].includes(v) ? v : "overview";
+    view = ["overview", "analysis", "league", "planner", "insights", "fixtures", "odds"].includes(v) ? v : "overview";
     document.querySelectorAll(".tabs a").forEach((a) => { if (a.dataset.v === view) a.setAttribute("aria-current", "page"); else a.removeAttribute("aria-current"); });
-    ({ overview: renderOverview, analysis: renderAnalysis, league: renderLeague, planner: renderPlanner, fixtures: renderFixtures, odds: renderOdds })[view]();
+    ({ overview: renderOverview, analysis: renderAnalysis, league: renderLeague, planner: renderPlanner, insights: renderInsights, fixtures: renderFixtures, odds: renderOdds })[view]();
   }
 
   function tick() {
@@ -665,7 +677,7 @@ select, input[type="search"] { font: inherit; color: var(--ink); background: var
     const need = [...new Set(ids)].filter((id) => !(id in FA.summ));
     if (D.source !== "live" || !need.length) return;
     await pool(need, 8, async (id) => {
-      try { const j = await api(`element-summary/${id}/`); FA.summ[id] = j.history.map((h) => [h.round, h.minutes]); const hp = j.history_past || []; FA.past[id] = hp.length ? hp[hp.length - 1].minutes : null; }
+      try { const j = await api(`element-summary/${id}/`); FA.summ[id] = j.history.map((h) => [h.round, h.minutes, h.total_points]); const hp = j.history_past || []; FA.past[id] = hp.length ? hp[hp.length - 1].minutes : null; }
       catch (e) { FA.summ[id] = null; }
     });
   }
@@ -1815,6 +1827,82 @@ select, input[type="search"] { font: inherit; color: var(--ink); background: var
     return (doubles.length ? `Double gameweeks scheduled: ${doubles.join(", ")}; save Bench Boost or Triple Captain for these. ` : "No double gameweeks have been scheduled yet. ") + (blanks.length ? `Blank gameweeks: ${blanks.join(", ")}; a Free Hit covers these.` : "");
   }
 
+  // ---------- insights: captains, top scorers and who in the league owned them ----------
+  const LP = {};
+  async function leaguePicksFor(gw) {
+    if (LP[gw]) return LP[gw];
+    const r = await fetch(`api/league-picks/${D.league.id}/${gw}`, { cache: "no-store" });
+    if (!r.ok || !(r.headers.get("content-type") || "").includes("json")) throw new Error("offline");
+    return (LP[gw] = await r.json());
+  }
+  const gwPoints = (id, gw) => { if (gw === gwCur) return E[id]?.event_points ?? null; const h = FA.summ[id]; if (!h) return null; return h.filter((x) => x[0] === gw).reduce((a, x) => a + (x[2] || 0), 0); };
+
+  async function renderInsights() {
+    $("#app").innerHTML = `<section class="view"><div class="panel-head"><h2>Insights</h2></div><p class="empty">Loading each gameweek's captains, top scorers and your league's squads… The first load of a past gameweek takes a few seconds; after that it's instant.</p></section>`;
+    const cur = D.events.find((e) => e.id === gwCur);
+    const evs = D.events.filter((e) => e.id <= gwCur && (e.finished || e.id === gwCur || e.data_checked)).sort((a, b) => b.id - a.id);
+    let offline = false;
+    await fetchSumm([...new Set(evs.map((e) => e.most_captained).filter(Boolean))]).catch(() => {});
+    const picks = {};
+    // The gameweek in progress uses the squads already loaded; finished ones come from the stored copy.
+    const live = { gw: gwCur, managers: members.map((x) => ({ entry: x.entry, name: x.player_name, team: x.entry_name, chip: x.m.picks?.chip, picks: squadOf(x.m).map((p) => [p[0], p[2]]) })) };
+    await pool(evs.map((e) => e.id), 4, async (gw) => {
+      if (gw === gwCur && cur && !cur.finished) { picks[gw] = live; return; }
+      try { picks[gw] = await leaguePicksFor(gw); } catch (e) { offline = true; if (gw === gwCur) picks[gw] = live; }
+    });
+    if (view !== "insights") return;
+    const rows = evs.map((ev) => {
+      const gw = ev.id, inProgress = gw === gwCur && cur && !cur.finished;
+      let top = ev.top_element, topPts = ev.top_points;
+      if (inProgress || !top) { const best = Object.values(E).reduce((b, e) => (!b || e.event_points > b.event_points ? e : b), null); if (gw === gwCur && best) { top = best.id; topPts = best.event_points; } }
+      const cap = ev.most_captained, capPts = cap ? gwPoints(cap, gw) : null;
+      const P = picks[gw];
+      const ms = P ? P.managers.filter((m) => m.picks && m.picks.length) : [];
+      const owners = ms.filter((m) => m.picks.some((x) => x[0] === top));
+      const captainers = ms.filter((m) => m.picks.some((x) => x[0] === top && x[1] >= 2));
+      const meP = ms.find((m) => m.entry === me);
+      const meOwn = meP && meP.picks.find((x) => x[0] === top);
+      const lgCap = {}; ms.forEach((m) => { const c = m.picks.find((x) => x[1] >= 2); if (c) lgCap[c[0]] = (lgCap[c[0]] || 0) + 1; });
+      const lgTopCap = Object.entries(lgCap).sort((a, b) => b[1] - a[1])[0];
+      return { gw, inProgress, cap, capPts, top, topPts, owners, captainers, n: ms.length, meOwn, lgTopCap, P };
+    });
+    const done = rows.filter((r) => !r.inProgress);
+    const avg = (xs) => (xs.length ? xs.reduce((a, b) => a + b, 0) / xs.length : 0);
+    const capAvg = avg(done.filter((r) => r.capPts != null).map((r) => r.capPts));
+    const blanks = done.filter((r) => r.capPts != null && r.capPts <= 3).length;
+    const withLg = done.filter((r) => r.n);
+    const ownAvg = avg(withLg.map((r) => r.owners.length));
+    const iOwned = withLg.filter((r) => r.meOwn).length;
+    const pname = (id) => (E[id] ? `${esc(E[id].web_name)} <small class="note">${tShort(E[id].team)}</small>` : "–");
+    const names = (ms) => ms.map((m) => esc(m.name.split(" ")[0])).join(", ");
+    $("#app").innerHTML = `
+    <section class="view">
+      <div class="panel-head"><h2>Insights</h2><span class="note">Captains and top scorers across all FPL managers, and who in ${esc(D.league.name)} had them</span></div>
+      <div class="kpis">
+        <div class="kpi"><span class="k">Most-captained player</span><span class="v">${capAvg.toFixed(1)}</span><span class="s">Average points a gameweek (${(capAvg * 2).toFixed(1)} as captain)</span></div>
+        <div class="kpi"><span class="k">Captain blanks</span><span class="v">${blanks}<small style="font-size:1rem;color:var(--muted)">/${done.length}</small></span><span class="s">Gameweeks the most-captained player scored 3 or fewer</span></div>
+        <div class="kpi"><span class="k">Top scorer in your league</span><span class="v">${withLg.length ? ownAvg.toFixed(1) : "–"}</span><span class="s">Managers who owned him, on average</span></div>
+        <div class="kpi"><span class="k">You owned the top scorer</span><span class="v">${withLg.length ? iOwned : "–"}<small style="font-size:1rem;color:var(--muted)">/${withLg.length || done.length}</small></span><span class="s">Finished gameweeks</span></div>
+      </div>
+      ${offline ? `<p class="note">League ownership for past gameweeks loads on the live site only.</p>` : ""}
+      <div class="tbl-wrap"><table class="cards-sm ins-tbl">
+        <thead><tr><th>Gameweek</th><th>Most captained (all FPL)</th><th class="n">His points</th><th>Top scorer</th><th class="n">Points</th><th>Owned in your league</th><th>Captained in your league</th><th>You</th></tr></thead>
+        <tbody>${rows.map((r) => `<tr class="${r.meOwn ? "me" : ""}">
+          <td>GW${r.gw}${r.inProgress ? ' <span class="pill">Live</span>' : ""}</td>
+          <td>${r.cap ? pname(r.cap) : "–"}</td>
+          <td class="n">${r.capPts == null ? "–" : `<strong>${r.capPts}</strong> <small class="note">(${r.capPts * 2} as C)</small>`}</td>
+          <td>${pname(r.top)}${r.inProgress ? ' <small class="note">so far</small>' : ""}</td>
+          <td class="n"><strong>${r.topPts ?? "–"}</strong></td>
+          <td>${r.n ? `<span class="own-cell"><strong>${r.owners.length} of ${r.n}</strong> <span class="obar"><i style="width:${(r.owners.length / r.n) * 100}%"></i></span><small class="note">${names(r.owners) || "Nobody"}</small></span>` : "–"}</td>
+          <td>${r.n ? `<span class="own-cell"><strong>${r.captainers.length}</strong>${r.captainers.length ? ` <small class="note">${names(r.captainers)}</small>` : ""}${r.lgTopCap && E[r.lgTopCap[0]] ? `<small class="note">League's top captain: ${esc(E[r.lgTopCap[0]].web_name)} (${r.lgTopCap[1]})</small>` : ""}</span>` : "–"}</td>
+          <td>${r.meOwn ? (r.meOwn[1] >= 2 ? '<span class="pill acc">Captained</span>' : r.meOwn[1] === 0 ? '<span class="pill">On bench</span>' : '<span class="pill ok">Owned</span>') : r.n ? '<span class="note">Didn\'t own</span>' : "–"}</td>
+        </tr>`).join("")}</tbody>
+      </table></div>
+      <p class="note">"Most captained" and "top scorer" are FPL's figures across all managers. Points are the player's own score; a captain doubles them. League ownership uses each manager's squad for that gameweek, including the bench.</p>
+      ${freshness()}
+    </section>`;
+  }
+
   // ---------- fixtures ----------
   // FDR over a window; a blank gameweek counts as the hardest rating (5) so it ranks low.
   function windowFdr(team, n) {
@@ -1855,9 +1943,57 @@ select, input[type="search"] { font: inherit; color: var(--ink); background: var
         </table></div>
         <p class="note">FDR is FPL's official fixture difficulty rating. A blank gameweek counts as 5 in the average; a double gameweek shows both games.</p>
       </div>
+      <div class="panel" id="rotation">${rotationHTML()}</div>
       ${freshness()}
     </section>`;
+    wireRotation();
     document.querySelectorAll("[data-fxn]").forEach((b) => b.addEventListener("click", () => { store.set("fxN", Number(b.dataset.fxn)); renderFixtures(); }));
+  }
+
+  // ---------- rotation pairs ----------
+  // Each gameweek, play whichever of the two has the easier fixture. A blank counts as 6 so the partner covers it.
+  const bestFdr = (team, g) => { const l = teamFx[team][g] || []; return l.length ? Math.min(...l.map((f) => f.fdr)) : 6; };
+  const pairScore = (a, b, gws) => gws.reduce((s, g) => s + Math.min(bestFdr(a, g), bestFdr(b, g)), 0) / gws.length;
+  function rotationHTML() {
+    let n = store.get("rotN", 5); if (!(n >= 1 && n <= 5)) n = 5;
+    const gws = []; for (let g = gwNext; g < gwNext + n && g <= 38; g++) gws.push(g);
+    const ids = D.teams.map((t) => t.id);
+    const mineTeams = new Set(squadOf(myM).map((p) => E[p[0]]?.team));
+    let [a, b] = store.get("rotPair", [null, null]);
+    const pairs = []; ids.forEach((x, i) => ids.slice(i + 1).forEach((y) => pairs.push({ a: x, b: y, s: pairScore(x, y, gws) })));
+    pairs.sort((p, q) => p.s - q.s || (windowFdr(p.a, n) + windowFdr(p.b, n)) - (windowFdr(q.a, n) + windowFdr(q.b, n)));
+    if (!ids.includes(a) || !ids.includes(b) || a === b) [a, b] = [pairs[0].a, pairs[0].b];
+    const opt = (sel) => D.teams.map((t) => `<option value="${t.id}" ${t.id === sel ? "selected" : ""}>${esc(t.name)}</option>`).join("");
+    const cell = (team, g, pick) => { const l = teamFx[team][g] || []; return `<td class="${pick ? "rot-pick" : ""}">${l.length ? l.map((f) => `<span class="fdrc fdr${f.fdr}">${esc(tShort(f.opp))} (${f.home ? "H" : "A"})</span>`).join("") : '<span class="fdrc fdr0">Blank</span>'}</td>`; };
+    const pickOf = (g) => (bestFdr(a, g) <= bestFdr(b, g) ? a : b);
+    const score = pairScore(a, b, gws);
+    const easy = gws.filter((g) => Math.min(bestFdr(a, g), bestFdr(b, g)) <= 2).length;
+    return `
+      <div class="panel-head"><h3>Rotation</h3><span class="note">Pair two clubs and play whichever has the easier fixture each week</span></div>
+      <div class="controls rot-ctl">
+        <label><span class="note">Team 1</span> <select id="rotA">${opt(a)}</select></label>
+        <label><span class="note">Team 2</span> <select id="rotB">${opt(b)}</select></label>
+        <label><span class="note">Gameweeks</span> <select id="rotN">${[1, 2, 3, 4, 5].map((v) => `<option value="${v}" ${v === n ? "selected" : ""}>Next ${v}</option>`).join("")}</select></label>
+      </div>
+      <div class="tbl-wrap"><table class="fx-tbl rot-tbl">
+        <thead><tr><th>Team</th><th class="n">Avg FDR</th>${gws.map((g) => `<th>GW${g}</th>`).join("")}</tr></thead>
+        <tbody>
+          ${[a, b].map((t) => `<tr><td>${esc(T[t].name)}${mineTeams.has(t) ? ' <span class="pill acc" title="You own players from this club">Yours</span>' : ""}</td><td class="n">${avgBadge(windowFdr(t, n))}</td>${gws.map((g) => cell(t, g, pickOf(g) === t)).join("")}</tr>`).join("")}
+          <tr class="rot-best"><td><strong>Play each week</strong></td><td class="n">${avgBadge(Math.min(5, score))}</td>${gws.map((g) => { const t = pickOf(g); return `<td><span class="note">${esc(T[t].short)}</span></td>`; }).join("")}</tr>
+        </tbody>
+      </table></div>
+      <p class="note">Together this pair averages <strong>${score.toFixed(1)}</strong> FDR if you always play the easier fixture (highlighted), with ${easy} of ${gws.length} gameweeks at FDR 2 or better. Rotation suits goalkeepers and budget defenders.</p>
+      <h3>Best pairs for the next ${n} gameweek${n > 1 ? "s" : ""}</h3>
+      <div class="rot-sugg">${pairs.slice(0, 8).map((p) => `<button class="rot-chip ${p.a === a && p.b === b ? "on" : ""}" data-pair="${p.a},${p.b}">${esc(T[p.a].short)} + ${esc(T[p.b].short)} <span class="note">${p.s.toFixed(1)}</span></button>`).join("")}</div>`;
+  }
+  function wireRotation() {
+    const box = $("#rotation"); if (!box) return;
+    const redraw = () => { box.innerHTML = rotationHTML(); wireRotation(); };
+    const setPair = (a, b) => { store.set("rotPair", [a, b]); redraw(); };
+    $("#rotA").addEventListener("change", (e) => setPair(Number(e.target.value), Number($("#rotB").value)));
+    $("#rotB").addEventListener("change", (e) => setPair(Number($("#rotA").value), Number(e.target.value)));
+    $("#rotN").addEventListener("change", (e) => { store.set("rotN", Number(e.target.value)); redraw(); });
+    box.querySelectorAll("[data-pair]").forEach((btn) => btn.addEventListener("click", () => { const [x, y] = btn.dataset.pair.split(",").map(Number); setPair(x, y); }));
   }
 
   // ---------- bookmaker odds ----------

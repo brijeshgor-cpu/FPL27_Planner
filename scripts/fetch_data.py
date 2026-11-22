@@ -120,6 +120,8 @@ def main():
             "id": e["id"], "deadline": e["deadline_time"], "finished": e["finished"],
             "is_current": e["is_current"], "is_next": e["is_next"], "avg": e["average_entry_score"],
             "high": e["highest_score"], "data_checked": e["data_checked"],
+            "most_captained": e.get("most_captained"), "top_element": e.get("top_element"),
+            "top_points": (e.get("top_element_info") or {}).get("points"),
         } for e in events],
         "current_gw": cur_gw,
         "next_gw": nxt["id"] if nxt else None,

@@ -32,6 +32,8 @@ export default {
 
     const path = url.pathname.slice("/api/".length);
     if (path === "odds" || path === "odds/") return odds(env);
+    const lp = /^league-picks\/(\d+)\/(\d+)\/?$/.exec(path);
+    if (lp) return leaguePicks(env, Number(lp[1]), Number(lp[2]));
     if (!ALLOWED.some((re) => re.test(path))) return json({ error: "not allowed" }, 404);
 
     const page = url.searchParams.get("page_standings");
@@ -154,4 +156,40 @@ function summarise(ev) {
     h2h: [avg(0), avg(1), avg(2)],
     over25: over.length ? over.reduce((a, b) => a + b, 0) / over.length : null,
   };
+}
+
+// ---------- every league member's squad for one gameweek ----------
+// Squads for a finished gameweek never change, so they are stored in KV permanently after the first load.
+// About 30 FPL requests on that first load (league table + one per manager), within the free-plan limit of 50.
+const FPL_HEADERS = { "User-Agent": "Mozilla/5.0 (compatible; fc27-planner)", Accept: "application/json" };
+async function fplJson(path) {
+  const r = await fetch(FPL + path, { headers: FPL_HEADERS });
+  if (!r.ok) throw new Error(path + " " + r.status);
+  return r.json();
+}
+async function leaguePicks(env, league, gw) {
+  if (gw < 1 || gw > 38) return json({ error: "bad gameweek" }, 400);
+  const key = `lp:${league}:${gw}`;
+  const cached = env.ODDS ? await env.ODDS.get(key, "json") : null;
+  if (cached) return json(cached, 200);
+  try {
+    const fx = await fplJson(`fixtures/?event=${gw}`);
+    const finished = fx.length > 0 && fx.every((f) => f.finished);
+    const lg = await fplJson(`leagues-classic/${league}/standings/`);
+    const members = lg.standings.results.slice(0, 45);
+    const managers = await Promise.all(members.map(async (m) => {
+      try {
+        const p = await fplJson(`entry/${m.entry}/event/${gw}/picks/`);
+        return { entry: m.entry, name: m.player_name, team: m.entry_name, chip: p.active_chip, picks: p.picks.map((x) => [x.element, x.multiplier]) };
+      } catch (e) {
+        // 404 = the manager hadn't joined by then (cacheable); anything else = try again next time.
+        return { entry: m.entry, name: m.player_name, team: m.entry_name, chip: null, picks: / 404$/.test(e.message) ? [] : null };
+      }
+    }));
+    const out = { gw, finished, managers };
+    if (finished && env.ODDS && managers.every((m) => m.picks)) await env.ODDS.put(key, JSON.stringify(out));
+    return json(out, 200);
+  } catch (e) {
+    return json({ error: "fpl_unreachable", detail: String(e.message || e) }, 502);
+  }
 }
