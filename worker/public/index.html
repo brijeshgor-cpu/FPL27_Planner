@@ -299,6 +299,8 @@ td.why { white-space: normal; min-width: 220px; font-size: .8rem; color: var(--m
 .news a { color: var(--ink); text-decoration: underline; text-decoration-color: var(--line); text-underline-offset: 3px; }
 .news a:hover { text-decoration-color: var(--accent); }
 /* Current gameweek team stats */
+.gws-sum { display: grid; gap: 8px; padding: 12px 14px; border: 1px solid color-mix(in srgb, var(--accent) 40%, var(--line)); border-radius: var(--r); background: color-mix(in srgb, var(--accent) 5%, var(--surface)); }
+.gws-sum .insights { gap: 8px; }
 .gws-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(270px, 1fr)); gap: 12px; }
 .gws-card { border: 1px solid var(--line); border-radius: var(--r); padding: 12px 14px; display: grid; gap: 8px; align-content: start; background: var(--surface); min-width: 0; }
 .gws-card.bench { background: var(--surface-2); }
@@ -887,6 +889,65 @@ select, input[type="search"] { font: inherit; color: var(--ink); background: var
     const tot = xi.reduce((a, r) => a + num(r.st.total_points) * r.mult, 0);
     const sum = (k) => xi.reduce((a, r) => a + num(r.st[k]), 0);
     const toPlay = xi.filter((r) => r.fx.length && !r.fx.some((f) => f[8])).length;
+
+    // ---- Key takeaways: an analyst's read of this gameweek, rebuilt from the match data on every load ----
+    const take = [];
+    const top10 = top10Rivals(), meRow = members.find((x) => x.entry === me);
+    const t10avg = top10.length ? top10.reduce((a, x) => a + x.event_total, 0) / top10.length : 0;
+    const lgAvg = members.reduce((a, x) => a + x.event_total, 0) / members.length;
+    const done = xi.filter((r) => r.fx.some((f) => f[8]));
+    // 1. Verdict
+    const gwScore = meRow.event_total;
+    take.push({ k: gwScore >= t10avg ? "good" : "bad", t: `${gwScore} pts${toPlay ? " so far" : ""}: ${gwScore >= t10avg ? "+" : "−"}${Math.abs(gwScore - t10avg).toFixed(0)} on the top-10 average (${t10avg.toFixed(0)})`,
+      d: `League average ${lgAvg.toFixed(0)}. ${gwScore >= t10avg ? "A gameweek that gains ground on the pack." : "A gameweek that loses ground on the pack."}${meRow.event_total !== tot ? ` (Your XI's raw total is ${tot}; the difference is auto-subs or hits.)` : ""}` });
+    // 2. Captaincy
+    const capR = xi.find((r) => r.cap);
+    if (capR) {
+      const cs = capR.st, capPts = num(cs.total_points) * capR.mult;
+      const tCaps = top10.map((x) => { const c = squadOf(x.m).find((p) => p[3]); return c ? E[c[0]].event_points * c[2] : null; }).filter((v) => v != null);
+      const tCapAvg = tCaps.length ? tCaps.reduce((a, b) => a + b, 0) / tCaps.length : 0;
+      const shared = top10.filter((x) => (squadOf(x.m).find((p) => p[3]) || [])[0] === capR.e.id).length;
+      const bestXi = done.slice().sort((a, b) => num(b.st.total_points) - num(a.st.total_points))[0];
+      take.push({ k: capPts >= tCapAvg ? "good" : "warn", t: `Captain ${esc(capR.e.web_name)}: ${capPts} pts (${num(cs.total_points)} × ${capR.mult})`,
+        d: `${num(cs.expected_goal_involvements) >= 0.6 && num(cs.total_points) <= 4 ? `Good process, poor return: ${num(cs.expected_goal_involvements).toFixed(2)} xGI without a goal involvement. ` : num(cs.expected_goal_involvements) < 0.3 && num(cs.minutes) ? `He barely threatened (${num(cs.expected_goal_involvements).toFixed(2)} xGI). ` : ""}Top-10 captains averaged ${tCapAvg.toFixed(1)}; ${shared} of ${top10.length} shared your pick, so ${shared >= top10.length / 2 ? "most of the damage or gain is shared" : "this swung the gap directly"}.${bestXi && bestXi.e.id !== capR.e.id && num(bestXi.st.total_points) > num(cs.total_points) ? ` In hindsight ${esc(bestXi.e.web_name)} (${bestXi.st.total_points}) was your best captain.` : ""}` });
+    }
+    // 3. Process vs result
+    const xg = sum("expected_goals"), xa = sum("expected_assists"), g = sum("goals_scored"), as = sum("assists");
+    const rets = g + as, xret = xg + xa;
+    take.push({ k: rets + 0.5 >= xret ? "good" : "warn", t: `Chances vs returns: ${rets} goal involvement${rets === 1 ? "" : "s"} from ${xret.toFixed(2)} xG + xA`,
+      d: rets - xret >= 1 ? "Your starters finished above what their chances deserved: a lucky week, don't overreact to it." : xret - rets >= 1 ? "Your starters created more than they scored: the performance was better than the points, so returns should follow if you hold." : "Returns were in line with the chances created: the score reflects how your players actually played." });
+    // 4. Stars and unrewarded creators
+    const stars = done.filter((r) => num(r.st.total_points) >= 6).sort((a, b) => num(b.st.total_points) - num(a.st.total_points)).slice(0, 3);
+    if (stars.length) take.push({ k: "good", t: `Star${stars.length > 1 ? "s" : ""}: ${stars.map((r) => esc(r.e.web_name)).join(", ")}`, d: stars.map((r) => `<strong>${esc(r.e.web_name)}</strong> ${r.st.total_points} pts (${[num(r.st.goals_scored) ? r.st.goals_scored + "G" : "", num(r.st.assists) ? r.st.assists + "A" : "", num(r.st.clean_sheets) && r.e.element_type <= 3 ? "CS" : "", num(r.st.bonus) ? r.st.bonus + " bonus" : ""].filter(Boolean).join(", ")}; ${num(r.st.expected_goal_involvements).toFixed(2)} xGI, BPS ${r.st.bps})`).join(" · ") });
+    const unlucky = done.filter((r) => num(r.st.expected_goal_involvements) >= 0.5 && !num(r.st.goals_scored) && !num(r.st.assists));
+    if (unlucky.length) take.push({ k: "info", t: `Unrewarded threat: ${unlucky.map((r) => esc(r.e.web_name)).join(", ")}`, d: unlucky.map((r) => `${esc(r.e.web_name)} ${num(r.st.expected_goals).toFixed(2)} xG + ${num(r.st.expected_assists).toFixed(2)} xA with no return`).join("; ") + ". Getting into those positions is what predicts future points; keep faith." });
+    // 5. Concerns: blanked with no threat, or short minutes
+    const quiet = done.filter((r) => r.e.element_type >= 3 && num(r.st.total_points) <= 2 && num(r.st.expected_goal_involvements) < 0.25 && num(r.st.minutes) >= 60);
+    const short = done.filter((r) => num(r.st.minutes) > 0 && num(r.st.minutes) < 60);
+    const dnp = done.filter((r) => !num(r.st.minutes));
+    if (quiet.length || short.length || dnp.length) take.push({ k: "bad", t: "Concerns", d: [
+      quiet.length ? `Blanked with little threat: ${quiet.map((r) => `${esc(r.e.web_name)} (${num(r.st.expected_goal_involvements).toFixed(2)} xGI, form ${r.e.form})`).join(", ")}. ${quiet.some((r) => parseFloat(r.e.form) < 3) ? `${quiet.filter((r) => parseFloat(r.e.form) < 3).map((r) => esc(r.e.web_name)).join(" and ")}'s form says this is a pattern, not a one-off: a sell candidate.` : "One quiet game is noise; two or three in a row is a reason to sell."}` : "",
+      short.length ? `Limited minutes: ${short.map((r) => `${esc(r.e.web_name)} (${r.st.minutes}')`).join(", ")}${short.some((r) => num(r.st.starts)) ? "; check whether that was rotation, tactics or a knock" : ""}.` : "",
+      dnp.length ? `Didn't play: ${dnp.map((r) => esc(r.e.web_name)).join(", ")}.` : ""].filter(Boolean).join(" ") });
+    // 6. Bench
+    const benchPts = bench.reduce((a, r) => a + num(r.st.total_points), 0);
+    if (benchPts) {
+      const bTop = bench.slice().sort((a, b) => num(b.st.total_points) - num(a.st.total_points))[0];
+      const worst = done.filter((r) => r.e.element_type === bTop.e.element_type || (r.e.element_type > 1 && bTop.e.element_type > 1)).sort((a, b) => num(a.st.total_points) - num(b.st.total_points))[0];
+      take.push({ k: benchPts >= 6 ? "warn" : "info", t: `${benchPts} pts left on the bench`, d: `${esc(bTop.e.web_name)} scored ${bTop.st.total_points} on your bench${worst && num(worst.st.total_points) < num(bTop.st.total_points) ? ` while ${esc(worst.e.web_name)} scored ${worst.st.total_points} in your XI (a swing of ${num(bTop.st.total_points) - num(worst.st.total_points)} points)` : ""}. ${benchPts >= 6 ? "Worth a closer look at your starting choices next week." : ""}` });
+    }
+    // 7. Defence
+    const defs = done.filter((r) => r.e.element_type <= 2);
+    if (defs.length) {
+      const csN = defs.filter((r) => num(r.st.clean_sheets)).length, dcHit = done.filter((r) => (r.e.element_type === 2 && num(r.st.defensive_contribution) >= 10) || (r.e.element_type >= 3 && num(r.st.defensive_contribution) >= 12));
+      take.push({ k: csN >= defs.length / 2 ? "good" : csN ? "warn" : "bad", t: `Defence: ${csN} of ${defs.length} kept a clean sheet`, d: `${defs.map((r) => `${esc(r.e.web_name)} ${num(r.st.goals_conceded)} conceded (${num(r.st.expected_goals_conceded).toFixed(2)} xGC)`).join(", ")}.${dcHit.length ? ` Defensive contribution points: ${dcHit.map((r) => `${esc(r.e.web_name)} (${r.st.defensive_contribution})`).join(", ")}.` : " Nobody reached the defensive contribution threshold."}` });
+    }
+    // 8. Bonus
+    const near = done.filter((r) => num(r.st.bps) >= 25 && !num(r.st.bonus));
+    take.push({ k: sum("bonus") ? "good" : "info", t: `Bonus: ${sum("bonus")} point${sum("bonus") === 1 ? "" : "s"}${toPlay || done.some((r) => r.fx.some((f) => !f[7])) ? " (provisional)" : ""}`, d: `${tops.bps ? `${esc(E[tops.bps].web_name)} led your team on BPS (${by[tops.bps].stats.bps}).` : ""}${near.length ? ` Near misses: ${near.map((r) => `${esc(r.e.web_name)} (BPS ${r.st.bps})`).join(", ")}.` : ""}` });
+    // 9. Still to play
+    if (toPlay) { const left = xi.filter((r) => r.fx.length && !r.fx.some((f) => f[8])); take.push({ k: "info", t: `${toPlay} starter${toPlay > 1 ? "s" : ""} still to play`, d: left.map((r) => `${esc(r.e.web_name)}${r.cap ? " (C)" : ""}`).join(", ") + ". These figures will change as their matches finish; reload to update." }); }
+
     box.innerHTML = `
       <div class="panel-head"><h2>Current gameweek team stats <span class="note">GW${gwCur}</span></h2><span class="note">Each of your players' match stats from FPL's official data (Opta), live while games are on</span></div>
       <div class="kpis">
@@ -895,6 +956,7 @@ select, input[type="search"] { font: inherit; color: var(--ink); background: var
         <div class="kpi"><span class="k">Bonus</span><span class="v">${sum("bonus")}</span><span class="s">Top BPS: ${tops.bps ? esc(E[tops.bps].web_name) + " (" + by[tops.bps].stats.bps + ")" : "–"}</span></div>
         <div class="kpi"><span class="k">Still to play</span><span class="v">${toPlay}</span><span class="s">Starters whose match hasn't kicked off</span></div>
       </div>
+      <div class="gws-sum"><h3>Key takeaways</h3><ul class="insights">${take.map((i) => `<li class="${i.k}"><div><div class="t">${i.t}</div><div class="d">${i.d}</div></div></li>`).join("")}</ul></div>
       <div class="gws-grid">${[...xi.sort(order), ...bench.sort(order)].map(card).join("")}</div>
       <p class="note">FPL's official match data covers minutes, goals, assists, xG, xA, xG conceded, saves, defensive actions (clearances, blocks, interceptions, tackles, recoveries), BPS, bonus and cards. Shots, xG on target, passes, chances created, dribbles, distance and top speed (as in FotMob) come from licensed data with no free public source, so they aren't shown. Updated on every reload.</p>`;
   }
