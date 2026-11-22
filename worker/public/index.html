@@ -283,6 +283,30 @@ td.why { white-space: normal; min-width: 220px; font-size: .8rem; color: var(--m
 .news li.neg { border-left-color: var(--bad); } .news li.pos { border-left-color: var(--good); }
 .news a { color: var(--ink); text-decoration: underline; text-decoration-color: var(--line); text-underline-offset: 3px; }
 .news a:hover { text-decoration-color: var(--accent); }
+/* Best value scatter */
+.v-chart .q-good { fill: color-mix(in srgb, var(--good) 9%, transparent); }
+.v-chart .q-bad { fill: color-mix(in srgb, var(--bad) 7%, transparent); }
+.v-chart .med { stroke: var(--muted); stroke-width: 1.2; stroke-dasharray: 5 4; }
+.v-chart .med-lbl { fill: var(--muted); font-size: 11px; font-family: var(--font-body); }
+.v-chart .q-lbl { fill: var(--muted); font-size: 12px; font-weight: 700; letter-spacing: .08em; font-family: var(--font-body); }
+.v-chart .q-lbl.good { fill: var(--good); } .v-chart .q-lbl.bad { fill: var(--bad); }
+.v-chart .ax-t { fill: var(--muted); font-size: 12px; font-family: var(--font-body); letter-spacing: .04em; }
+.v-chart .v-dot { stroke: var(--surface); stroke-width: 2; }
+.v-chart .v-dot.p-def { fill: var(--c-bank); } .v-chart .v-dot.p-mid { fill: var(--c-solid); } .v-chart .v-dot.p-fwd { fill: var(--c-punt); }
+.v-chart .v-dot.mine { stroke: var(--accent); stroke-width: 4; }
+.v-chart .v-lbl { fill: var(--ink); font-size: 12.5px; font-weight: 600; font-family: var(--font-body); paint-order: stroke; stroke: var(--surface); stroke-width: 3px; }
+.v-chart .v-lbl.mine { font-weight: 800; text-decoration: underline; text-decoration-color: var(--accent); }
+.v-chart .v-lead { stroke: var(--muted); stroke-width: 1; opacity: .7; }
+.legend i.ring { background: transparent; border: 3px solid var(--accent); width: 12px; height: 12px; border-radius: 50%; }
+.v-lists { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 16px; }
+@media (max-width: 760px) { .v-lists { grid-template-columns: minmax(0, 1fr); } }
+.v-box { border: 1px solid var(--line); border-radius: var(--r); padding: 12px 14px; display: grid; gap: 8px; }
+.v-box.good { border-color: color-mix(in srgb, var(--good) 45%, var(--line)); background: color-mix(in srgb, var(--good) 6%, var(--surface)); }
+.v-box.bad { border-color: color-mix(in srgb, var(--bad) 45%, var(--line)); background: color-mix(in srgb, var(--bad) 5%, var(--surface)); }
+.v-box.good h3 { color: var(--good); } .v-box.bad h3 { color: var(--bad); }
+.v-list { margin: 0; padding-left: 22px; display: grid; gap: 6px; }
+.v-list li { padding-left: 4px; }
+.v-list li > span { display: flex; flex-wrap: wrap; justify-content: space-between; gap: 2px 10px; }
 /* Captaincy shortlist */
 .cap-chart { display: grid; gap: 4px; }
 .cap-row { display: grid; grid-template-columns: 26px minmax(150px, 230px) minmax(0, 1fr) 118px; align-items: center; gap: 12px; padding: 8px 4px; border-bottom: 1px solid var(--line); }
@@ -926,7 +950,9 @@ select, input[type="search"] { font: inherit; color: var(--ink); background: var
   const TEAM_ALIASES = { MCI: ["man city", "manchester city"], MUN: ["man utd", "man united", "manchester united"], TOT: ["spurs", "tottenham"], NFO: ["forest", "nottingham"], NEW: ["newcastle"], BHA: ["brighton"], WHU: ["west ham"], WOL: ["wolves"], AVL: ["villa"], CRY: ["palace"], LEE: ["leeds"], IPS: ["ipswich"], COV: ["coventry"], HUL: ["hull"], BOU: ["bournemouth"], SUN: ["sunderland"] };
   const teamAliases = (t) => [...teamWords(t), ...(TEAM_ALIASES[T[t]?.short] || [])];
   const mentionsTeam = (text, t) => teamAliases(t).some((w) => new RegExp(`(^|[^a-z])${reEsc(w)}([^a-z]|$)`).test(text));
-  let nameCount = null;
+  let nameCount = null, nameList = null;
+  // Every player's short and full surname (4+ letters), used to tell whose news a sentence is.
+  const playerNames = () => nameList || (nameList = [...new Set(Object.values(E).flatMap((x) => [x.web_name, x.second_name]).map((n) => String(n || "").toLowerCase()).filter((n) => n.length >= 4))]);
   const NF = new Map(), XS = new Map(); // per-run caches for news matches and expert scores
   function newsFor(e) {
     if (!FA.news || !FA.news.items) return [];
@@ -939,9 +965,24 @@ select, input[type="search"] { font: inherit; color: var(--ink); background: var
       let at = low.indexOf(full);
       if (at < 0) { const re = new RegExp(`(^|[^a-zà-ÿ])${short.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}([^a-zà-ÿ]|$)`); const m = re.exec(low); if (m && (mentionsTeam(low, e.team) || (nameCount[short] === 1 && short.length >= 5))) at = m.index; }
       if (at < 0) return;
-      const near = text.slice(Math.max(0, at - 90), at + 130);
-      const neg = NEWS_NEG.test(near), pos = !neg && NEWS_POS.test(near);
-      out.push({ it, tone: neg ? "neg" : pos ? "pos" : "info", strong: neg && NEWS_STRONG.test(near), near });
+      // Tone only counts when the word sits in the same sentence as the player, within ~60 characters,
+      // and never from live blogs or full match reports (they name many players in passing).
+      const blog = /as it happened|live\b|player ratings/i.test(it.title);
+      const sStart = Math.max(text.lastIndexOf(". ", at), text.lastIndexOf("! ", at), text.lastIndexOf("? ", at)) + 1;
+      const ends = [". ", "! ", "? "].map((x) => text.indexOf(x, at)).filter((i) => i >= 0);
+      const sentence = text.slice(sStart, ends.length ? Math.min(...ends) + 1 : text.length);
+      const pos0 = at - sStart;
+      // Each keyword belongs to the player named closest before it ("Yoro was sent off for denying Isak"
+      // is about Yoro); if no player is named before it, to the first one named after it.
+      const lowS = sentence.toLowerCase();
+      const named = [];
+      playerNames().forEach((nm) => { let i = -1; while ((i = lowS.indexOf(nm, i + 1)) >= 0) { const b = lowS[i - 1], a = lowS[i + nm.length]; if ((!b || !/[a-zà-ÿ]/.test(b)) && (!a || !/[a-zà-ÿ]/.test(a))) named.push({ i, nm }); } });
+      named.sort((p, q) => p.i - q.i);
+      const mineAt = (i) => i >= pos0 - 1 && i <= pos0 + short.length + 1;
+      const owner = (k) => { const before = named.filter((x) => x.i + x.nm.length <= k); if (before.length) return before[before.length - 1]; return named.find((x) => x.i > k); };
+      const closeTo = (re) => { const g = new RegExp(re.source, "gi"); let m; while ((m = g.exec(sentence))) { if (Math.abs(m.index - pos0) > 60) continue; const o = owner(m.index); if (!o || mineAt(o.i) || (o.i <= pos0 && o.i + o.nm.length >= pos0)) return true; } return false; };
+      const neg = !blog && closeTo(NEWS_NEG), pos = !neg && closeTo(NEWS_POS);
+      out.push({ it, tone: neg ? "neg" : pos ? "pos" : "info", strong: neg && closeTo(NEWS_STRONG), near: sentence });
     });
     NF.set(e.id, out);
     return out;
@@ -2072,6 +2113,7 @@ select, input[type="search"] { font: inherit; color: var(--ink); background: var
         <div class="kpi"><span class="k">Top scorer in your league</span><span class="v">${withLg.length ? ownAvg.toFixed(1) : "–"}</span><span class="s">Managers who owned him, on average</span></div>
         <div class="kpi"><span class="k">You owned the top scorer</span><span class="v">${withLg.length ? iOwned : "–"}<small style="font-size:1rem;color:var(--muted)">/${withLg.length || done.length}</small></span><span class="s">Finished gameweeks</span></div>
       </div>
+      <div class="panel" id="valueChart"><div class="panel-head"><h3>Best Value: Price vs Projected Points</h3></div><p class="empty">Projecting the next 4 gameweeks…</p></div>
       <div class="panel" id="capShort"><div class="panel-head"><h3>GW${gwNext} captaincy shortlist</h3></div><p class="empty">Working out each player's chance of scoring…</p></div>
       ${offline ? `<p class="note">League ownership for past gameweeks loads on the live site only.</p>` : ""}
       <div class="tbl-wrap"><table class="cards-sm ins-tbl">
@@ -2094,7 +2136,7 @@ select, input[type="search"] { font: inherit; color: var(--ink); background: var
       <div class="panel">${bpsTopHTML()}</div>
       ${freshness()}
     </section>`;
-    wireXgiTop(); wireDefTop(); renderCaptaincy();
+    wireXgiTop(); wireDefTop(); renderCaptaincy().then(renderValue);
   }
 
   // ---- Captaincy shortlist: chance of scoring with a likely range, plus projected captain points ----
@@ -2156,6 +2198,80 @@ select, input[type="search"] { font: inherit; color: var(--ink); background: var
       <div class="cap-legend"><span><i class="cap-dot k-bank"></i><strong>Banker</strong> narrow range</span><span><i class="cap-dot k-solid"></i><strong>Solid</strong></span><span><i class="cap-dot k-punt"></i><strong>Punt</strong> wide range</span></div>
       <p class="note">Dot = best estimate, bar = likely range (90%). Colour shows how sure the estimate is about the player (matches played, steady minutes, fitness), not how hard the fixture is. Chance of scoring uses each player's xG per 90, expected minutes and fitness, and the bookmakers' expected goals for his team in GW${gwNext}. Projected captain points use the site's expert score (form, xG, xA, bonus, fixtures, odds and news), doubled. Updated on every reload.</p>`;
     box.querySelectorAll("[data-capsort]").forEach((b) => b.addEventListener("click", () => { store.set("capSort", b.dataset.capsort); renderCaptaincy(); }));
+  }
+
+  // ---- Best value: price vs projected points over the next 4 gameweeks ----
+  // Defenders, midfielders and forwards with 300+ minutes: the top 18 by projected points plus the 6 most
+  // expensive others. Projected points = the site's expert score over 4 gameweeks. Quadrants split at the
+  // median price and median projection. Value = points above or below the least-squares line of points on price.
+  async function renderValue() {
+    const box = $("#valueChart"); if (!box) return;
+    const H = 4;
+    const pool0 = Object.values(E).filter((e) => e.element_type >= 2 && e.minutes >= 300 && availability(e) >= 0.75 && e.status !== "s");
+    const TO0 = teamOdds();
+    const pre = pool0.map((e) => [e, proj(e, H, TO0).total]).sort((a, b) => b[1] - a[1]).slice(0, 45).map((x) => x[0].id);
+    try { await ensureFA(pre); } catch (e) { /* season minutes used */ }
+    if (!document.body.contains(box)) return;
+    const TO = teamOdds();
+    const all = pool0.map((e) => ({ e, x: e.now_cost / 10, y: expertScore(e, H, TO) }));
+    const byPts = [...all].sort((a, b) => b.y - a.y);
+    const pts = byPts.slice(0, 18);
+    [...all].sort((a, b) => b.x - a.x).forEach((d) => { if (pts.length < 24 && !pts.includes(d)) pts.push(d); });
+    const mine = new Set(squadOf(myM).map((p) => p[0]));
+    const med = (v) => { const a = [...v].sort((p, q) => p - q), m = a.length >> 1; return a.length % 2 ? a[m] : (a[m - 1] + a[m]) / 2; };
+    const mx = med(pts.map((d) => d.x)), my = med(pts.map((d) => d.y));
+    const n = pts.length, sx = pts.reduce((a, d) => a + d.x, 0), sy = pts.reduce((a, d) => a + d.y, 0);
+    const sxx = pts.reduce((a, d) => a + d.x * d.x, 0), sxy = pts.reduce((a, d) => a + d.x * d.y, 0);
+    const slope = (n * sxy - sx * sy) / (n * sxx - sx * sx || 1), icpt = (sy - slope * sx) / n;
+    pts.forEach((d) => (d.res = d.y - (icpt + slope * d.x)));
+    const best = [...pts].sort((a, b) => b.res - a.res).slice(0, 5);
+    const worst = pts.filter((d) => d.x >= mx).sort((a, b) => a.res - b.res).slice(0, 5);
+
+    // chart geometry
+    const W = 900, Ht = 560, L = 56, Rm = 24, T = 20, B = 52;
+    const xmin = Math.floor(Math.min(...pts.map((d) => d.x)) - 0.5), xmax = Math.ceil(Math.max(...pts.map((d) => d.x)) + 0.5);
+    const ymax = Math.ceil((Math.max(...pts.map((d) => d.y)) + 2) / 5) * 5, ymin = Math.max(0, Math.floor((Math.min(...pts.map((d) => d.y)) - 2) / 5) * 5);
+    const X = (v) => L + ((v - xmin) / (xmax - xmin)) * (W - L - Rm), Y = (v) => T + (1 - (v - ymin) / (ymax - ymin)) * (Ht - T - B);
+    let g = "";
+    // quadrant shading
+    g += `<rect class="q-good" x="${L}" y="${T}" width="${X(mx) - L}" height="${Y(my) - T}"/><rect class="q-bad" x="${X(mx)}" y="${Y(my)}" width="${W - Rm - X(mx)}" height="${Ht - B - Y(my)}"/>`;
+    for (let v = Math.ceil(xmin); v <= xmax; v += (xmax - xmin > 10 ? 2 : 1)) g += `<line class="grid" x1="${X(v)}" x2="${X(v)}" y1="${T}" y2="${Ht - B}"/><text class="ax" x="${X(v)}" y="${Ht - B + 18}" text-anchor="middle">£${v}m</text>`;
+    for (let v = ymin; v <= ymax; v += 5) g += `<line class="grid" x1="${L}" x2="${W - Rm}" y1="${Y(v)}" y2="${Y(v)}"/><text class="ax" x="${L - 8}" y="${Y(v) + 4}" text-anchor="end">${v}</text>`;
+    g += `<line class="med" x1="${X(mx)}" x2="${X(mx)}" y1="${T}" y2="${Ht - B}"/><line class="med" x1="${L}" x2="${W - Rm}" y1="${Y(my)}" y2="${Y(my)}"/>`;
+    g += `<text class="med-lbl" x="${X(mx) + 6}" y="${Ht - B - 6}">median £${mx.toFixed(1)}m</text><text class="med-lbl" x="${W - Rm - 4}" y="${Y(my) - 6}" text-anchor="end">median ${my.toFixed(1)}</text>`;
+    g += `<text class="q-lbl good" x="${L + 10}" y="${T + 20}">BARGAINS</text><text class="q-lbl" x="${W - Rm - 10}" y="${T + 20}" text-anchor="end">PREMIUM HITS</text><text class="q-lbl" x="${L + 10}" y="${Ht - B - 12}">CHEAP FILLER</text><text class="q-lbl bad" x="${W - Rm - 10}" y="${Ht - B - 12}" text-anchor="end">OVERPRICED</text>`;
+    g += `<text class="ax-t" x="${(L + W - Rm) / 2}" y="${Ht - 8}" text-anchor="middle">Price (£m)</text><text class="ax-t" transform="translate(16 ${(T + Ht - B) / 2}) rotate(-90)" text-anchor="middle">Projected points, next ${H} GWs</text>`;
+    // labels: try right, left, above, below; keep clear of other labels and dots
+    const placed = [], dots = pts.map((d) => ({ x: X(d.x), y: Y(d.y) }));
+    const hit = (b) => placed.some((q) => b.x < q.x + q.w && b.x + b.w > q.x && b.y < q.y + q.h && b.y + b.h > q.y) || dots.some((q) => q.x > b.x - 6 && q.x < b.x + b.w + 6 && q.y > b.y - 6 && q.y < b.y + b.h + 6) || b.x < L || b.x + b.w > W - Rm || b.y < T || b.y + b.h > Ht - B;
+    // Place labels where they're densest first; try spots ever further out, drawing a leader line when moved away.
+    const crowd = (d) => pts.filter((o) => Math.hypot(X(o.x) - X(d.x), Y(o.y) - Y(d.y)) < 60).length;
+    const labels = [...pts].sort((a, b) => crowd(b) - crowd(a) || b.y - a.y).map((d) => {
+      const cx = X(d.x), cy = Y(d.y), w = d.e.web_name.length * 7.6 + 6, h = 15;
+      const cands = [[cx + 11, cy - 8], [cx - 11 - w, cy - 8], [cx - w / 2, cy - 26], [cx - w / 2, cy + 11]];
+      for (let k = 1; k <= 6; k++) for (const dy of [-k * 16, k * 16]) { cands.push([cx + 18, cy - 8 + dy], [cx - 18 - w, cy - 8 + dy]); }
+      for (let k = 1; k <= 4; k++) for (const dy of [-k * 16, k * 16]) { cands.push([cx + 40, cy - 8 + dy], [cx - 40 - w, cy - 8 + dy]); }
+      const c = cands.map(([x, y]) => ({ x, y, w, h })).find((b) => !hit(b)) || { x: cx + 11, y: cy - 8, w, h };
+      placed.push(c); return { d, c, far: Math.abs(c.y + 8 - cy) > 10 || c.x > cx + 14 || c.x + c.w < cx - 14 };
+    });
+    const POS = { 2: "def", 3: "mid", 4: "fwd" };
+    pts.forEach((d) => { g += `<circle class="v-dot p-${POS[d.e.element_type]} ${mine.has(d.e.id) ? "mine" : ""}" cx="${X(d.x)}" cy="${Y(d.y)}" r="8"><title>${esc(d.e.web_name)} (${POSN(d.e)}, ${tShort(d.e.team)}): £${d.x.toFixed(1)}m, ${d.y.toFixed(1)} projected pts over ${H} GWs, ${d.res >= 0 ? "+" : ""}${d.res.toFixed(1)} vs the value line${mine.has(d.e.id) ? " · you own him" : ""}</title></circle>`; });
+    labels.forEach(({ d, c, far }) => {
+      if (far) { const lx = c.x > X(d.x) ? c.x : c.x + c.w, ly = c.y + 8; g = `<line class="v-lead" x1="${X(d.x)}" y1="${Y(d.y)}" x2="${lx}" y2="${ly}"/>` + g; }
+      g += `<text class="v-lbl ${mine.has(d.e.id) ? "mine" : ""}" x="${c.x + 3}" y="${c.y + 12}">${esc(d.e.web_name)}</text>`;
+    });
+
+    const list = (arr, cls) => `<ol class="v-list ${cls}">${arr.map((d) => `<li><span><strong>${esc(d.e.web_name)}</strong>${mine.has(d.e.id) ? ' <span class="pill acc">Yours</span>' : ""} <small class="note">${POSN(d.e)} · ${tShort(d.e.team)}</small></span><span class="note">£${d.x.toFixed(1)}m · ${d.y.toFixed(1)} pts · ${d.res >= 0 ? "+" : ""}${d.res.toFixed(1)} vs line</span></li>`).join("")}</ol>`;
+    box.innerHTML = `
+      <div class="panel-head"><h3>Best Value: Price vs Projected Points</h3><span class="note">Next ${H} gameweeks · top ${pts.length} by projected points and price · 300+ minutes · DEF, MID, FWD</span></div>
+      <p class="note"><strong>How to read:</strong> further right costs more, higher scores more over the next ${H} gameweeks. Top-left is the sweet spot (cheap and productive); bottom-right means paying a premium for less. Your players have a green ring and an underlined name; hover or tap a dot for details.</p>
+      <div style="overflow-x:auto"><div class="chart v-chart" style="min-width:640px"><svg viewBox="0 0 ${W} ${Ht}" role="img" aria-label="Scatter chart of price against projected points for ${pts.length} players">${g}</svg></div></div>
+      <div class="legend"><span><i style="background:var(--c-bank)"></i>Defender</span><span><i style="background:var(--c-solid)"></i>Midfielder</span><span><i style="background:var(--c-punt)"></i>Forward</span><span><i class="ring"></i>You own</span></div>
+      <div class="v-lists">
+        <div class="v-box good"><h3>Target: best value picks</h3>${list(best, "good")}</div>
+        <div class="v-box bad"><h3>Avoid: overpriced for the return</h3>${list(worst, "bad")}</div>
+      </div>
+      <p class="note">Projected points use the site's expert score (xG, xA, clean sheet chance, defensive contributions, bonus, fixtures, bookmaker odds, minutes, injuries and news) over GW${gwNext}–${gwNext + H - 1}. "vs line" is points above or below what a player of that price typically projects (a straight-line fit across these ${pts.length} players). Injured, suspended and doubtful players are left out. A projection, not a guarantee. Updated on every reload.</p>`;
   }
 
   // Top 20 by season expected goal involvements (Opta xG + xA, as published by FPL).
