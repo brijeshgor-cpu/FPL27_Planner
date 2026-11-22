@@ -14,7 +14,9 @@
   --muted: #5d6c62;
   --accent: #1d7a4b;
   --accent-ink: #ffffff;
-  --rival: #c2721a;
+  --rival: #4a5fd6;
+  --s-me: #1d7a4b;
+  --s-them: #4a5fd6;
   --good: #1d7a4b;
   --bad: #b8382f;
   --warn: #b7831a;
@@ -36,7 +38,7 @@
 @media (prefers-color-scheme: dark) {
   :root:not([data-theme="light"]) {
     --bg: #0e1411; --surface: #161f1a; --surface-2: #1d2922; --line: #2a3830; --ink: #e6eee8; --muted: #93a499;
-    --accent: #45c283; --accent-ink: #07140d; --rival: #f0a04b; --good: #45c283; --bad: #f0786d; --warn: #e3b55a;
+    --accent: #45c283; --accent-ink: #07140d; --rival: #6f86e6; --s-me: #35a86e; --s-them: #6f86e6; --good: #45c283; --bad: #f0786d; --warn: #e3b55a;
     --pitch-a: #1d4f33; --pitch-b: #1a482e; --pitch-line: rgba(255,255,255,.18); --card-on-pitch: #0f1813; --card-on-pitch-ink: #e6eee8;
     --fdr1: #2c9d61; --fdr1-ink: #ffffff; --fdr2: #2d6a46; --fdr2-ink: #dff3e7; --fdr3: #34403a; --fdr3-ink: #d4ddd7;
     --fdr4: #8a3c30; --fdr4-ink: #ffe3dd; --fdr5: #6e1913; --fdr5-ink: #ffd9d4; --chart-other: #3a4a40;
@@ -45,7 +47,7 @@
 }
 :root[data-theme="dark"] {
   --bg: #0e1411; --surface: #161f1a; --surface-2: #1d2922; --line: #2a3830; --ink: #e6eee8; --muted: #93a499;
-  --accent: #45c283; --accent-ink: #07140d; --rival: #f0a04b; --good: #45c283; --bad: #f0786d; --warn: #e3b55a;
+  --accent: #45c283; --accent-ink: #07140d; --rival: #6f86e6; --s-me: #35a86e; --s-them: #6f86e6; --good: #45c283; --bad: #f0786d; --warn: #e3b55a;
   --pitch-a: #1d4f33; --pitch-b: #1a482e; --pitch-line: rgba(255,255,255,.18); --card-on-pitch: #0f1813; --card-on-pitch-ink: #e6eee8;
   --fdr1: #2c9d61; --fdr1-ink: #ffffff; --fdr2: #2d6a46; --fdr2-ink: #dff3e7; --fdr3: #34403a; --fdr3-ink: #d4ddd7;
   --fdr4: #8a3c30; --fdr4-ink: #ffe3dd; --fdr5: #6e1913; --fdr5-ink: #ffd9d4; --chart-other: #3a4a40;
@@ -153,10 +155,10 @@ tbody tr.click:hover td { background: var(--surface-2); }
 .chart .zero { stroke: var(--muted); stroke-width: 1; stroke-dasharray: 3 3; }
 .chart .ax { fill: var(--muted); font-size: 11px; font-family: var(--font-body); }
 .chart .other { stroke: var(--chart-other); stroke-width: 1.2; fill: none; }
-.chart .mine { stroke: var(--accent); stroke-width: 3; fill: none; }
-.chart .riv { stroke: var(--rival); stroke-width: 2.5; fill: none; }
-.chart .lbl-me { fill: var(--accent); font-weight: 700; font-size: 12px; font-family: var(--font-body); }
-.chart .lbl-rv { fill: var(--rival); font-weight: 700; font-size: 12px; font-family: var(--font-body); }
+.chart .mine { stroke: var(--s-me); stroke-width: 3; fill: none; }
+.chart .riv { stroke: var(--s-them); stroke-width: 2.5; fill: none; }
+.chart .lbl-me { fill: var(--ink); font-weight: 700; font-size: 12px; font-family: var(--font-body); }
+.chart .lbl-rv { fill: var(--ink); font-weight: 700; font-size: 12px; font-family: var(--font-body); }
 .legend { display: flex; flex-wrap: wrap; gap: 14px; font-size: .8rem; color: var(--muted); }
 .legend i { display: inline-block; width: 14px; height: 3px; border-radius: 2px; vertical-align: middle; margin-right: 6px; }
 
@@ -168,6 +170,46 @@ tbody tr.click:hover td { background: var(--surface-2); }
 .plist li { display: flex; justify-content: space-between; gap: 8px; border-bottom: 1px dashed var(--line); padding-bottom: 3px; }
 .plist li span:last-child { color: var(--muted); }
 
+/* Mini League analysis */
+.picks5 { display: grid; grid-template-columns: repeat(auto-fit, minmax(170px, 1fr)); gap: 10px; }
+.pick { text-align: left; background: var(--surface); border: 1px solid var(--line); border-radius: var(--r); padding: 12px 14px; display: grid; gap: 4px; }
+.pick:hover { border-color: var(--muted); }
+.pick[aria-pressed="true"] { border-color: var(--s-them); box-shadow: inset 0 0 0 1px var(--s-them); }
+.pick .role { font-size: .68rem; text-transform: uppercase; letter-spacing: .08em; color: var(--muted); display: flex; align-items: center; gap: 6px; }
+.pick .role i { width: 10px; height: 10px; border-radius: 50%; background: var(--line); }
+.pick[aria-pressed="true"] .role i { background: var(--s-them); }
+.pick .nm { font-family: var(--font-display); font-size: 1.3rem; font-weight: 700; line-height: 1.1; }
+.pick .tm { font-size: .78rem; color: var(--muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.pick .row2 { display: flex; justify-content: space-between; gap: 8px; font-size: .82rem; }
+.vs { display: grid; grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr); align-items: center; gap: 12px; text-align: center; }
+.vs .side { display: grid; gap: 2px; }
+.vs .side .who { font-size: .72rem; text-transform: uppercase; letter-spacing: .08em; color: var(--muted); display: flex; justify-content: center; align-items: center; gap: 6px; }
+.vs .side .who i { width: 10px; height: 10px; border-radius: 50%; }
+.vs .big { font-family: var(--font-display); font-size: 2.6rem; font-weight: 700; line-height: 1; }
+.vs .mid { font-size: .8rem; color: var(--muted); }
+.h2h td:nth-child(1) { color: var(--muted); }
+.h2h td:nth-child(2), .h2h td:nth-child(3) { font-weight: 600; }
+.chipgrid td .st { font-weight: 600; }
+.chipgrid td .st.avail { color: var(--good); }
+.chipgrid td .st.exp { color: var(--bad); }
+.chipgrid td .st.used { color: var(--muted); }
+.chipgrid tr.half td { background: var(--surface-2); font-size: .7rem; text-transform: uppercase; letter-spacing: .07em; color: var(--muted); font-weight: 600; }
+.chart { position: relative; }
+.chart .bar-me { fill: var(--s-me); } .chart .bar-them { fill: var(--s-them); }
+.chart .hit { fill: transparent; cursor: crosshair; }
+.chart .hit:hover, .chart .hit.on { fill: var(--ink); fill-opacity: .05; }
+.chart .dgood { fill: var(--good); font-size: 10.5px; font-weight: 700; font-family: var(--font-body); }
+.chart .dbad { fill: var(--bad); font-size: 10.5px; font-weight: 700; font-family: var(--font-body); }
+.chart .dzero { fill: var(--muted); font-size: 10.5px; font-family: var(--font-body); }
+.chart .xh { stroke: var(--muted); stroke-width: 1; }
+.chart .dot-me { fill: var(--s-me); stroke: var(--surface); stroke-width: 2; }
+.chart .dot-them { fill: var(--s-them); stroke: var(--surface); stroke-width: 2; }
+.tip { position: absolute; pointer-events: none; background: var(--ink); color: var(--bg); border-radius: 8px; padding: 8px 10px; font-size: .8rem; line-height: 1.4; min-width: 150px; z-index: 3; box-shadow: 0 4px 14px rgba(0,0,0,.2); }
+.tip b { font-family: var(--font-display); font-size: .95rem; }
+.tip i { display: inline-block; width: 8px; height: 8px; border-radius: 50%; margin-right: 6px; }
+.tip .r { display: flex; justify-content: space-between; gap: 12px; }
+td .sw { display: inline-block; width: 8px; height: 8px; border-radius: 50%; margin-right: 6px; vertical-align: middle; }
+.gw-tbl td.n small { color: var(--muted); font-weight: 400; margin-left: 4px; }
 select, input[type="search"] { font: inherit; color: var(--ink); background: var(--surface); border: 1px solid var(--line); border-radius: 8px; padding: 6px 10px; max-width: 100%; }
 .btn { border: 1px solid var(--line); background: var(--surface); border-radius: 8px; padding: 6px 12px; font-weight: 600; }
 .btn.pri { background: var(--accent); color: var(--accent-ink); border-color: var(--accent); }
@@ -202,7 +244,8 @@ select, input[type="search"] { font: inherit; color: var(--ink); background: var
   </div>
   <nav class="wrap tabs" aria-label="Views">
     <a href="#overview" data-v="overview">Overview</a>
-    <a href="#league" data-v="league">Mini-league</a>
+    <a href="#analysis" data-v="analysis">Mini League analysis</a>
+    <a href="#league" data-v="league">Standings</a>
     <a href="#planner" data-v="planner">Transfer planner</a>
     <a href="#fixtures" data-v="fixtures">Fixtures</a>
   </nav>
@@ -393,9 +436,9 @@ select, input[type="search"] { font: inherit; color: var(--ink); background: var
   // ---------- routing ----------
   function route() {
     const v = (location.hash || "#overview").slice(1);
-    view = ["overview", "league", "planner", "fixtures"].includes(v) ? v : "overview";
+    view = ["overview", "analysis", "league", "planner", "fixtures"].includes(v) ? v : "overview";
     document.querySelectorAll(".tabs a").forEach((a) => { if (a.dataset.v === view) a.setAttribute("aria-current", "page"); else a.removeAttribute("aria-current"); });
-    ({ overview: renderOverview, league: renderLeague, planner: renderPlanner, fixtures: renderFixtures })[view]();
+    ({ overview: renderOverview, analysis: renderAnalysis, league: renderLeague, planner: renderPlanner, fixtures: renderFixtures })[view]();
   }
 
   function tick() {
@@ -544,6 +587,258 @@ select, input[type="search"] { font: inherit; color: var(--ink); background: var
     return l.length ? l.reduce((a, b) => a + b, 0) / l.length : 3;
   }
 
+  // ---------- mini league analysis ----------
+  const FRIENDS = ["Dipesh Patel", "Dhruve Gor", "Parit Shah", "Umesh Majithia"];
+  const norm = (s) => String(s || "").trim().toLowerCase().replace(/\s+/g, " ");
+  const CHIP_NAME = { wildcard: "Wildcard", freehit: "Free Hit", bboost: "Bench Boost", "3xc": "Triple Captain" };
+  const firstName = (x) => (x.player_name || "").split(" ")[0] || "Them";
+
+  function analysisGroup() {
+    const sorted = [...members].sort((a, b) => a.rank - b.rank);
+    const group = [];
+    if (sorted[0] && sorted[0].entry !== me) group.push({ x: sorted[0], role: "League leader" });
+    const missing = [];
+    FRIENDS.forEach((name) => {
+      const x = members.find((m) => norm(m.player_name) === norm(name));
+      if (!x) { missing.push(name); return; }
+      const g = group.find((q) => q.x.entry === x.entry);
+      if (g) g.role = "League leader · friend"; else if (x.entry !== me) group.push({ x, role: "Friend" });
+    });
+    return { group, missing };
+  }
+  // Per-gameweek numbers for one manager. Net points = GW points minus hits, so the running total matches FPL.
+  function gwStats(m) {
+    const by = {};
+    m.history.forEach(([ev, pts, total, tr, cost, bench, orank, value, bank]) => (by[ev] = { net: pts - cost, cost, total, tr, bench, orank, value, bank }));
+    const chipAt = {}; m.chips.forEach(([n, ev]) => (chipAt[ev] = n));
+    const nets = m.history.map((r) => r[1] - r[4]);
+    const best = m.history.reduce((b, r) => (!b || r[1] - r[4] > b[1] ? [r[0], r[1] - r[4]] : b), null);
+    const worst = m.history.reduce((b, r) => (!b || r[1] - r[4] < b[1] ? [r[0], r[1] - r[4]] : b), null);
+    return { by, chipAt, avg: nets.length ? nets.reduce((a, b) => a + b, 0) / nets.length : 0, best, worst };
+  }
+  function chipStatus(m, name, s, e) {
+    const u = m.chips.find(([n, ev]) => n === name && ev >= s && ev <= e);
+    if (u) return { cls: "used", txt: `Used GW${u[1]}`, left: false };
+    if (gwNext > e) return { cls: "exp", txt: "Not used, expired", left: false };
+    if (gwNext < s) return { cls: "avail", txt: `Unlocks GW${s}`, left: true };
+    return { cls: "avail", txt: "Available", left: true };
+  }
+
+  function renderAnalysis() {
+    const { group, missing } = analysisGroup();
+    if (!group.length) { $("#app").innerHTML = `<p class="empty">None of your friends were found in ${esc(D.league.name)}.</p>`; return; }
+    let sel = store.get("h2h", null);
+    if (!group.some((g) => g.x.entry === sel)) sel = group[0].x.entry;
+    const them = group.find((g) => g.x.entry === sel).x;
+    const meRow = members.find((x) => x.entry === me);
+    const A = gwStats(myM), B = gwStats(them.m);
+    const tn = firstName(them);
+    const gws = []; for (let g = 1; g <= gwCur; g++) if (A.by[g] || B.by[g]) gws.push(g);
+    let won = 0, lost = 0, drawn = 0;
+    gws.forEach((g) => { if (A.by[g] && B.by[g]) { const d = A.by[g].net - B.by[g].net; d > 0 ? won++ : d < 0 ? lost++ : drawn++; } });
+    const gap = meRow.total - them.total;
+
+    const cards = group.map(({ x, role }) => {
+      const d = x.total - meRow.total;
+      return `<button class="pick" data-h2h="${x.entry}" aria-pressed="${x.entry === sel}">
+        <span class="role"><i></i>${role}</span>
+        <span class="nm">${esc(x.player_name)}</span>
+        <span class="tm">${esc(x.entry_name)}</span>
+        <span class="row2"><span>${ordinal(x.rank)} · ${fmt(x.total)} pts</span><span class="${d > 0 ? "down" : d < 0 ? "up" : ""}">${d > 0 ? d + " ahead" : d < 0 ? -d + " behind" : "level"}</span></span>
+      </button>`;
+    }).join("");
+
+    // head-to-head rows: [label, mine, theirs, kind] kind: "hi" higher is better, "lo" lower is better, "rank", null = no verdict
+    const lh = lastHist(myM), th = lastHist(them.m);
+    const money = (v) => "£" + price(v) + "m";
+    const sumIdx = (m, i) => m.history.reduce((a, r) => a + r[i], 0);
+    const capOf = (m) => { const c = squadOf(m).find((p) => p[3]); return c ? E[c[0]]?.web_name : "–"; };
+    const rows = [
+      ["League position", meRow.rank, them.rank, "rank", ordinal],
+      ["Total points", meRow.total, them.total, "hi", fmt],
+      [`GW${gwCur} points`, A.by[gwCur]?.net ?? 0, B.by[gwCur]?.net ?? 0, "hi", String],
+      ["Average per gameweek", A.avg, B.avg, "hi", (v) => v.toFixed(1)],
+      ["Best gameweek", A.best?.[1] ?? 0, B.best?.[1] ?? 0, "hi", null, (v, who) => `${v} <small style="color:var(--muted)">GW${(who === "a" ? A.best : B.best)?.[0]}</small>`],
+      ["Worst gameweek", A.worst?.[1] ?? 0, B.worst?.[1] ?? 0, "hi", null, (v, who) => `${v} <small style="color:var(--muted)">GW${(who === "a" ? A.worst : B.worst)?.[0]}</small>`],
+      ["Overall rank", lh[6], th[6], "orank", fmt],
+      ["Squad value", lh[7] - lh[8], th[7] - th[8], "hi", money],
+      ["In the bank", lh[8], th[8], "hi", money],
+      ["Total team value", lh[7], th[7], "hi", money],
+      ["Transfers made", sumIdx(myM, 3), sumIdx(them.m, 3), null, String],
+      ["Points lost to hits", sumIdx(myM, 4), sumIdx(them.m, 4), "lo", (v) => (v ? "−" + v : "0")],
+      ["Points left on bench", sumIdx(myM, 5), sumIdx(them.m, 5), "lo", String],
+      [`GW${gwCur} captain`, capOf(myM), capOf(them.m), "text", esc],
+    ];
+    const diffCell = ([label, a, b, kind, f]) => {
+      if (kind === "text" || kind === null) return `<td class="n" style="color:var(--muted)">${kind === "text" ? (a === b ? "Same" : "Different") : sign(a - b)}</td>`;
+      if (kind === "rank" || kind === "orank") {
+        const d = b - a; // positive = you are higher up
+        if (!d) return `<td class="n">Level</td>`;
+        return `<td class="n ${d > 0 ? "up" : "down"}">${fmt(Math.abs(d))} ${kind === "rank" ? "place" + (Math.abs(d) === 1 ? "" : "s") : ""} ${d > 0 ? "above" : "below"}</td>`;
+      }
+      let d = a - b; const good = kind === "hi" ? d > 0 : d < 0;
+      const txt = label.includes("value") || label.includes("bank") ? (d > 0 ? "+" : d < 0 ? "−" : "") + "£" + price(Math.abs(d)) + "m" : label.startsWith("Average") ? sign(Number(d.toFixed(1))) : sign(d);
+      return `<td class="n ${d === 0 ? "" : good ? "up" : "down"}">${d === 0 ? "Level" : txt}</td>`;
+    };
+    const h2hRows = rows.map((r) => {
+      const [label, a, b, , f, custom] = r;
+      const show = (v, who) => (custom ? custom(v, who) : f(v));
+      return `<tr><td>${label}</td><td class="n">${show(a, "a")}</td><td class="n">${show(b, "b")}</td>${diffCell(r)}</tr>`;
+    }).join("");
+
+    // Chips come in two sets: GW1-19 and GW20-38.
+    const halfRows = [];
+    [[1, 19], [20, 38]].forEach(([hs, he]) => {
+      const defs = D.chips_def.filter(([, s, e]) => s <= he && e >= hs);
+      if (!defs.length) return;
+      halfRows.push(`<tr class="half"><td colspan="3">${hs === 1 ? "First half" : "Second half"} · GW${hs}–${he}</td></tr>`);
+      ["wildcard", "freehit", "bboost", "3xc"].forEach((n) => {
+        const d = defs.find(([c]) => c === n); if (!d) return;
+        const a = chipStatus(myM, n, d[1], d[2]), b = chipStatus(them.m, n, d[1], d[2]);
+        halfRows.push(`<tr><td>${CHIP_NAME[n]}</td><td><span class="st ${a.cls}">${a.txt}</span></td><td><span class="st ${b.cls}">${b.txt}</span></td></tr>`);
+      });
+    });
+    const nowLeft = (m) => D.chips_def.filter(([n, s, e]) => gwNext >= s && gwNext <= e && chipStatus(m, n, s, e).left).length;
+
+    const tableRows = gws.map((g) => {
+      const a = A.by[g], b = B.by[g];
+      const d = a && b ? a.net - b.net : null, gapT = a && b ? a.total - b.total : null;
+      const ca = A.chipAt[g], cb = B.chipAt[g];
+      return `<tr><td>GW${g}</td>
+        <td class="n">${a ? a.net : "–"}${a?.cost ? `<small>(−${a.cost})</small>` : ""}${ca ? ` <span class="chip on">${CHIP_LABEL[ca]}</span>` : ""}</td>
+        <td class="n">${b ? b.net : "–"}${b?.cost ? `<small>(−${b.cost})</small>` : ""}${cb ? ` <span class="chip on">${CHIP_LABEL[cb]}</span>` : ""}</td>
+        <td class="n ${d > 0 ? "up" : d < 0 ? "down" : ""}">${d == null ? "–" : d === 0 ? "0" : sign(d)}</td>
+        <td class="n">${a ? fmt(a.total) : "–"}</td><td class="n">${b ? fmt(b.total) : "–"}</td>
+        <td class="n ${gapT > 0 ? "up" : gapT < 0 ? "down" : ""}"><strong>${gapT == null ? "–" : gapT === 0 ? "Level" : sign(gapT)}</strong></td></tr>`;
+    }).join("");
+
+    $("#app").innerHTML = `
+    <section class="view">
+      <div class="panel-head"><h2>Mini League analysis</h2><span class="note">The league leader and your friends. Pick one to compare with FC27.</span></div>
+      <div class="picks5">${cards}</div>
+      ${missing.length ? `<p class="note">Not found in ${esc(D.league.name)}: ${missing.map(esc).join(", ")}.</p>` : ""}
+
+      <div class="panel">
+        <div class="vs">
+          <div class="side"><span class="who"><i style="background:var(--s-me)"></i>You</span><span class="big">${fmt(meRow.total)}</span><span class="mid">${esc(D.entry.name)} · ${ordinal(meRow.rank)}</span></div>
+          <div class="mid"><strong style="font-size:1rem;color:var(--ink)">${gap === 0 ? "Level" : gap > 0 ? `You lead by ${gap}` : `${tn} leads by ${-gap}`}</strong><br>Gameweeks won: you ${won}, ${esc(tn)} ${lost}${drawn ? `, ${drawn} drawn` : ""}</div>
+          <div class="side"><span class="who"><i style="background:var(--s-them)"></i>${esc(tn)}</span><span class="big">${fmt(them.total)}</span><span class="mid">${esc(them.entry_name)} · ${ordinal(them.rank)}</span></div>
+        </div>
+      </div>
+
+      <div class="grid-2">
+        <div class="panel">
+          <div class="panel-head"><h3>Head to head</h3><span class="note">Difference is from your side</span></div>
+          <div class="tbl-wrap"><table class="h2h"><thead><tr><th></th><th class="n"><span class="sw" style="background:var(--s-me)"></span>You</th><th class="n"><span class="sw" style="background:var(--s-them)"></span>${esc(tn)}</th><th class="n">Difference</th></tr></thead><tbody>${h2hRows}</tbody></table></div>
+          <p class="note">Squad value is what your players are worth to sell; total team value adds the money in the bank.</p>
+        </div>
+        <div class="panel">
+          <div class="panel-head"><h3>Chips</h3><span class="note">You have ${nowLeft(myM)} left this half, ${esc(tn)} has ${nowLeft(them.m)}</span></div>
+          <div class="tbl-wrap"><table class="chipgrid"><thead><tr><th>Chip</th><th><span class="sw" style="background:var(--s-me)"></span>You</th><th><span class="sw" style="background:var(--s-them)"></span>${esc(tn)}</th></tr></thead><tbody>${halfRows.join("")}</tbody></table></div>
+          <p class="note">First-half chips must be played by the GW19 deadline or they're lost. A second set unlocks from GW20.</p>
+        </div>
+      </div>
+
+      <div class="panel">
+        <div class="panel-head"><h3>Points per gameweek</h3><span class="note">Net of hits. Numbers under each gameweek show your margin.</span></div>
+        <div class="legend"><span><i style="background:var(--s-me)"></i>You</span><span><i style="background:var(--s-them)"></i>${esc(them.player_name)}</span></div>
+        <div style="overflow-x:auto"><div class="chart" id="gwChart" style="min-width:560px">${gwBarChart(gws, A, B, tn)}</div></div>
+      </div>
+
+      <div class="panel">
+        <div class="panel-head"><h3>Season total by gameweek</h3><span class="note">Running total after each gameweek</span></div>
+        <div class="legend"><span><i style="background:var(--s-me)"></i>You</span><span><i style="background:var(--s-them)"></i>${esc(them.player_name)}</span></div>
+        <div style="overflow-x:auto"><div class="chart" id="totChart" style="min-width:560px">${totalChart(gws, A, B, tn)}</div></div>
+        <div class="tbl-wrap"><table class="gw-tbl">
+          <thead><tr><th>Gameweek</th><th class="n"><span class="sw" style="background:var(--s-me)"></span>Your pts</th><th class="n"><span class="sw" style="background:var(--s-them)"></span>${esc(tn)} pts</th><th class="n">GW margin</th><th class="n">Your total</th><th class="n">${esc(tn)} total</th><th class="n">Overall gap</th></tr></thead>
+          <tbody>${tableRows}</tbody></table></div>
+        <p class="note">Small numbers in brackets are points deducted for extra transfers. Chip badges show the chip played that week.</p>
+      </div>
+      ${freshness()}
+    </section>`;
+
+    document.querySelectorAll("[data-h2h]").forEach((b) => b.addEventListener("click", () => { store.set("h2h", Number(b.dataset.h2h)); renderAnalysis(); }));
+    wireTip($("#gwChart"), (g) => {
+      const a = A.by[g], b = B.by[g], d = a && b ? a.net - b.net : null;
+      return `<b>GW${g}</b><div class="r"><span><i style="background:var(--s-me)"></i>You</span><span>${a ? a.net : "–"}${a?.cost ? ` (−${a.cost})` : ""}${A.chipAt[g] ? " · " + CHIP_LABEL[A.chipAt[g]] : ""}</span></div><div class="r"><span><i style="background:var(--s-them)"></i>${esc(tn)}</span><span>${b ? b.net : "–"}${b?.cost ? ` (−${b.cost})` : ""}${B.chipAt[g] ? " · " + CHIP_LABEL[B.chipAt[g]] : ""}</span></div>${d == null ? "" : `<div class="r"><span>Margin</span><span>${d === 0 ? "Level" : sign(d)}</span></div>`}`;
+    });
+    wireTip($("#totChart"), (g) => {
+      const a = A.by[g], b = B.by[g], d = a && b ? a.total - b.total : null;
+      return `<b>After GW${g}</b><div class="r"><span><i style="background:var(--s-me)"></i>You</span><span>${a ? fmt(a.total) : "–"}</span></div><div class="r"><span><i style="background:var(--s-them)"></i>${esc(tn)}</span><span>${b ? fmt(b.total) : "–"}</span></div>${d == null ? "" : `<div class="r"><span>Gap</span><span>${d === 0 ? "Level" : sign(d)}</span></div>`}`;
+    }, true);
+  }
+
+  function niceStep(range, target = 5) { const steps = [1, 2, 5, 10, 20, 25, 50, 100, 200, 250, 500]; return steps.find((s) => range / s <= target) || 1000; }
+  const CW = 860;
+
+  function gwBarChart(gws, A, B) {
+    const H = 300, L = 38, R = 8, Tp = 12, B0 = 52;
+    const max = Math.max(10, ...gws.map((g) => Math.max(A.by[g]?.net ?? 0, B.by[g]?.net ?? 0)));
+    const step = niceStep(max, 5), top = Math.ceil(max / step) * step;
+    const y = (v) => Tp + (1 - Math.max(0, v) / top) * (H - Tp - B0);
+    const band = (CW - L - R) / gws.length, bw = Math.min(18, (band - 8) / 2);
+    let g = "";
+    for (let v = 0; v <= top; v += step) g += `<line class="grid" x1="${L}" x2="${CW - R}" y1="${y(v)}" y2="${y(v)}"/><text class="ax" x="${L - 6}" y="${y(v) + 4}" text-anchor="end">${v}</text>`;
+    const bar = (x, v, cls) => {
+      if (v == null) return "";
+      const y0 = y(0), y1 = y(v), r = Math.min(4, bw / 2, (y0 - y1) / 2);
+      if (y0 - y1 < 0.5) return `<rect class="${cls}" x="${x}" y="${y0 - 1}" width="${bw}" height="1"/>`;
+      return `<path class="${cls}" d="M${x},${y0}V${y1 + r}Q${x},${y1} ${x + r},${y1}H${x + bw - r}Q${x + bw},${y1} ${x + bw},${y1 + r}V${y0}Z"/>`;
+    };
+    gws.forEach((gw, i) => {
+      const cx = L + band * i + band / 2;
+      const a = A.by[gw]?.net, b = B.by[gw]?.net;
+      g += bar(cx - bw - 1, a, "bar-me") + bar(cx + 1, b, "bar-them");
+      g += `<text class="ax" x="${cx}" y="${H - B0 + 16}" text-anchor="middle">${gw}</text>`;
+      if (a != null && b != null) { const d = a - b; g += `<text class="${d > 0 ? "dgood" : d < 0 ? "dbad" : "dzero"}" x="${cx}" y="${H - B0 + 34}" text-anchor="middle">${d === 0 ? "0" : sign(d)}</text>`; }
+      g += `<rect class="hit" data-gw="${gw}" x="${L + band * i}" y="${Tp}" width="${band}" height="${H - Tp - B0 + 40}"/>`;
+    });
+    g += `<text class="ax" x="${L - 6}" y="${H - B0 + 16}" text-anchor="end">GW</text><text class="ax" x="${L - 6}" y="${H - B0 + 34}" text-anchor="end">±</text>`;
+    return `<svg viewBox="0 0 ${CW} ${H}" role="img" aria-label="Points per gameweek, you against your rival">${g}</svg>`;
+  }
+
+  function totalChart(gws, A, B, tn) {
+    const H = 300, L = 46, R = 96, Tp = 14, B0 = 28;
+    const vals = []; gws.forEach((g) => { if (A.by[g]) vals.push(A.by[g].total); if (B.by[g]) vals.push(B.by[g].total); });
+    const max = Math.max(10, ...vals), step = niceStep(max, 6), top = Math.ceil(max / step) * step;
+    const x = (gw) => L + (gws.length <= 1 ? 0 : (gws.indexOf(gw) / (gws.length - 1)) * (CW - L - R));
+    const y = (v) => Tp + (1 - v / top) * (H - Tp - B0);
+    let g = "";
+    for (let v = 0; v <= top; v += step) g += `<line class="grid" x1="${L}" x2="${CW - R}" y1="${y(v)}" y2="${y(v)}"/><text class="ax" x="${L - 6}" y="${y(v) + 4}" text-anchor="end">${fmt(v)}</text>`;
+    gws.forEach((gw) => (g += `<text class="ax" x="${x(gw)}" y="${H - 8}" text-anchor="middle">${gw}</text>`));
+    const line = (S, cls) => { const pts = gws.filter((gw) => S.by[gw]); return `<path class="${cls}" d="${pts.map((gw, i) => (i ? "L" : "M") + x(gw).toFixed(1) + "," + y(S.by[gw].total).toFixed(1)).join("")}"/>`; };
+    g += line(B, "riv") + line(A, "mine");
+    const last = (S) => { const l = gws.filter((gw) => S.by[gw]).pop(); return l ? [l, S.by[l].total] : null; };
+    const la = last(A), lb = last(B);
+    let ya = la ? y(la[1]) : 0, yb = lb ? y(lb[1]) : 0;
+    if (la && lb && Math.abs(ya - yb) < 16) { const mid = (ya + yb) / 2, up = la[1] >= lb[1]; ya = mid + (up ? -9 : 9); yb = mid + (up ? 9 : -9); }
+    if (lb) g += `<circle class="dot-them" cx="${x(lb[0])}" cy="${y(lb[1])}" r="5"/><text class="lbl-rv" x="${x(lb[0]) + 10}" y="${yb + 4}">${esc(tn)} ${fmt(lb[1])}</text>`;
+    if (la) g += `<circle class="dot-me" cx="${x(la[0])}" cy="${y(la[1])}" r="5"/><text class="lbl-me" x="${x(la[0]) + 10}" y="${ya + 4}">You ${fmt(la[1])}</text>`;
+    g += `<line class="xh" id="xh" x1="0" x2="0" y1="${Tp}" y2="${H - B0}" visibility="hidden"/>`;
+    const half = gws.length > 1 ? (CW - L - R) / (gws.length - 1) / 2 : (CW - L - R) / 2;
+    gws.forEach((gw) => (g += `<rect class="hit" data-gw="${gw}" data-x="${x(gw)}" x="${x(gw) - half}" y="${Tp}" width="${half * 2}" height="${H - Tp - B0}"/>`));
+    return `<svg viewBox="0 0 ${CW} ${H}" role="img" aria-label="Season total after each gameweek, you against your rival">${g}</svg>`;
+  }
+
+  // Shared hover/tap tooltip for the analysis charts.
+  function wireTip(box, html, crosshair) {
+    if (!box) return;
+    const svg = box.querySelector("svg"), tip = document.createElement("div");
+    tip.className = "tip"; tip.hidden = true; box.appendChild(tip);
+    const xh = crosshair ? svg.querySelector("#xh") : null;
+    const show = (r, ev) => {
+      box.querySelectorAll(".hit.on").forEach((h) => h.classList.remove("on")); if (!crosshair) r.classList.add("on");
+      tip.innerHTML = html(Number(r.dataset.gw)); tip.hidden = false;
+      if (xh) { xh.setAttribute("x1", r.dataset.x); xh.setAttribute("x2", r.dataset.x); xh.setAttribute("visibility", "visible"); }
+      const bb = box.getBoundingClientRect(), rb = r.getBoundingClientRect();
+      let left = rb.left - bb.left + rb.width / 2 + 12; if (left + tip.offsetWidth > bb.width) left = rb.left - bb.left + rb.width / 2 - tip.offsetWidth - 12;
+      tip.style.left = Math.max(0, left) + "px"; tip.style.top = Math.max(0, (ev ? ev.clientY - bb.top : 40) - tip.offsetHeight / 2) + "px";
+    };
+    const hide = () => { tip.hidden = true; box.querySelectorAll(".hit.on").forEach((h) => h.classList.remove("on")); if (xh) xh.setAttribute("visibility", "hidden"); };
+    svg.querySelectorAll(".hit").forEach((r) => { r.addEventListener("pointermove", (ev) => show(r, ev)); r.addEventListener("click", (ev) => show(r, ev)); });
+    svg.addEventListener("pointerleave", hide);
+  }
+
   // ---------- league ----------
   function renderLeague() {
     const sorted = [...members].sort((a, b) => a.rank - b.rank);
@@ -580,7 +875,7 @@ select, input[type="search"] { font: inherit; color: var(--ink); background: var
       ${freshness()}
       <div class="panel">
         <div class="panel-head"><h2>Season race</h2><span class="note">Points above or below the league average after each gameweek</span></div>
-        <div class="legend"><span><i style="background:var(--accent)"></i>You</span><span><i style="background:var(--rival)"></i>${esc(members.find((x) => x.entry === rival)?.player_name)}</span><span><i style="background:var(--chart-other)"></i>Rest of the league</span></div>
+        <div class="legend"><span><i style="background:var(--s-me)"></i>You</span><span><i style="background:var(--s-them)"></i>${esc(members.find((x) => x.entry === rival)?.player_name)}</span><span><i style="background:var(--chart-other)"></i>Rest of the league</span></div>
         <div class="chart">${raceChart(rival)}</div>
       </div>
       <div class="panel" id="cmp"></div>
@@ -617,8 +912,8 @@ select, input[type="search"] { font: inherit; color: var(--ink); background: var
     let ym = pm ? y(pm[1]) : 0, yr = pr ? y(pr[1]) : 0;
     if (pm && pr && Math.abs(ym - yr) < 15) { const mid = (ym + yr) / 2, up = pm[1] >= pr[1]; ym = mid + (up ? -8 : 8); yr = mid + (up ? 8 : -8); }
     const end = (p, ly, cls, colorVar, label) => `<circle cx="${x(p[0])}" cy="${y(p[1])}" r="4" style="fill:var(${colorVar})"/><text class="${cls}" x="${x(p[0]) + 8}" y="${ly + 4}">${esc(label)} ${p[1] > 0 ? "+" : ""}${Math.round(p[1])}</text>`;
-    if (pr) g += end(pr, yr, "lbl-rv", "--rival", rn);
-    if (pm) g += end(pm, ym, "lbl-me", "--accent", "You");
+    if (pr) g += end(pr, yr, "lbl-rv", "--s-them", rn);
+    if (pm) g += end(pm, ym, "lbl-me", "--s-me", "You");
     return `<svg viewBox="0 0 ${W} ${H}" role="img" aria-label="Season race chart">${g}</svg>`;
   }
 
