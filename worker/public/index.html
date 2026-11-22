@@ -764,7 +764,7 @@ select, input[type="search"] { font: inherit; color: var(--ink); background: var
         <div class="kpi"><span class="k">League position</span><span class="v">${myRank}<small style="font-size:1rem;color:var(--muted)">/${members.length}</small></span><span class="s ${move > 0 ? "up" : move < 0 ? "down" : ""}">${move > 0 ? "▲ " + move : move < 0 ? "▼ " + -move : "No change"} since last GW</span></div>
         <div class="kpi"><span class="k">Total points</span><span class="v">${fmt(meRow.total)}</span><span class="s">${leader.entry === me ? "You lead the league" : `${leader.total - meRow.total} behind ${esc(leader.player_name)}`}</span></div>
         <div class="kpi"><span class="k">GW${gwCur} points</span><span class="v">${meRow.event_total}</span><span class="s">League avg ${avgGw} · ${ordinal(gwRank)} this GW${ev?.avg ? ` · FPL avg ${ev.avg}` : ""}</span></div>
-        <div class="kpi"><span class="k">Overall rank</span><span class="v">${fmt(D.entry.summary_overall_rank || lh[6] || 0)}</span>${rankMove(myM)}<span class="s">${above ? `${above.total - meRow.total} pts to ${ordinal(above.rank)} in league` : "Top of the league"}</span></div>
+        <div class="kpi"><span class="k">Overall rank</span><span class="v ${rankDir(myM)}">${fmt(D.entry.summary_overall_rank || lh[6] || 0)}</span>${rankMove(myM)}<span class="s">${above ? `${above.total - meRow.total} pts to ${ordinal(above.rank)} in league` : "Top of the league"}</span></div>
         <div class="kpi"><span class="k">Bank · Squad value</span><span class="v">£${price(bankOf(myM))}m</span><span class="s">Squad value £${price(squadValue(myM))}m · total £${price(squadValue(myM) + bankOf(myM))}m</span></div>
         <div class="kpi"><span class="k">Free transfers</span><span class="v">${ft}</span><span class="s">Estimate for GW${gwNext} · ${cl.filter((c) => !c.used).map((c) => CHIP_LABEL[c.name] || c.name).join(" ") || "no chips"} left</span></div>
       </div>
@@ -1321,6 +1321,12 @@ select, input[type="search"] { font: inherit; color: var(--ink); background: var
   }
   const POSN = (e) => D.positions[String(e.element_type)];
   // Overall rank change between the latest gameweek and the one before it.
+  // "up" (green) if overall rank improved since the previous gameweek, "down" (red) if it got worse.
+  function rankDir(m) {
+    const h = m.history; if (h.length < 2) return "";
+    const now = h[h.length - 1][6], prev = h[h.length - 2][6];
+    return !now || !prev || now === prev ? "" : now < prev ? "up" : "down";
+  }
   function rankMove(m) {
     const h = m.history; if (h.length < 2) return "";
     const [gw, , , , , , now] = h[h.length - 1], prev = h[h.length - 2][6];
