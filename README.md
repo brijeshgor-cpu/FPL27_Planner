@@ -18,7 +18,9 @@ python3 scripts/build_site.py
 CLOUDFLARE_API_TOKEN=... npx wrangler deploy
 ```
 
-Data is fetched live on each page load, so redeploying is only needed for page changes.
+Data is fetched live from FPL on every page load (nothing is cached), so redeploying is only needed for page changes.
+The only exceptions: bookmaker odds refresh 3 days and 1 day before each deadline, and each league member's squad for a
+finished gameweek (used by Insights) is stored once because it can no longer change; the league table itself is always live.
 To limit who can open it, add Cloudflare Access (Zero Trust → Access → Applications) with the emails you want to allow.
 
 ## Run locally

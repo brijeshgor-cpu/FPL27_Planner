@@ -38,15 +38,13 @@ export default {
 
     const page = url.searchParams.get("page_standings");
     const target = FPL + path + (page && /^\d+$/.test(page) ? `?page_standings=${page}` : "");
-    // Manager data is never cached, so every reload is live. The large shared files
-    // (players, fixtures) may be reused for up to 60 seconds.
-    const shared = /^(bootstrap-static|fixtures)\//.test(path);
+    // Nothing from FPL is cached here: every page load fetches fresh data.
 
     let upstream;
     try {
       upstream = await fetch(target, {
         headers: { "User-Agent": "Mozilla/5.0 (compatible; fc27-planner)", Accept: "application/json" },
-        cf: shared ? { cacheTtl: 60, cacheEverything: true } : { cacheTtl: 0, cacheEverything: false },
+        cf: { cacheTtl: 0, cacheEverything: false },
       });
     } catch (e) {
       return json({ error: "FPL unreachable" }, 502);
@@ -170,24 +168,27 @@ async function fplJson(path) {
 async function leaguePicks(env, league, gw) {
   if (gw < 1 || gw > 38) return json({ error: "bad gameweek" }, 400);
   const key = `lp:${league}:${gw}`;
-  const cached = env.ODDS ? await env.ODDS.get(key, "json") : null;
-  if (cached) return json(cached, 200);
   try {
-    const fx = await fplJson(`fixtures/?event=${gw}`);
-    const finished = fx.length > 0 && fx.every((f) => f.finished);
+    // The league table is always fetched live, so new members, leavers and renamed teams show straight away.
     const lg = await fplJson(`leagues-classic/${league}/standings/`);
     const members = lg.standings.results.slice(0, 45);
+    // A finished gameweek's squads can't change, so stored ones are reused; anyone missing is fetched.
+    const stored = env.ODDS ? await env.ODDS.get(key, "json") : null;
+    const have = new Map(stored && stored.finished ? stored.managers.filter((m) => m.picks).map((m) => [m.entry, m]) : []);
+    const finished = stored && stored.finished ? true : await fplJson(`fixtures/?event=${gw}`).then((fx) => fx.length > 0 && fx.every((f) => f.finished));
     const managers = await Promise.all(members.map(async (m) => {
+      const base = { entry: m.entry, name: m.player_name, team: m.entry_name };
+      if (finished && have.has(m.entry)) return { ...base, chip: have.get(m.entry).chip, picks: have.get(m.entry).picks };
       try {
         const p = await fplJson(`entry/${m.entry}/event/${gw}/picks/`);
-        return { entry: m.entry, name: m.player_name, team: m.entry_name, chip: p.active_chip, picks: p.picks.map((x) => [x.element, x.multiplier]) };
+        return { ...base, chip: p.active_chip, picks: p.picks.map((x) => [x.element, x.multiplier]) };
       } catch (e) {
-        // 404 = the manager hadn't joined by then (cacheable); anything else = try again next time.
-        return { entry: m.entry, name: m.player_name, team: m.entry_name, chip: null, picks: / 404$/.test(e.message) ? [] : null };
+        // 404 = the manager hadn't joined by then; anything else = try again next time.
+        return { ...base, chip: null, picks: / 404$/.test(e.message) ? [] : null };
       }
     }));
     const out = { gw, finished, managers };
-    if (finished && env.ODDS && managers.every((m) => m.picks)) await env.ODDS.put(key, JSON.stringify(out));
+    if (finished && env.ODDS && managers.some((m) => !have.has(m.entry) && m.picks)) await env.ODDS.put(key, JSON.stringify(out));
     return json(out, 200);
   } catch (e) {
     return json({ error: "fpl_unreachable", detail: String(e.message || e) }, 502);
