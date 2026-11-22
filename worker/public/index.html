@@ -1996,7 +1996,7 @@ select, input[type="search"] { font: inherit; color: var(--ink); background: var
     const gap = (e) => e.goals_scored - (+e.expected_goals || 0);
     const pool = Object.values(E).filter((e) => (e.element_type === 3 || e.element_type === 4) && e.minutes >= 450);
     const pick = (type, dir) => pool.filter((e) => e.element_type === type && (dir > 0 ? gap(e) > 0 : gap(e) < 0))
-      .sort((a, b) => dir * (gap(b) - gap(a))).slice(0, 5);
+      .sort((a, b) => dir * (gap(b) - gap(a))).slice(0, 10);
     const row = (e) => `<tr class="${mine.has(e.id) ? "me" : ""}">
       <td><span class="mgr"><span>${esc(e.web_name)} ${availability(e) < 1 ? statusPill(e) : ""}</span><small>${POSN(e)} · ${esc(T[e.team]?.name)} · £${price(e.now_cost)}m · ${fmt(e.minutes)} mins</small></span></td>
       <td class="n"><strong>${e.goals_scored}</strong></td>
@@ -2011,7 +2011,7 @@ select, input[type="search"] { font: inherit; color: var(--ink); background: var
       <tbody>${[[3, "Midfielders"], [4, "Forwards"]].map(([t, label]) => `<tr class="half"><td colspan="7">${label}</td></tr>` + (pick(t, dir).map(row).join("") || `<tr><td colspan="7" class="empty">None</td></tr>`)).join("")}</tbody>
     </table></div>`;
     return `
-      <div class="panel-head"><h3>Goals vs expected goals</h3><span class="note">Midfielders and forwards with 450+ minutes, top 5 of each</span></div>
+      <div class="panel-head"><h3>Goals vs expected goals</h3><span class="note">Midfielders and forwards with 450+ minutes, top 10 of each</span></div>
       <div class="gxg-grid">
         <div><h3 class="gxg-h up">Scoring above their xG</h3><p class="note">Finishing better than their chances suggest. Good form, but goals may slow down.</p>${table(1)}</div>
         <div><h3 class="gxg-h down">Scoring below their xG</h3><p class="note">Getting the chances without the goals. Often due a return if the chances keep coming.</p>${table(-1)}</div>
