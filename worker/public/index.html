@@ -258,6 +258,7 @@ td.why { white-space: normal; min-width: 220px; font-size: .8rem; color: var(--m
 .tgt { display: grid; gap: 8px; }
 .tgt + .tgt { margin-top: 10px; }
 .own-cell { display: grid; gap: 2px; }
+.xgi-tbl th, .xgi-tbl td { padding: 8px 7px; }
 .ins-tbl td { vertical-align: top; }
 .ins-tbl td small.note { white-space: normal; max-width: 260px; display: block; }
 .rot-ctl { gap: 10px 16px; }
@@ -1918,7 +1919,7 @@ select, input[type="search"] { font: inherit; color: var(--ink); background: var
         <div class="seg" role="group" aria-label="Position">${[[0, "All"], [2, "DEF"], [3, "MID"], [4, "FWD"]].map(([v, l]) => `<button data-xpos="${v}" aria-pressed="${v === pos}">${l}</button>`).join("")}</div></div>
       <p class="note">Season totals from Opta's expected goals (xG) and expected assists (xA), as published by FPL. You own ${ownedCount} of these ${list.length}.</p>
       <div class="tbl-wrap"><table class="cards-sm xgi-tbl">
-        <thead><tr><th class="n">#</th><th>Player</th><th class="n">xGI</th><th class="n">xG</th><th class="n">xA</th><th class="n">xGI per 90</th><th class="n">Goals + assists</th><th class="n">vs xGI</th><th class="n">Mins</th><th class="n">Price</th><th>You own</th></tr></thead>
+        <thead><tr><th class="n">#</th><th>Player</th><th class="n">xGI</th><th class="n">xG</th><th class="n">xA</th><th class="n">xGI per 90</th><th class="n">Goals + assists</th><th class="n">vs xGI</th><th class="n">Mins</th><th>Next 3</th><th class="n">Price</th><th>You own</th></tr></thead>
         <tbody>${list.map((e, i) => `<tr class="${mine.has(e.id) ? "me" : ""}">
           <td class="n">${i + 1}</td>
           <td><span class="mgr"><span>${esc(e.web_name)} ${availability(e) < 1 ? statusPill(e) : ""}</span><small>${POSN(e)} · ${esc(T[e.team]?.name)} · ${e.selected_by_percent}% owned</small></span></td>
@@ -1929,11 +1930,12 @@ select, input[type="search"] { font: inherit; color: var(--ink); background: var
           <td class="n">${e.goals_scored + e.assists} <small class="note">(${e.goals_scored}G ${e.assists}A)</small></td>
           <td class="n">${diff(e)}</td>
           <td class="n">${fmt(e.minutes)}</td>
+          <td>${fxStrip(e.team, gwNext, 3)}</td>
           <td class="n"><strong>£${price(e.now_cost)}m</strong>${e.cost_change_start ? ` <small class="${e.cost_change_start > 0 ? "up" : "down"}">${e.cost_change_start > 0 ? "+" : "−"}${price(Math.abs(e.cost_change_start))}</small>` : ""}</td>
           <td>${mine.has(e.id) ? '<span class="pill acc">Yes</span>' : '<span class="note">No</span>'}</td>
         </tr>`).join("")}</tbody>
       </table></div>
-      <p class="note">"vs xGI" compares actual goals plus assists with xGI: a big minus means he has been unlucky and could be due returns; a big plus means he is scoring more than his chances suggest. The small figure next to the price is the change since the start of the season.</p>`;
+      <p class="note">"vs xGI" compares actual goals plus assists with xGI: a big minus means he has been unlucky and could be due returns; a big plus means he is scoring more than his chances suggest. The small figure next to the price is the change since the start of the season. Next 3 shows the coming opponents coloured by FPL difficulty (capitals home, lower case away).</p>`;
   }
   function wireXgiTop() {
     const box = $("#xgiTop"); if (!box) return;
