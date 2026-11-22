@@ -283,6 +283,22 @@ td.why { white-space: normal; min-width: 220px; font-size: .8rem; color: var(--m
 .news li.neg { border-left-color: var(--bad); } .news li.pos { border-left-color: var(--good); }
 .news a { color: var(--ink); text-decoration: underline; text-decoration-color: var(--line); text-underline-offset: 3px; }
 .news a:hover { text-decoration-color: var(--accent); }
+/* Key insights summary */
+.ki-panel { border-color: color-mix(in srgb, var(--accent) 45%, var(--line)); }
+.ki-bottom { margin: 0; padding: 12px 14px; border-radius: var(--r); background: color-mix(in srgb, var(--accent) 10%, var(--surface)); font-size: 1rem; line-height: 1.55; }
+.ki-bottom .k, .ki-changes .k { display: block; font-size: .72rem; text-transform: uppercase; letter-spacing: .08em; color: var(--muted); font-weight: 700; margin-bottom: 2px; }
+.ki-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(230px, 1fr)); gap: 10px; }
+.ki-card { display: grid; gap: 4px; align-content: start; padding: 12px 14px; border-radius: var(--r); border: 1px solid var(--line); border-top: 4px solid var(--line); background: var(--surface); min-width: 0; }
+.ki-card.ki-cap { border-top-color: var(--accent); } .ki-card.ki-buy { border-top-color: var(--good); } .ki-card.ki-sell { border-top-color: var(--bad); }
+.ki-card.ki-goal { border-top-color: var(--c-solid); } .ki-card.ki-diff { border-top-color: var(--rival); } .ki-card.ki-watch { border-top-color: var(--warn); }
+.ki-label { font-size: .7rem; text-transform: uppercase; letter-spacing: .08em; color: var(--muted); font-weight: 700; }
+.ki-head { font-family: var(--font-display); font-size: 1.45rem; font-weight: 700; line-height: 1.1; }
+.ki-sub { font-size: .86rem; }
+.ki-foot { font-size: .78rem; color: var(--muted); }
+.ki-changes ul { list-style: none; margin: 4px 0 0; padding: 0; display: grid; gap: 4px; font-size: .88rem; }
+.ki-changes li { padding-left: 12px; border-left: 3px solid var(--line); }
+.ki-changes li.ki-ch-up, .ki-changes li.ki-ch-buy { border-left-color: var(--good); } .ki-changes li.ki-ch-down { border-left-color: var(--bad); } .ki-changes li.ki-ch-cap { border-left-color: var(--accent); }
+.ki-changes a { color: var(--ink); }
 /* Best value scatter */
 .v-chart .q-good { fill: color-mix(in srgb, var(--good) 9%, transparent); }
 .v-chart .q-bad { fill: color-mix(in srgb, var(--bad) 7%, transparent); }
@@ -2097,6 +2113,7 @@ select, input[type="search"] { font: inherit; color: var(--ink); background: var
     });
     const done = rows.filter((r) => !r.inProgress);
     const avg = (xs) => (xs.length ? xs.reduce((a, b) => a + b, 0) / xs.length : 0);
+    INS.rows = rows;
     const capAvg = avg(done.filter((r) => r.capPts != null).map((r) => r.capPts));
     const blanks = done.filter((r) => r.capPts != null && r.capPts <= 3).length;
     const withLg = done.filter((r) => r.n);
@@ -2107,6 +2124,7 @@ select, input[type="search"] { font: inherit; color: var(--ink); background: var
     $("#app").innerHTML = `
     <section class="view">
       <div class="panel-head"><h2>Insights</h2><span class="note">Captains and top scorers across all FPL managers, and who in ${esc(D.league.name)} had them</span></div>
+      <div class="panel ki-panel" id="insSummary"><div class="panel-head"><h2>Key insights</h2></div><p class="empty">Analysing every section below…</p></div>
       <div class="kpis">
         <div class="kpi"><span class="k">Most-captained player</span><span class="v">${capAvg.toFixed(1)}</span><span class="s">Average points a gameweek (${(capAvg * 2).toFixed(1)} as captain)</span></div>
         <div class="kpi"><span class="k">Captain blanks</span><span class="v">${blanks}<small style="font-size:1rem;color:var(--muted)">/${done.length}</small></span><span class="s">Gameweeks the most-captained player scored 3 or fewer</span></div>
@@ -2136,7 +2154,7 @@ select, input[type="search"] { font: inherit; color: var(--ink); background: var
       <div class="panel">${bpsTopHTML()}</div>
       ${freshness()}
     </section>`;
-    wireXgiTop(); wireDefTop(); renderCaptaincy().then(renderValue);
+    wireXgiTop(); wireDefTop(); renderCaptaincy().then(renderValue).then(renderSummary).catch((e) => { const b = $("#insSummary"); if (b) b.innerHTML = `<div class="panel-head"><h2>Key insights</h2></div><div class="err">The summary couldn't be built (${esc(e.message)}). Reload to try again.</div>`; });
   }
 
   // ---- Captaincy shortlist: chance of scoring with a likely range, plus projected captain points ----
@@ -2173,6 +2191,7 @@ select, input[type="search"] { font: inherit; color: var(--ink); background: var
     const lgOwn = {}; members.forEach((x) => squadOf(x.m).forEach((p) => (lgOwn[p[0]] = (lgOwn[p[0]] || 0) + 1)));
     const rows = pre.map((id) => E[id]).filter((e) => sevOf(risks(e, TO)) < 3).map((e) => { const c = scoreChance(e, TO); return c && { e, c, pts: 2 * expertScore(e, 1, TO) }; }).filter(Boolean);
     const sort = store.get("capSort", "pts") === "p" ? "p" : "pts";
+    INS.cap = [...rows];
     const list = rows.sort((a, b) => (sort === "p" ? b.c.p - a.c.p : b.pts - a.pts)).slice(0, 10);
     const max = Math.max(0.8, Math.ceil(Math.max(...list.map((r) => r.c.hi)) * 5) / 5);
     const x = (v) => `${(v / max) * 100}%`;
@@ -2198,6 +2217,111 @@ select, input[type="search"] { font: inherit; color: var(--ink); background: var
       <div class="cap-legend"><span><i class="cap-dot k-bank"></i><strong>Banker</strong> narrow range</span><span><i class="cap-dot k-solid"></i><strong>Solid</strong></span><span><i class="cap-dot k-punt"></i><strong>Punt</strong> wide range</span></div>
       <p class="note">Dot = best estimate, bar = likely range (90%). Colour shows how sure the estimate is about the player (matches played, steady minutes, fitness), not how hard the fixture is. Chance of scoring uses each player's xG per 90, expected minutes and fitness, and the bookmakers' expected goals for his team in GW${gwNext}. Projected captain points use the site's expert score (form, xG, xA, bonus, fixtures, odds and news), doubled. Updated on every reload.</p>`;
     box.querySelectorAll("[data-capsort]").forEach((b) => b.addEventListener("click", () => { store.set("capSort", b.dataset.capsort); renderCaptaincy(); }));
+  }
+
+  // ---- Key insights: a summary of everything on the Insights tab, rebuilt on every load ----
+  // Cards pick the single most useful finding from each section; "What's changed" compares with the last
+  // snapshot this browser saw (kept until something changes, or for 24 hours) to show trends between refreshes.
+  const INS = {};
+  function renderSummary() {
+    const box = $("#insSummary"); if (!box) return;
+    INS.swap = null;
+    const TO = teamOdds();
+    const mineIds = squadOf(myM).map((p) => p[0]), mine = new Set(mineIds);
+    const lgOwn = {}; members.forEach((x) => squadOf(x.m).forEach((p) => (lgOwn[p[0]] = (lgOwn[p[0]] || 0) + 1)));
+    const N = members.length;
+    const fx = (e) => { const l = teamFx[e.team][gwNext] || []; return l.length ? l.map((f) => `${f.home ? "v" : "@"} ${tShort(f.opp)}`).join(", ") : "blank"; };
+    const okFit = (e) => availability(e) >= 0.75 && e.status !== "s";
+    const cards = [];
+
+    // 1. Captain
+    const cap = (INS.cap || []).slice().sort((a, b) => b.pts - a.pts);
+    if (cap.length) {
+      const c = cap[0], diff = cap.find((r) => r !== c && (lgOwn[r.e.id] || 0) <= 3 && r.pts >= c.pts * 0.8);
+      cards.push({ k: "cap", label: "Captain", head: c.e.web_name, mine: mine.has(c.e.id),
+        sub: `${c.pts.toFixed(1)} projected captain pts · ${pct(c.c.p)} to score · ${fx(c.e)}`,
+        foot: diff ? `Differential: <strong>${esc(diff.e.web_name)}</strong> (${diff.pts.toFixed(1)} pts, ${lgOwn[diff.e.id] || 0} of ${N} own)` : `Owned by ${lgOwn[c.e.id] || 0} of ${N} in your league` });
+      const likely = cap.slice().sort((a, b) => b.c.p - a.c.p)[0];
+      if (likely && likely !== c) cards.push({ k: "goal", label: "Most likely scorer", head: likely.e.web_name, mine: mine.has(likely.e.id), sub: `${pct(likely.c.p)} chance of scoring ${fx(likely.e)} · ${likely.c.kind === "bank" ? "Banker" : likely.c.kind === "solid" ? "Solid" : "Punt"}`, foot: `${likely.pts.toFixed(1)} projected captain pts` });
+    }
+    // 2. Best value buy and weakest value in your squad
+    if (INS.value) {
+      const bv = INS.value.best.find((d) => !mine.has(d.e.id));
+      if (bv) cards.push({ k: "buy", label: "Best value buy", head: bv.e.web_name, sub: `£${bv.x.toFixed(1)}m · ${bv.y.toFixed(1)} pts over 4 GWs · +${bv.res.toFixed(1)} above the value line`, foot: `${POSN(bv.e)} · ${tShort(bv.e.team)} · ${lgOwn[bv.e.id] || 0} of ${N} own` });
+      const fit = (d) => INS.value.icpt + INS.value.slope * d;
+      const starters = squadOf(myM).filter((p) => p[1] <= 11).map((p) => E[p[0]]);
+      const myVal = starters.filter((e) => e.element_type >= 2 && e.minutes >= 300).map((e) => { const y = expertScore(e, 4, TO); return { e, y, res: y - fit(e.now_cost / 10) }; }).sort((a, b) => a.res - b.res);
+      const w = myVal[0];
+      if (w && w.res < -2) {
+        const budget = (myM.picks?.bank ?? lastHist(myM)[8]) + sellPrice(w.e.id);
+        const tc = {}; mineIds.forEach((id) => (tc[E[id].team] = (tc[E[id].team] || 0) + 1));
+        const rep = Object.values(E).filter((e) => e.element_type === w.e.element_type && !mine.has(e.id) && e.now_cost <= budget && okFit(e) && e.minutes >= 300 && ((tc[e.team] || 0) - (e.team === w.e.team ? 1 : 0)) < 3)
+          .map((e) => ({ e, y: expertScore(e, 4, TO) })).sort((a, b) => b.y - a.y)[0];
+        INS.swap = rep && rep.y > w.y + 3 ? { out: w.e, inn: rep.e, gain: rep.y - w.y } : null;
+        cards.push({ k: "sell", label: "Weakest value in your XI", head: w.e.web_name, mine: true, sub: `£${price(w.e.now_cost)}m for ${w.y.toFixed(1)} pts over 4 GWs · ${w.res.toFixed(1)} below the value line`,
+          foot: INS.swap ? `Upgrade: <strong>${esc(rep.e.web_name)}</strong> (£${price(rep.e.now_cost)}m, +${INS.swap.gain.toFixed(1)} pts) fits your £${price(budget)}m budget` : `Sells for £${price(sellPrice(w.e.id))}m; no clearly better ${POSN(w.e)} fits your budget` });
+      }
+    }
+    // 3. Due a goal / hot streak
+    const att = Object.values(E).filter((e) => e.element_type >= 3 && e.minutes >= 450);
+    const gap = (e) => e.goals_scored - (+e.expected_goals || 0);
+    const due = att.filter((e) => okFit(e) && !mine.has(e.id) && (+e.expected_goals_per_90) >= 0.25).sort((a, b) => gap(a) - gap(b))[0];
+    if (due && gap(due) <= -1) cards.push({ k: "goal", label: "Due a goal", head: due.e ? due.e.web_name : due.web_name, sub: `${due.goals_scored} goal${due.goals_scored === 1 ? "" : "s"} from ${(+due.expected_goals).toFixed(2)} xG (${gap(due).toFixed(1)}) · £${price(due.now_cost)}m`, foot: `${tShort(due.team)} ${fx(due)} · ${due.selected_by_percent}% own · ${lgOwn[due.id] || 0} of ${N} in league` });
+    const hot = att.filter((e) => mine.has(e.id)).sort((a, b) => gap(b) - gap(a))[0];
+    if (hot && gap(hot) >= 1.5) cards.push({ k: "watch", label: "Hot streak in your squad", head: hot.web_name, mine: true, sub: `${hot.goals_scored} goal${hot.goals_scored === 1 ? "" : "s"} from ${(+hot.expected_goals).toFixed(2)} xG (+${gap(hot).toFixed(1)})`, foot: "Finishing above his chances; returns may slow down" });
+    // 4. Defence target and bonus magnet
+    const g90 = (e) => (e.minutes ? (+e.expected_goals_conceded || 0) / e.minutes * 90 : 9);
+    const def = Object.values(E).filter((e) => e.element_type === 2 && e.minutes >= 450 && okFit(e) && !mine.has(e.id))
+      .map((e) => ({ e, s: expertScore(e, 4, TO) })).sort((a, b) => b.s - a.s)[0];
+    if (def) cards.push({ k: "buy", label: "Defence target", head: def.e.web_name, sub: `xGA ${g90(def.e).toFixed(2)}/90 · defcon in ~${pct(poisAtLeast(+def.e.defensive_contribution_per_90 || 0, 10))} of games · £${price(def.e.now_cost)}m`, foot: `${tShort(def.e.team)} next 3: ${[0, 1, 2].map((i) => { const l = teamFx[def.e.team][gwNext + i] || []; return l.length ? tShort(l[0].opp) + (l[0].home ? " (H)" : " (A)") : "blank"; }).join(", ")}` });
+    const bps = Object.values(E).filter((e) => e.minutes >= 450 && okFit(e) && !mine.has(e.id)).sort((a, b) => b.bps / b.minutes - a.bps / a.minutes)[0];
+    if (bps) cards.push({ k: "diff", label: "Bonus magnet you don't own", head: bps.web_name, sub: `${((bps.bps / bps.minutes) * 90).toFixed(1)} BPS per 90 · ${bps.bonus} bonus pts · ${bps.total_points} total`, foot: `${POSN(bps)} · £${price(bps.now_cost)}m · ${lgOwn[bps.id] || 0} of ${N} in league own` });
+    // 5. Price and form trends in your squad
+    const moves = mineIds.map((id) => ({ e: E[id], pm: priceMove(E[id]) })).filter((x) => x.pm.cls);
+    if (moves.length) cards.push({ k: moves.some((x) => x.pm.cls === "down") ? "sell" : "watch", label: "Price moves in your squad", head: `${moves.filter((x) => x.pm.cls === "up").length} rising · ${moves.filter((x) => x.pm.cls === "down").length} falling`,
+      sub: moves.slice(0, 4).map((x) => `${esc(x.e.web_name)} <span class="${x.pm.cls}">${x.pm.pct > 0 ? "+" : ""}${x.pm.pct.toFixed(0)}%</span>`).join(" · "), foot: (moves.find((x) => x.pm.cls === "down") ? `Sell fallers before the overnight update to keep the money` : `Risers gain value for you if you hold`) });
+    const form = mineIds.map((id) => E[id]).filter((e) => e.minutes >= 270).map((e) => ({ e, d: parseFloat(e.form) - parseFloat(e.points_per_game) })).sort((a, b) => a.d - b.d);
+    const down = form.filter((x) => x.d <= -1.5), up = form.filter((x) => x.d >= 2).reverse();
+    if (down.length || up.length) cards.push({ k: down.length ? "watch" : "buy", label: "Form trend in your squad", head: [up.length ? `${up.length} heating up` : "", down.length ? `${down.length} cooling off` : ""].filter(Boolean).join(" · "),
+      sub: [...up.slice(0, 2).map((x) => `${esc(x.e.web_name)} <span class="up">form ${x.e.form} vs ${x.e.points_per_game}/g</span>`), ...down.slice(0, 2).map((x) => `${esc(x.e.web_name)} <span class="down">form ${x.e.form} vs ${x.e.points_per_game}/g</span>`)].join(" · "), foot: "Form is FPL's average over the last 30 days" });
+    // 6. League trend from gameweek history
+    const done = (INS.rows || []).filter((r) => !r.inProgress && r.n);
+    if (done.length) {
+      const diffWins = done.filter((r) => r.owners.length <= 3).length;
+      const capPts = done.filter((r) => r.capPts != null).map((r) => r.capPts);
+      cards.push({ k: "diff", label: "League trend", head: `${diffWins} of ${done.length} top scorers were differentials`, sub: `The gameweek's top scorer was owned by 3 or fewer in ${esc(D.league.name)} in ${diffWins} of ${done.length} gameweeks`, foot: capPts.length ? `Most-captained player averaged ${(capPts.reduce((a, b) => a + b, 0) / capPts.length).toFixed(1)} pts; ${capPts.filter((v) => v <= 3).length} blanks` : "" });
+    }
+
+    // Bottom line
+    const c0 = cap[0], vb = INS.value && INS.value.best.find((d) => !mine.has(d.e.id)), sw = INS.swap;
+    const bottom = [c0 ? `Captain <strong>${esc(c0.e.web_name)}</strong>` : "", sw ? `upgrade <strong>${esc(sw.out.web_name)}</strong> to <strong>${esc(sw.inn.web_name)}</strong> (+${sw.gain.toFixed(1)} pts over 4 GWs)` : vb ? `the best value buy is <strong>${esc(vb.e.web_name)}</strong>` : "", due && gap(due) <= -1 ? `and keep an eye on <strong>${esc(due.web_name)}</strong>, who is due a goal` : ""].filter(Boolean).join(", ");
+
+    // What's changed since the last snapshot this browser saw
+    const lead = [...members].sort((a, b) => a.rank - b.rank).find((x) => x.entry !== me), meRow = members.find((x) => x.entry === me);
+    const snap = { t: Date.now(), data: D.generated_at, cap: c0 ? c0.e.id : null, capP: Object.fromEntries(cap.slice(0, 10).map((r) => [r.e.id, +r.c.p.toFixed(3)])),
+      best: INS.value ? INS.value.best.map((d) => d.e.id) : [], prices: Object.fromEntries(mineIds.map((id) => [id, E[id].now_cost])),
+      news: mineIds.flatMap((id) => newsFor(E[id]).filter((x) => x.tone === "neg").map((x) => x.it.link)), gap: lead.total - meRow.total, rank: meRow.rank, odds: FA.odds ? FA.odds.fetched : null };
+    const prev = store.get("insSnap", null);
+    const ch = [];
+    if (prev) {
+      if (prev.cap && snap.cap && prev.cap !== snap.cap && E[prev.cap]) ch.push(["cap", `Top captain changed from ${esc(E[prev.cap].web_name)} to <strong>${esc(E[snap.cap].web_name)}</strong>`]);
+      Object.entries(snap.capP).forEach(([id, p]) => { const q = prev.capP && prev.capP[id]; if (q != null && Math.abs(p - q) >= 0.04) ch.push([p > q ? "up" : "down", `${esc(E[id].web_name)}'s chance of scoring ${p > q ? "rose" : "fell"} from ${pct(q)} to <strong>${pct(p)}</strong>`]); });
+      snap.best.filter((id) => !(prev.best || []).includes(id)).forEach((id) => ch.push(["buy", `<strong>${esc(E[id].web_name)}</strong> entered the best value picks`]));
+      (prev.best || []).filter((id) => !snap.best.includes(id) && E[id]).forEach((id) => ch.push(["down", `${esc(E[id].web_name)} dropped out of the best value picks`]));
+      Object.entries(snap.prices).forEach(([id, v]) => { const q = prev.prices && prev.prices[id]; if (q != null && q !== v) ch.push([v > q ? "up" : "down", `${esc(E[id].web_name)}'s price ${v > q ? "rose" : "fell"} to <strong>£${price(v)}m</strong>`]); });
+      snap.news.filter((l) => !(prev.news || []).includes(l)).forEach((l) => { const it = FA.news.items.find((x) => x.link === l); if (it) ch.push(["down", `New injury or suspension story: <a href="${esc(l)}" target="_blank" rel="noopener">${esc(it.title)}</a>`]); });
+      if (prev.gap != null && prev.gap !== snap.gap) ch.push([snap.gap < prev.gap ? "up" : "down", `Gap to ${esc(firstName(lead))} ${snap.gap < prev.gap ? "narrowed" : "widened"} from ${prev.gap} to <strong>${snap.gap}</strong>`]);
+      if (prev.rank != null && prev.rank !== snap.rank) ch.push([snap.rank < prev.rank ? "up" : "down", `League position ${snap.rank < prev.rank ? "up" : "down"} from ${ordinal(prev.rank)} to <strong>${ordinal(snap.rank)}</strong>`]);
+      if (prev.odds && snap.odds && snap.odds > prev.odds) ch.push(["cap", "Bookmaker odds were refreshed"]);
+    }
+    if (!prev || ch.length || Date.now() - prev.t > 24 * 3600e3) store.set("insSnap", snap);
+    const since = prev ? new Date(prev.t).toLocaleString("en-GB", { timeZone: "Europe/London", day: "2-digit", month: "2-digit", hour: "2-digit", minute: "2-digit" }) : null;
+
+    box.innerHTML = `
+      <div class="panel-head"><h2>Key insights</h2><span class="note">Summary of everything below, rebuilt from live data at ${new Date().toLocaleTimeString("en-GB", { timeZone: "Europe/London", hour: "2-digit", minute: "2-digit" })}</span></div>
+      ${bottom ? `<p class="ki-bottom"><span class="k">Bottom line</span> ${bottom}.</p>` : ""}
+      <div class="ki-grid">${cards.map((c) => `<div class="ki-card ki-${c.k}"><span class="ki-label">${c.label}</span><span class="ki-head">${esc(c.head)}${c.mine ? ' <span class="pill acc">Yours</span>' : ""}</span><span class="ki-sub">${c.sub}</span>${c.foot ? `<span class="ki-foot">${c.foot}</span>` : ""}</div>`).join("")}</div>
+      <div class="ki-changes"><span class="k">What's changed${since ? ` since ${since}` : ""}</span>${!prev ? `<p class="note">This is the first snapshot in this browser. Next time the data changes, the trends will show here.</p>` : ch.length ? `<ul>${ch.slice(0, 10).map(([k, t]) => `<li class="ki-ch-${k}">${t}</li>`).join("")}</ul>` : `<p class="note">Nothing has moved since then: same captain, prices, value picks and news.</p>`}</div>`;
   }
 
   // ---- Best value: price vs projected points over the next 4 gameweeks ----
@@ -2226,6 +2350,7 @@ select, input[type="search"] { font: inherit; color: var(--ink); background: var
     pts.forEach((d) => (d.res = d.y - (icpt + slope * d.x)));
     const best = [...pts].sort((a, b) => b.res - a.res).slice(0, 5);
     const worst = pts.filter((d) => d.x >= mx).sort((a, b) => a.res - b.res).slice(0, 5);
+    INS.value = { pts, best, worst, slope, icpt };
 
     // chart geometry
     const W = 900, Ht = 560, L = 56, Rm = 24, T = 20, B = 52;
