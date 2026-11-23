@@ -782,6 +782,9 @@ td.fx2-c { padding: 4px 3px; }
 .notes-list li { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; padding: 8px 10px; border: 1px solid var(--line); border-radius: 8px; }
 .notes-list li .d { flex-basis: 100%; color: var(--muted); font-size: .84rem; } .notes-list li .btn { margin-left: auto; }
 .note-form { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 8px; } .note-form input, .note-form select { flex: 1 1 160px; min-width: 0; }
+.note-form textarea { flex: 1 1 100%; min-height: 80px; resize: vertical; font: inherit; color: var(--ink); background: var(--surface); border: 1px solid var(--line); border-radius: 8px; padding: 8px 10px; }
+.note-actions { flex: 1 1 100%; display: flex; justify-content: space-between; align-items: center; gap: 8px; }
+.notes-list li .d { white-space: pre-wrap; overflow-wrap: anywhere; }
 .rv-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(260px, 1fr)); gap: 10px; }
 .rv-card { border: 1px solid var(--line); border-radius: var(--r); padding: 10px 12px; display: grid; gap: 4px; font-size: .85rem; min-width: 0; }
 .rv-h { display: flex; justify-content: space-between; gap: 8px; } .rv-row .k { display: inline-block; min-width: 96px; color: var(--muted); font-size: .72rem; text-transform: uppercase; letter-spacing: .05em; font-weight: 600; }
@@ -949,7 +952,11 @@ td.fx2-c { padding: 4px 3px; }
     return d;
   }
   // The private owner link (?owner=KEY) unlocks notes and advice recording on this device.
-  try { const q = new URLSearchParams(location.search), k = q.get("owner"); if (k) { store.set("ownerKey", k); q.delete("owner"); history.replaceState(null, "", location.pathname + (q.toString() ? "?" + q : "") + location.hash); } } catch (e) { /* ignore */ }
+  try {
+    const q = new URLSearchParams(location.search); let k = q.get("owner"), hash = location.hash;
+    const hm = /[?&]owner=([^&]*)/.exec(hash); if (!k && hm) { k = decodeURIComponent(hm[1]); hash = hash.replace(/[?&]owner=[^&]*/, ""); }
+    if (k) { store.set("ownerKey", k.trim()); q.delete("owner"); history.replaceState(null, "", location.pathname + (q.toString() ? "?" + q : "") + hash); }
+  } catch (e) { /* ignore */ }
   loadLive()
     .catch((e) => loadSnapshot(e))
     .then((d) => { D = d; prepare(); route(); window.addEventListener("hashchange", route); tick(); setInterval(tick, 1000); })
@@ -4638,6 +4645,12 @@ td.fx2-c { padding: 4px 3px; }
 
   // ---- Owner key: lets this browser save notes and record advice (set once per device with ?owner=KEY) ----
   const ownerKey = () => store.get("ownerKey", null);
+  // Checks this device's owner password with the server once per page load.
+  let ownerOk = null, OWNER_CFG = true;
+  async function checkOwner(k = ownerKey()) {
+    if (!k || D.source !== "live") return (ownerOk = false);
+    try { const r = await fetch("api/owner-check", { method: "POST", headers: { "X-Owner-Key": k } }); const j = await r.json(); ownerOk = !!j.ok; OWNER_CFG = j.configured; return ownerOk; } catch (e) { return (ownerOk = null); }
+  }
   async function ownerPost(path, body) {
     const k = ownerKey(); if (!k) throw new Error("no owner key");
     const r = await fetch("api/" + path, { method: "POST", headers: { "Content-Type": "application/json", "X-Owner-Key": k }, body: JSON.stringify(body) });
@@ -4661,7 +4674,7 @@ td.fx2-c { padding: 4px 3px; }
   const noteTxt = (id) => { const n = noteOf(id); return n ? `Your note: ${NOTE_TAGS[n.tag].l}${n.text ? ` ("${esc(n.text)}")` : ""}${n.until ? ` until GW${n.until}` : ""}` : ""; };
   function notesPanelHTML() {
     const list = Object.entries(NOTES).filter(([id]) => E[id] && noteOf(+id)).sort((a, b) => (b[1].at || 0) - (a[1].at || 0));
-    const can = !!ownerKey() && D.source === "live";
+    const can = !!ownerKey() && D.source === "live" && ownerOk !== false;
     return `<div class="panel-head"><h3>Your notes <span class="lab lab-asm">Assumption</span></h3><span class="note">Your judgement, which the model takes into account</span></div>
       <p class="note">Add what the numbers can't see: a manager's hint, a hunch or a fitness worry. A note changes that player's projection everywhere on the site:
       <strong>Trust him</strong> +10% · <strong>Rotation risk</strong> −20% and a lower start chance · <strong>Injury doubt</strong> −50% · <strong>Avoid buying</strong> never suggested as a buy · <strong>Hold</strong> never suggested as a sale.</p>
@@ -4670,8 +4683,10 @@ td.fx2-c { padding: 4px 3px; }
         <select id="noteP" aria-label="Player">${noteOpts("mine")}</select>
         <select id="noteT">${Object.entries(NOTE_TAGS).map(([k, v]) => `<option value="${k}">${v.l}</option>`).join("")}</select>
         <select id="noteU"><option value="${gwNext}">This gameweek</option><option value="${Math.min(38, gwNext + 2)}">Next 3 gameweeks</option><option value="">Until I remove it</option></select>
-        <input id="noteX" placeholder="Why? (optional)" maxlength="140"><button class="btn pri" id="noteAdd">Add note</button></div><p class="note" id="noteMsg"></p>`
-        : `<p class="note">${D.source === "live" ? "Notes can only be added on a device that has opened your private owner link once." : "Notes load on the live site."}</p>`}`;
+        <textarea id="noteX" rows="3" placeholder="Your reasoning (optional): team news, a manager's comments, a hunch…" maxlength="1500"></textarea><div class="note-actions"><span class="note" id="noteCount">0 / 1500</span><button class="btn pri" id="noteAdd">Add note</button></div></div><p class="note" id="noteMsg"></p>`
+        : D.source === "live" ? `<div class="note-unlock"><p class="note">${ownerKey() && ownerOk === false ? "<strong>This device's owner password doesn't match the one in Cloudflare.</strong> " : ""}Enter your owner password (the <code>OWNER_KEY</code> you set in Cloudflare) to add notes on this device. It's checked with the server and remembered on this device only.</p>
+          <div class="note-form"><input type="password" id="ownerPw" placeholder="Owner password" autocomplete="current-password"><button class="btn pri" id="ownerGo">Unlock</button></div><p class="note" id="ownerMsg"></p></div>`
+        : `<p class="note">Notes load on the live site.</p>`}`;
   }
   // Player list for the notes form: your squad, or one club's players, grouped by position.
   function noteOpts(club) {
@@ -4681,8 +4696,17 @@ td.fx2-c { padding: 4px 3px; }
   }
   function wireNotes(box, after) {
     if (!box) return;
+    if (ownerKey() && ownerOk === null && D.source === "live") checkOwner().then((ok) => { if (ok === false) after(); });
+    $("#ownerGo")?.addEventListener("click", async () => {
+      const k = ($("#ownerPw").value || "").trim(); if (!k) return;
+      $("#ownerMsg").textContent = "Checking…";
+      const ok = await checkOwner(k);
+      if (ok) { store.set("ownerKey", k); after(); }
+      else $("#ownerMsg").textContent = ok === null ? "Couldn't reach the server: try again." : OWNER_CFG === false ? "OWNER_KEY isn't set in Cloudflare yet." : "That password doesn't match OWNER_KEY in Cloudflare. Check for spaces or a different capital letter.";
+    });
+    $("#noteX")?.addEventListener("input", () => { $("#noteCount").textContent = `${$("#noteX").value.length} / 1500`; });
     $("#noteC")?.addEventListener("change", (ev) => { $("#noteP").innerHTML = noteOpts(ev.target.value); });
-    const save = async (next) => { try { await ownerPost("notes", next); NOTES = next; XS.clear(); NF.clear(); GWE.buys = null; GWE.chipsAdv = null; GWE.fh = null; Object.keys(PRC).forEach((k) => delete PRC[k]); after(); } catch (e) { const m = $("#noteMsg"); if (m) m.textContent = "Couldn't save: " + e.message; } };
+    const save = async (next) => { const m0 = $("#noteMsg"); if (m0) m0.textContent = "Saving…"; try { await ownerPost("notes", next); NOTES = next; XS.clear(); NF.clear(); GWE.buys = null; GWE.chipsAdv = null; GWE.fh = null; Object.keys(PRC).forEach((k) => delete PRC[k]); after(); } catch (e) { const m = $("#noteMsg"); if (m) { m.textContent = "Couldn't save: " + e.message + "."; m.classList.add("down"); } if (/match|not allowed/.test(e.message)) { ownerOk = false; setTimeout(after, 2500); } } };
     box.querySelectorAll("[data-delnote]").forEach((b) => b.addEventListener("click", () => { const n = { ...NOTES }; delete n[b.dataset.delnote]; save(n); }));
     $("#noteAdd")?.addEventListener("click", () => {
       const e = E[+$("#noteP").value];

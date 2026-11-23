@@ -37,6 +37,11 @@ export default {
     const rec = /^rec\/(\d+)\/?$/.exec(path);
     if (rec) return ownerStore(request, env, "rec:" + rec[1], Number(rec[1]));
     if (path === "recs" || path === "recs/") return allRecs(env);
+    if (path === "owner-check") {
+      if (request.method !== "POST") return new Response("Method not allowed", { status: 405 });
+      const k = (request.headers.get("X-Owner-Key") || "").trim();
+      return json({ ok: !!env.OWNER_KEY && k === String(env.OWNER_KEY).trim(), configured: !!env.OWNER_KEY }, 200);
+    }
     if (path === "calib" || path === "calib/") return ownerStore(request, env, "calib", null);
     if (request.method !== "GET") return new Response("Method not allowed", { status: 405 });
 
@@ -374,7 +379,8 @@ async function myTeamResponse(env) {
 async function ownerStore(request, env, key, gw) {
   if (request.method === "GET") return json((await env.ODDS.get(key, "json")) || (gw ? null : {}), 200);
   if (request.method !== "POST") return new Response("Method not allowed", { status: 405 });
-  if (!env.OWNER_KEY || request.headers.get("X-Owner-Key") !== env.OWNER_KEY) return json({ error: "not allowed" }, 403);
+  if (!env.OWNER_KEY) return json({ error: "OWNER_KEY isn't set in Cloudflare" }, 403);
+  if ((request.headers.get("X-Owner-Key") || "").trim() !== String(env.OWNER_KEY).trim()) return json({ error: "this device's owner password doesn't match OWNER_KEY in Cloudflare" }, 403);
   let body; try { body = await request.json(); } catch (e) { return json({ error: "bad json" }, 400); }
   const text = JSON.stringify(body);
   if (text.length > 200000) return json({ error: "too large" }, 413);
