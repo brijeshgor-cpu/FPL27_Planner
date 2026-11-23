@@ -670,6 +670,7 @@ details.why[open] { flex-basis: 100%; }
 .decision .src { font-size: .74rem; }
 .adv-sec:last-child { grid-column: auto; }
 .lt-h { margin: 16px 0 4px; font-size: 1rem; }
+.lt-one { margin-top: 10px; }
 .lt-sum { margin: 0 0 8px; font-size: .88rem; }
 .lt-tbl td, .lt-tbl th { font-size: .82rem; }
 #lgTrend, .grid-2 > .panel { min-width: 0; }
@@ -977,7 +978,7 @@ details.why[open] { flex-basis: 100%; }
         <div class="panel">
           <div class="panel-head"><h2>What the league tells you</h2><span class="note">You vs the top 10 · updates every gameweek</span></div>
           <ul class="insights">${insights().map((i) => `<li class="${i.k}"><div><div class="t">${i.t}</div><div class="d">${i.d}</div></div></li>`).join("")}</ul>
-          <div id="lgTrend"><p class="note">Loading each gameweek's top scorers and captains…</p></div>
+          <div id="lgTrend"><p class="note">Loading this gameweek's top scorer and captains…</p></div>
         </div>
       </div>
       <div class="panel" id="gwStats"><div class="panel-head"><h2>Current gameweek team stats <span class="note">GW${gwCur}</span></h2></div><p class="empty">Loading your players' match stats…</p></div>
@@ -2550,19 +2551,17 @@ details.why[open] { flex-basis: 100%; }
     if (!document.body.contains(box)) return;
     const rows = H ? H.rows.filter((r) => r.n) : [];
     if (!rows.length) { box.innerHTML = `<p class="note">Gameweek history loads on the live site.</p>`; return; }
-    const done = rows.filter((r) => !r.inProgress), nm = (id) => esc(E[id]?.web_name || "?");
-    const diffs = done.filter((r) => r.owners.length <= 3), capP = done.filter((r) => r.lgCapPts != null);
-    const capAvg = capP.length ? capP.reduce((a, r) => a + r.lgCapPts, 0) / capP.length : 0, blanks = capP.filter((r) => r.lgCapPts <= 2);
+    // This gameweek only: its top scorer, who in the league owned him, and the league's captain.
+    const r = rows.find((x) => x.gw === gwCur) || rows[0], nm = (id) => esc(E[id]?.web_name || "?");
+    const diff = r.owners.length <= 3, capMine = r.lgCapId && squadOf(myM).some((p) => p[0] === r.lgCapId && p[3]);
     const L = leagueCtx();
-    const take = diffs.length / Math.max(1, done.length) >= 0.5
-      ? (L.stance === "chase" ? "Differentials have decided most gameweeks, and you're chasing: when two options are within about 0.5 xP, take the one fewer of the league own." : L.stance === "protect" ? "Differentials have decided most gameweeks, but you're protecting a lead: cover the template and only take differentials that cost almost nothing." : "Differentials have decided most gameweeks: worth taking when the xP cost is small.")
-      : "The template has decided most gameweeks: owning the big names matters more than differentials.";
-    box.innerHTML = `<h3 class="lt-h">League trend <span class="lab lab-fact">Fact</span></h3>
-      <p class="lt-sum"><strong>${diffs.length} of ${done.length}</strong> gameweek top scorers were owned by 3 or fewer in ${esc(D.league.name)}. The league's most-captained player averaged <strong>${capAvg.toFixed(1)} pts</strong>${blanks.length ? `, with ${blanks.length} blank${blanks.length > 1 ? "s" : ""} (${blanks.map((r) => `${nm(r.lgCapId)} GW${r.gw}`).join(", ")})` : ""}.</p>
-      <div class="tbl-wrap"><table class="lt-tbl"><thead><tr><th>GW</th><th>Top scorer · league owners</th><th>League's top captain · owners</th></tr></thead><tbody>
-      ${rows.map((r) => `<tr class="${r.owners.length <= 3 && !r.inProgress ? "lt-diff" : ""}"><td>GW${r.gw}${r.inProgress ? ' <span class="pill">Live</span>' : ""}</td><td><strong>${nm(r.top)}</strong> ${r.topPts ?? "–"} pts${r.inProgress ? " so far" : ""} <span class="note">· ${r.owners.length}/${r.n}</span>${r.owners.length <= 3 && !r.inProgress ? ' <span class="pill">Differential</span>' : ""}${r.meOwn ? ' <span class="pill ok">You</span>' : ""}</td><td>${r.lgCapId ? `<strong>${nm(r.lgCapId)}</strong> ${r.lgCapPts ?? "–"} pts${r.inProgress ? " so far" : ""} <span class="note">· ${r.lgCapN}/${r.n}</span>` : "–"}</td></tr>`).join("")}
-      </tbody></table></div>
-      <p class="unc"><b>What it means:</b> ${take} <span class="lab lab-asm">Assumption</span></p>`;
+    const myCap = (squadOf(myM).find((p) => p[3]) || [])[0];
+    box.innerHTML = `<ul class="insights lt-one">
+      <li class="${diff ? "info" : ""}"><div><div class="t">GW${r.gw} top scorer: ${nm(r.top)}, ${r.topPts ?? "–"} pts${r.inProgress ? " so far" : ""} <span class="lab lab-fact">Fact</span></div>
+        <div class="d">Owned by ${r.owners.length} of ${r.n} in ${esc(D.league.name)}${r.owners.length ? ` (${r.owners.slice(0, 4).map((m) => esc(String(m.name || "?").split(" ")[0])).join(", ")}${r.owners.length > 4 ? ` and ${r.owners.length - 4} more` : ""})` : ""}${r.meOwn ? ", including you" : ", not including you"}${diff ? ": a differential, so it barely moved the league" : ""}.</div></div></li>
+      ${r.lgCapId ? `<li class="${r.lgCapPts != null && r.lgCapPts <= 2 ? "bad" : ""}"><div><div class="t">League's top captain: ${nm(r.lgCapId)}, ${r.lgCapPts ?? "–"} pts${r.inProgress ? " so far" : ""} <span class="lab lab-fact">Fact</span></div>
+        <div class="d">Captained by ${r.lgCapN} of ${r.n}${myCap ? `; you captained ${nm(myCap)}${myCap === r.lgCapId ? " too, so no ground gained or lost" : ` (${E[myCap]?.event_points ?? "–"} pts${r.inProgress ? " so far" : ""})`}` : ""}.${L.stance === "chase" && myCap === r.lgCapId ? " You're chasing, so matching the league's captain doesn't close the gap." : ""}</div></div></li>` : ""}
+    </ul>`;
   }
 
   // ---- What the league tells you: your team against the top 10 of the mini-league ----
@@ -3633,7 +3632,7 @@ details.why[open] { flex-basis: 100%; }
     const ownAvg = avg(withLg.map((r) => r.owners.length));
     const iOwned = withLg.filter((r) => r.meOwn).length;
     const pname = (id) => (E[id] ? `${esc(E[id].web_name)} <small class="note">${tShort(E[id].team)}</small>` : "–");
-    const names = (ms) => ms.map((m) => esc(m.name.split(" ")[0])).join(", ");
+    const names = (ms) => ms.map((m) => esc(String(m.name || "?").split(" ")[0])).join(", ");
     $("#app").innerHTML = `
     <section class="view">
       <div class="panel-head"><h2>Insights</h2></div>
