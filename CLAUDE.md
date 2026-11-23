@@ -144,6 +144,16 @@ bench order, transfers or chip before the deadline?*
 - **Player predictions tab:** `renderPredict()` and `drawPredList()`. Per-gameweek xP is
   `predPer(e, k)`, the difference between `expertScore` horizons, and expected minutes are
   `predMins(e, k)`. `teamOdds()` is cached per odds download, because the Poisson fit is expensive.
+- **Player predictions: Compare two players:** `drawPredCompare()`, state in `PCX`, toggled by
+  "Compare two players". It has:
+  - club-then-player pickers (default: the GW plan's first sell vs buy);
+  - filters for Gametime (per start, per appearance, per 90), a Gameweeks slider, Venue (from each
+    match's `was_home`) and Season. Earlier seasons are totals only, from `history_past`.
+  - predicted points (`predPer`), 6 FDR-coloured fixture tiles, a profile radar against the
+    position's 5th–95th percentiles, and head-to-head totals and per-gametime bars.
+
+  Match data comes from `element-summary` (`pcHist`). xPts for a match is `deservedPts()` on its
+  underlying numbers. A small-sample warning shows under 270 minutes.
 - **Fixtures tab:** `renderFixtures()` and `drawFxTable()`. Sort by Overall (FPL FDR × 2, or team
   strength when the toggle is on), Attack, Defence, Goals or Clean sheets, with an Order, a Teams
   filter, a GW range slider with quick-set 3/5/8, and a Team strength toggle. FPL's own strength
