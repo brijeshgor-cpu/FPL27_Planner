@@ -777,6 +777,19 @@ td.fx2-c { padding: 4px 3px; }
 .mt-card td { white-space: normal !important; } .mt-card td.n { white-space: nowrap !important; } .mt-my td { padding: 3px 4px; vertical-align: top; } .mt-my td small { color: var(--muted); }
 .mt-my td:first-child { white-space: nowrap; } .mt-my .mt-stats { color: var(--muted); } .mt-my tr.mt-dnp td { opacity: .6; }
 @media (max-width: 600px) { .mt-grid { grid-template-columns: minmax(0, 1fr); } .mt-team { font-size: .85rem; gap: 4px; } .mt-team img { width: 26px; height: 26px; } .mt-res b { font-size: 1.4rem; } .mt-my td:first-child { white-space: normal; } }
+/* Notes, advice, rivals, sequence */
+.notes-list { list-style: none; padding: 0; margin: 8px 0; display: grid; gap: 6px; }
+.notes-list li { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; padding: 8px 10px; border: 1px solid var(--line); border-radius: 8px; }
+.notes-list li .d { flex-basis: 100%; color: var(--muted); font-size: .84rem; } .notes-list li .btn { margin-left: auto; }
+.note-form { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 8px; } .note-form input, .note-form select { flex: 1 1 160px; min-width: 0; }
+.rv-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(260px, 1fr)); gap: 10px; }
+.rv-card { border: 1px solid var(--line); border-radius: var(--r); padding: 10px 12px; display: grid; gap: 4px; font-size: .85rem; min-width: 0; }
+.rv-h { display: flex; justify-content: space-between; gap: 8px; } .rv-row .k { display: inline-block; min-width: 96px; color: var(--muted); font-size: .72rem; text-transform: uppercase; letter-spacing: .05em; font-weight: 600; }
+.rv-swing { font-weight: 700; margin-top: 4px; }
+.seq { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 10px; }
+.seq-wk { border: 1px solid var(--line); border-radius: var(--r); padding: 10px 12px; min-width: 0; } .seq-h { display: flex; justify-content: space-between; gap: 6px; }
+.seq-wk ul { margin: 6px 0; padding-left: 16px; display: grid; gap: 4px; font-size: .86rem; }
+@media (max-width: 800px) { .seq { grid-template-columns: minmax(0, 1fr); } }
 </style>
 
 <header class="bar">
@@ -911,6 +924,8 @@ td.fx2-c { padding: 4px 3px; }
     const d = await r.json(); d.source = "snapshot"; d.liveError = liveErr && !/no live API/.test(liveErr.message) ? liveErr.message : null;
     return d;
   }
+  // The private owner link (?owner=KEY) unlocks notes and advice recording on this device.
+  try { const q = new URLSearchParams(location.search), k = q.get("owner"); if (k) { store.set("ownerKey", k); q.delete("owner"); history.replaceState(null, "", location.pathname + (q.toString() ? "?" + q : "") + location.hash); } } catch (e) { /* ignore */ }
   loadLive()
     .catch((e) => loadSnapshot(e))
     .then((d) => { D = d; prepare(); route(); window.addEventListener("hashchange", route); tick(); setInterval(tick, 1000); })
@@ -1597,6 +1612,7 @@ td.fx2-c { padding: 4px 3px; }
     const nw = newsFor(e);
     if (nw.some((x) => x.tone === "neg" && x.strong)) sc *= 0.5; else if (nw.some((x) => x.tone === "neg")) sc *= 0.85;
     if (teamNews(e.team).length) sc *= 0.95; // new manager: some rotation risk
+    sc *= noteFactor(e) * calFactor(e); // your notes, and calibration from tracked results
     XS.set(key, sc);
     return sc;
   }
@@ -1906,6 +1922,7 @@ td.fx2-c { padding: 4px 3px; }
     GWE.sel = null; GWE.msg = "";
     drawGw();
     gwPoll();
+    gwEngine().then(recordAdvice).catch(() => {});
   }
   // Builds the official team (GWE.base) from FPL's Pick Team, or from public data without a login.
   function gwBuild(mt) {
@@ -2062,7 +2079,8 @@ td.fx2-c { padding: 4px 3px; }
   // and scaled by FPL's chance of playing. A start is counted at 50+ minutes (a half-time sub plays 45).
   // pAbsent: doesn't play at all (a legal auto-sub can cover). pCameo: comes off the bench (cover is lost).
   function minutesProfile(e) {
-    const a = e.status === "s" ? 0 : availability(e);
+    const nt = noteOf(e.id);
+    const a = e.status === "s" ? 0 : nt && nt.tag === "injury" ? Math.min(availability(e), 0.5) : availability(e);
     const gp = teamPlayed(e.team) || 1;
     const sStart = Math.min(1, e.starts / gp), s70 = Math.min(sStart, sStart * Math.min(1, e.minutes / Math.max(1, e.starts * 80)));
     const s60 = (sStart + s70) / 2, sApp = Math.min(1, sStart + 0.12);
@@ -2072,7 +2090,7 @@ td.fx2-c { padding: 4px 3px; }
     const cameo = h.filter((x) => x[1] > 0 && x[1] < 30).length, off = h.filter((x) => x[1] >= 50 && x[1] < 70).length, dnp = h.filter((x) => x[1] === 0).length;
     const hasFx = (teamFx[e.team][gwNext] || []).length > 0;
     const blend = (k, s) => (k + 2 * s) / (n + 2);
-    const rStart = blend(st, sStart), rPlay = Math.max(rStart, blend(app, sApp));
+    const rStart = blend(st, sStart) * (nt && nt.tag === "rotation" ? 0.75 : 1), rPlay = Math.max(rStart, blend(app, sApp));
     const pStart = hasFx ? a * rStart : 0, p70 = hasFx ? a * blend(f70, s70) : 0, p60 = hasFx ? a * blend(f60, s60) : 0;
     const pPlay = hasFx ? a * rPlay : 0, pCameo = Math.max(0, pPlay - pStart), pAbsent = hasFx ? 1 - pPlay : 1;
     const startMins = h.filter((x) => x[1] >= 50).map((x) => x[1]);
@@ -2119,7 +2137,7 @@ td.fx2-c { padding: 4px 3px; }
   // A player worth buying must be fit, an established starter, and not have dropped out of the side last time.
   function buySecure(e) {
     const mp = minutesProfile(e), lm = lastMatch(e);
-    const why = mp.a < 1 ? `flagged (${pct(mp.a)} to play${e.news ? ": " + esc(e.news) : ""})` : lm && lm.mins < 45 ? `only ${lm.mins}' in GW${lm.gw}${lm.mins ? "" : " (unused)"}, a possible rotation or role change` : mp.rStart < 0.7 ? `not a regular starter (${pct(mp.rStart)} of matches)` : "";
+    const why = noteOf(e.id)?.tag === "avoid" ? "your note says avoid" : mp.a < 1 ? `flagged (${pct(mp.a)} to play${e.news ? ": " + esc(e.news) : ""})` : lm && lm.mins < 45 ? `only ${lm.mins}' in GW${lm.gw}${lm.mins ? "" : " (unused)"}, a possible rotation or role change` : mp.rStart < 0.7 ? `not a regular starter (${pct(mp.rStart)} of matches)` : "";
     return { ok: !why, why, mp, lm };
   }
   const minsLine = (s) => (s.lm ? `started ${s.mp.st} of his last ${s.mp.n}, ${s.lm.mins}' in GW${s.lm.gw}` : `starts ${pct(s.mp.rStart)} of matches`);
@@ -2183,6 +2201,7 @@ td.fx2-c { padding: 4px 3px; }
         e.penalties_order === 1 ? "On penalties <i>(FPL set-piece notes)</i>" : e.penalties_order === 2 ? "Second on penalties" : "",
         e.corners_and_indirect_freekicks_order === 1 || e.direct_freekicks_order === 1 ? `Set pieces: ${[e.corners_and_indirect_freekicks_order === 1 ? "corners" : "", e.direct_freekicks_order === 1 ? "direct free kicks" : ""].filter(Boolean).join(", ")}` : "",
         `League: ${lgOwnTxt(e.id)} <i>(GW${gwCur} picks)</i>`,
+        noteOf(e.id) ? `<b>${noteTxt(e.id)}</b> <i>(your judgement)</i>` : "",
         e.news ? `<b>FPL news</b>: ${esc(e.news)}${e.news_added ? ` (updated ${newsDate(e)})` : ""} <i>(fact)</i>` : "",
       ].filter(Boolean);
       return `<div class="why-p"><strong>${esc(e.web_name)}</strong><ul>${bits.map((b) => `<li>${b}</li>`).join("")}</ul></div>`;
@@ -2370,11 +2389,12 @@ td.fx2-c { padding: 4px 3px; }
     const sh0 = squadHealth(st.ids).n;
     let bank = c.bank, cur = [...st.ids]; const tc = {}; cur.forEach((id) => (tc[E[id].team] = (tc[E[id].team] || 0) + 1));
     const xi5 = (ids) => bestXI(ids, gp5).sum, xi1 = (ids) => bestXI(ids, gp1).sum;
-    const picks = [], held = {};
+    const picks = [], held = {}, noteHeld = new Set();
     for (let round = 0; round <= Math.min(ftLeft, 4); round++) {
       const base5 = xi5(cur), sh = squadHealth(cur).n; let best = null;
       cur.forEach((id, slot) => {
         const e = E[id]; if (e.element_type === 1 && slot === 11 && availability(e) > 0) return; // backup keeper
+        if (noteOf(id)?.tag === "hold") { if (round === 0) noteHeld.add(id); return; }
         const budget = bank + sellFor(id), mo = momentum(e);
         candidates(e.element_type, budget, new Set(cur), tc, e.team, TO, new Set()).slice(0, 6).forEach((cd) => {
           const nid = cur.map((x) => (x === id ? cd.e.id : x)), g = xi5(nid) - base5;
@@ -2420,6 +2440,7 @@ td.fx2-c { padding: 4px 3px; }
         unc: `GW${gwNext} xP: ${nm(h.out)} ${gp1(h.out).toFixed(1)} vs ${nm(h.inn)} ${gp1(h.inn).toFixed(1)}. If ${nm(h.out)} blanks or his minutes drop, make the switch next week.`,
         why: whyHTML([h.out, h.inn]) });
     });
+    noteHeld.forEach((id) => res.push({ sec: "buy", k: "info", lab: "Assumption", hold: id, t: `Keep ${nm(E[id])} (your note)`, d: `${noteTxt(id)}. The model doesn't consider selling him while the note stands.`, unc: "Remove or change the note in Your notes if things change." }));
     if (!res.some((x) => x.act)) res.push({ sec: "buy", k: "good", lab: "Assumption", t: ftLeft ? `Roll your transfer` : "No upgrade worth a −4 hit", d: ftLeft ? `No affordable signing adds more than ${Math.max(3, rollValue + 1.5).toFixed(1)} xP to your best XI over 5 gameweeks (bank £${price(c.bank)}m), which is less than the value of rolling. You'll have ${Math.min(5, ftLeft + 1)} free transfer${ftLeft + 1 > 1 ? "s" : ""} next gameweek.` : `You've used your free transfers. No upgrade gains enough over 5 gameweeks to cover the 4-point cost.`, unc: "An injury in team news could make a transfer worthwhile: check before the deadline." });
     GWE.buys = { key, out: res };
     return res;
@@ -2589,7 +2610,8 @@ td.fx2-c { padding: 4px 3px; }
         <div class="panel ed-pick" id="gwPick"></div>
       </div>
       <div class="panel adv"><div class="panel-head"><h3>Recommendations for GW${gwNext}</h3><span class="note">For the team as edited. Only what could change your XI, captain, bench, transfers or chips before the deadline.</span></div>${decHTML}<div class="adv-grid">${advHTML}</div>
-        <p class="note">xP is minutes-adjusted expected points (appearance, goals, assists, clean sheets, penalties, bonus and defensive contributions under this season's rules). Minutes come from each player's last 5 matches (a start counts at 50+ minutes), blended with his season rate and FPL's chance of playing. Penalty-box touches, shots, chances created and manager comments aren't in FPL's free data, so they aren't used. Tap Why? for the stats and odds behind a call.</p></div>
+        <p class="note">${Object.keys(NOTES).some((id) => noteOf(+id)) ? "Your notes are applied to these recommendations. " : ""}xP is minutes-adjusted expected points (appearance, goals, assists, clean sheets, penalties, bonus and defensive contributions under this season's rules). Minutes come from each player's last 5 matches (a start counts at 50+ minutes), blended with his season rate and FPL's chance of playing. Penalty-box touches, shots, chances created and manager comments aren't in FPL's free data, so they aren't used. Tap Why? for the stats and odds behind a call.</p></div>
+      <div class="panel" id="notesPanel">${notesPanelHTML()}</div>
       <p class="note">Changes here are a sandbox saved in this browser only: make them on the FPL site to make them real. Projected points use the site's expert score (xG, xA, clean sheet odds, defensive contributions, bonus, fixtures and bookmaker odds, minutes, injuries and news). Sale prices follow FPL's rule that you keep half of any rise.</p>
       ${freshness()}
     </section>`;
@@ -2603,6 +2625,7 @@ td.fx2-c { padding: 4px 3px; }
     }));
     app.querySelector('[data-act="cap"]')?.addEventListener("click", () => { if (st.vc === GWE.sel) st.vc = st.cap; st.cap = GWE.sel; GWE.sel = null; gwSave(); drawGw(); });
     app.querySelector('[data-act="vc"]')?.addEventListener("click", () => { if (st.cap === GWE.sel) st.cap = st.vc; st.vc = GWE.sel; GWE.sel = null; gwSave(); drawGw(); });
+    wireNotes($("#notesPanel"), () => drawGw());
     app.querySelectorAll("[data-adv]").forEach((b) => b.addEventListener("click", () => { const x = GWE.adv[Number(b.dataset.adv)]; if (x && x.act) { gwApply(x.act); drawGw(); } }));
     $("#gwCap")?.addEventListener("change", (ev) => { const v = Number(ev.target.value); if (st.vc === v) st.vc = st.cap; st.cap = v; gwSave(); drawGw(); });
     $("#gwVc")?.addEventListener("change", (ev) => { const v = Number(ev.target.value); if (st.cap === v) st.cap = st.vc; st.vc = v; gwSave(); drawGw(); });
@@ -2945,6 +2968,7 @@ td.fx2-c { padding: 4px 3px; }
 
     $("#app").innerHTML = `
     <section class="view">
+      <div class="panel" id="rivalWatch"><p class="empty">Working out your rivals' likely captains and GW${gwNext} swing…</p></div>
       <div class="panel-head"><h2>Mini League analysis</h2><span class="note">The league leader, friends and family. Pick one to compare with FC27.</span></div>
       <div class="picks5">${cards}</div>
       ${missing.length ? `<p class="note">Not found in ${esc(D.league.name)}: ${missing.map(esc).join(", ")}.</p>` : ""}
@@ -2988,6 +3012,7 @@ td.fx2-c { padding: 4px 3px; }
       ${freshness()}
     </section>`;
 
+    Promise.resolve(OFF === undefined ? loadOfficial() : OFF).then(() => ensureFA([])).then(() => { if (view === "analysis") renderRivalWatch(); }).catch(() => {});
     document.querySelectorAll("[data-h2h]").forEach((b) => b.addEventListener("click", () => { store.set("h2h", Number(b.dataset.h2h)); renderAnalysis(); }));
     wireTip($("#gwChart"), (g) => {
       const a = A.by[g], b = B.by[g], d = a && b ? a.net - b.net : null;
@@ -3335,6 +3360,7 @@ td.fx2-c { padding: 4px 3px; }
       <p class="fresh">${OFF ? `Squad, bank, sale prices and free transfers from your FPL Pick Team${OFF.stale ? " (last saved copy: the FPL login needs renewing, see the Current gameweek tab)" : ""}, loaded at ${new Date(OFF.fetched).toLocaleTimeString("en-GB", { hour: "2-digit", minute: "2-digit" })}. ${doneOut.length ? `Already made on FPL for GW${gwNext}: ${doneOut.map((o, i) => `${esc(E[o].web_name)} → ${doneIn[i] ? esc(E[doneIn[i]].web_name) : "?"}`).join(", ")} (${OFF.made} of ${OFF.limit} free transfers used, ${ft} left).` : `No transfers made on FPL for GW${gwNext} yet.`} <span class="lab lab-fact">Fact</span>` : `Rebuilt from public data (your GW${gwCur} team): FPL keeps GW${gwNext} transfers private until the deadline unless the site is signed in to your FPL account. Free transfers are an estimate. <span class="lab lab-asm">Assumption</span>`}</p>
       ${plan.length ? `<ul class="moves">${plan.map(({ out, inn }, i) => `<li><span><span class="down">${esc(E[out].web_name)}</span> → <span class="up">${esc(E[inn].web_name)}</span> <span class="note">sells £${price(sellPrice(out))}m → costs £${price(E[inn].now_cost)}m</span></span><button class="btn sm" data-undo="${i}">Undo</button></li>`).join("")}</ul><div class="controls"><button class="btn" id="reset">Clear plan</button></div>` : ""}
 
+      <div class="panel" id="seqPlan"><p class="empty">Planning the next 3 gameweeks…</p></div>
       <div class="panel">
         <div class="panel-head"><h2>Squad</h2><span class="note">Tap a player to see replacements. Plans are saved in this browser only.</span></div>
         <div class="sq-sum">
@@ -3377,6 +3403,7 @@ td.fx2-c { padding: 4px 3px; }
     renderTargets(sq.map((x) => x.el), bank);
     renderTop10(sq.map((x) => x.el));
     renderCompare(sq.map((x) => x.el), bank, ft, plan.length);
+    renderSeqPlan().catch(() => {});
     const q = $("#q"); if (q) q.addEventListener("input", debounce(() => { const pos = q.selectionStart; renderPlanner(); const nq = $("#q"); nq.focus(); nq.setSelectionRange(pos, pos); }, 250));
   }
 
@@ -3655,7 +3682,7 @@ td.fx2-c { padding: 4px 3px; }
     box.innerHTML = `<p class="note pr-count">${sorted.length} player${sorted.length === 1 ? "" : "s"} · GW${PR.g0}${PR.g1 > PR.g0 ? `–${PR.g1}` : ""} · £${price(PR.p0)}m–£${price(PR.p1)}m</p>` + (show.length ? show.map((e) => {
       const code = T[e.team]?.code, tot = pred(e);
       return `<div class="pr-card ${mine.has(e.id) ? "mine" : ""}">
-        <div class="pr-who">${code != null ? `<img src="kit/${code}${e.element_type === 1 ? "_1" : ""}.png" alt="" width="44" height="44" loading="lazy" onerror="this.remove()">` : ""}<span><strong>${esc(e.web_name)}${mine.has(e.id) ? ' <span class="star" title="In your team">★</span>' : ""}${availability(e) < 1 ? ` <span class="flag-i ${availability(e) === 0 ? "out" : ""}" title="${esc(e.news)}">!</span>` : ""}</strong><small>${esc(T[e.team]?.name)} · ${({ 1: "Goalkeeper", 2: "Defender", 3: "Midfielder", 4: "Forward" })[e.element_type]}</small></span></div>
+        <div class="pr-who">${code != null ? `<img src="kit/${code}${e.element_type === 1 ? "_1" : ""}.png" alt="" width="44" height="44" loading="lazy" onerror="this.remove()">` : ""}<span><strong>${esc(e.web_name)}${mine.has(e.id) ? ' <span class="star" title="In your team">★</span>' : ""}${noteOf(e.id) ? ` <span class="pill ${NOTE_TAGS[noteOf(e.id).tag].cls}" title="${esc(noteTxt(e.id))}">✎ ${NOTE_TAGS[noteOf(e.id).tag].l}</span>` : ""}${availability(e) < 1 ? ` <span class="flag-i ${availability(e) === 0 ? "out" : ""}" title="${esc(e.news)}">!</span>` : ""}</strong><small>${esc(T[e.team]?.name)} · ${({ 1: "Goalkeeper", 2: "Defender", 3: "Midfielder", 4: "Forward" })[e.element_type]}</small></span></div>
         <div class="pr-stat"><span class="k">Price</span><strong>£${price(e.now_cost)}m</strong></div>
         <div class="pr-stat"><span class="k">Ownership</span><strong>${(+e.selected_by_percent || 0).toFixed(1)}%</strong></div>
         <div class="pr-stat" title="${(t10own[e.id] || []).length ? "Owned by " + esc((t10own[e.id] || []).join(", ")) : "None of the top 10 own him"}"><span class="k">Top 10 own</span><strong class="${(t10own[e.id] || []).length >= 5 ? "" : (t10own[e.id] || []).length === 0 ? "note" : ""}">${(t10own[e.id] || []).length}/${t10.length}</strong></div>
@@ -3750,6 +3777,7 @@ td.fx2-c { padding: 4px 3px; }
   // Top-10 ownership of your (planned) squad, and the players they have that you don't, with next-gameweek projections.
   async function ensureFA(ids) {
     await loadNews();
+    await loadNotes();
     if (FA.odds === undefined) FA.odds = await (oddsCache ? Promise.resolve(oddsCache) : fetch("api/odds", { cache: "no-store" }).then((r) => (r.ok && (r.headers.get("content-type") || "").includes("json") ? r.json() : null)).catch(() => null));
     if (FA.odds) oddsCache = FA.odds;
     await fetchSumm(FA.comp ? ids : [...ids, ...returneePool()]);
@@ -3887,6 +3915,7 @@ td.fx2-c { padding: 4px 3px; }
     <section class="view">
       <div class="panel-head"><h2>Insights</h2></div>
       <div class="panel ki-panel" id="insSummary"><div class="panel-head"><h2>Key insights</h2></div><p class="empty">Analysing every section below…</p></div>
+      <div class="panel" id="adviceScore"><p class="empty">Checking how the advice did…</p></div>
       <div class="panel" id="valueChart"><div class="panel-head"><h3>Best Value: Price vs Projected Points</h3></div><p class="empty">Projecting the next 4 gameweeks…</p></div>
       <div class="panel" id="capCost"><div class="panel-head"><h3>Captaincy decisions</h3></div><p class="empty">Loading every gameweek's points…</p></div>
       <div class="panel" id="luck"><div class="panel-head"><h3>Luck tracker: actual vs expected points</h3></div><p class="empty">Loading…</p></div>
@@ -3918,7 +3947,7 @@ td.fx2-c { padding: 4px 3px; }
       <div class="panel" id="minSec"><div class="panel-head"><h3>Minutes security</h3></div><p class="empty">Loading…</p></div>
       ${freshness()}
     </section>`;
-    wireXgiTop(); wireDefTop(); renderCaptaincy().then(renderValue).then(renderDeep).then(renderSummary).catch((e) => { const b = $("#insSummary"); if (b) b.innerHTML = `<div class="panel-head"><h2>Key insights</h2></div><div class="err">The summary couldn't be built (${esc(e.message)}). Reload to try again.</div>`; });
+    wireXgiTop(); wireDefTop(); renderAdviceScore().catch(() => {}); renderCaptaincy().then(renderValue).then(renderDeep).then(renderSummary).catch((e) => { const b = $("#insSummary"); if (b) b.innerHTML = `<div class="panel-head"><h2>Key insights</h2></div><div class="err">The summary couldn't be built (${esc(e.message)}). Reload to try again.</div>`; });
   }
 
   // ---- Captaincy shortlist: chance of scoring with a likely range, plus projected captain points ----
@@ -4566,6 +4595,191 @@ td.fx2-c { padding: 4px 3px; }
     return `<td>${l.length ? l.map((f) => `<span class="fdrc fdr${f.fdr}" title="FDR ${f.fdr}">${esc(tShort(f.opp))} (${f.home ? "H" : "A"})</span>`).join("") : '<span class="fdrc fdr0">Blank</span>'}</td>`;
   }).join("");
   const avgBadge = (a) => `<span class="fdrc fdr${Math.min(5, Math.max(1, Math.round(a)))}" title="Average FDR">${a.toFixed(1)}</span>`;
+
+  // =====================================================================================
+  // Human touch, advice tracking, rival watch and multi-week planning
+  // =====================================================================================
+
+  // ---- Owner key: lets this browser save notes and record advice (set once per device with ?owner=KEY) ----
+  const ownerKey = () => store.get("ownerKey", null);
+  async function ownerPost(path, body) {
+    const k = ownerKey(); if (!k) throw new Error("no owner key");
+    const r = await fetch("api/" + path, { method: "POST", headers: { "Content-Type": "application/json", "X-Owner-Key": k }, body: JSON.stringify(body) });
+    if (!r.ok) throw new Error((await r.json().catch(() => ({}))).error || "save failed");
+    return r.json();
+  }
+
+  // ---- Your player notes: a human override the model takes into account ----
+  // trust: +10% xP · rotation: start rate ×0.75 and xP ×0.8 · injury: chance of playing ≤50% and xP ×0.5
+  // avoid: never suggested as a buy · hold: never suggested as a sale. Each note lasts until a gameweek you choose.
+  const NOTE_TAGS = { trust: { l: "Trust him", f: 1.1, cls: "ok" }, rotation: { l: "Rotation risk", f: 0.8, cls: "sev2" }, injury: { l: "Injury doubt", f: 0.5, cls: "sev3" }, avoid: { l: "Avoid buying", f: 1, cls: "sev3" }, hold: { l: "Hold, don't sell", f: 1, cls: "acc" } };
+  let NOTES = {}, CAL = null, notesP = null;
+  function loadNotes() {
+    if (notesP) return notesP;
+    const get = (p) => (D.source === "live" ? fetch("api/" + p, { cache: "no-store" }).then((r) => (r.ok ? r.json() : null)).catch(() => null) : Promise.resolve(null));
+    return (notesP = Promise.all([get("notes"), get("calib")]).then(([n, c]) => { NOTES = n || {}; CAL = c && c.f ? c : null; XS.clear(); NF.clear(); }));
+  }
+  const noteOf = (id) => { const n = NOTES[id]; return n && (!n.until || n.until >= gwNext) && NOTE_TAGS[n.tag] ? n : null; };
+  const noteFactor = (e) => { const n = noteOf(e.id); return n ? NOTE_TAGS[n.tag].f : 1; };
+  const calFactor = (e) => (CAL && CAL.f && CAL.f[e.element_type] ? CAL.f[e.element_type] : 1);
+  const noteTxt = (id) => { const n = noteOf(id); return n ? `Your note: ${NOTE_TAGS[n.tag].l}${n.text ? ` ("${esc(n.text)}")` : ""}${n.until ? ` until GW${n.until}` : ""}` : ""; };
+  function notesPanelHTML() {
+    const list = Object.entries(NOTES).filter(([id]) => E[id] && noteOf(+id)).sort((a, b) => (b[1].at || 0) - (a[1].at || 0));
+    const can = !!ownerKey() && D.source === "live";
+    return `<div class="panel-head"><h3>Your notes <span class="lab lab-asm">Assumption</span></h3><span class="note">Your judgement, which the model takes into account</span></div>
+      <p class="note">Add what the numbers can't see: a manager's hint, a hunch or a fitness worry. A note changes that player's projection everywhere on the site:
+      <strong>Trust him</strong> +10% · <strong>Rotation risk</strong> −20% and a lower start chance · <strong>Injury doubt</strong> −50% · <strong>Avoid buying</strong> never suggested as a buy · <strong>Hold</strong> never suggested as a sale.</p>
+      ${list.length ? `<ul class="notes-list">${list.map(([id, n]) => `<li><span class="pill ${NOTE_TAGS[n.tag].cls}">${NOTE_TAGS[n.tag].l}</span> <strong>${esc(E[id].web_name)}</strong> <span class="note">${tShort(E[id].team)}${n.until ? ` · until GW${n.until}` : " · until removed"}</span>${n.text ? `<div class="d">${esc(n.text)}</div>` : ""}${can ? `<button class="btn sm" data-delnote="${id}">Remove</button>` : ""}</li>`).join("")}</ul>` : `<p class="empty">No notes yet.</p>`}
+      ${can ? `<div class="note-form"><input list="noteNames" id="noteP" placeholder="Player name"><datalist id="noteNames">${Object.values(E).filter((e) => e.minutes > 0 || baseSquad().some((p) => p[0] === e.id)).sort((a, b) => b.total_points - a.total_points).map((e) => `<option value="${esc(e.web_name)} (${tShort(e.team)})"></option>`).join("")}</datalist>
+        <select id="noteT">${Object.entries(NOTE_TAGS).map(([k, v]) => `<option value="${k}">${v.l}</option>`).join("")}</select>
+        <select id="noteU"><option value="${gwNext}">This gameweek</option><option value="${Math.min(38, gwNext + 2)}">Next 3 gameweeks</option><option value="">Until I remove it</option></select>
+        <input id="noteX" placeholder="Why? (optional)" maxlength="140"><button class="btn pri" id="noteAdd">Add note</button></div><p class="note" id="noteMsg"></p>`
+        : `<p class="note">${D.source === "live" ? "Notes can only be added on a device that has opened your private owner link once." : "Notes load on the live site."}</p>`}`;
+  }
+  function wireNotes(box, after) {
+    if (!box) return;
+    const save = async (next) => { try { await ownerPost("notes", next); NOTES = next; XS.clear(); NF.clear(); GWE.buys = null; GWE.chipsAdv = null; GWE.fh = null; Object.keys(PRC).forEach((k) => delete PRC[k]); after(); } catch (e) { const m = $("#noteMsg"); if (m) m.textContent = "Couldn't save: " + e.message; } };
+    box.querySelectorAll("[data-delnote]").forEach((b) => b.addEventListener("click", () => { const n = { ...NOTES }; delete n[b.dataset.delnote]; save(n); }));
+    $("#noteAdd")?.addEventListener("click", () => {
+      const v = $("#noteP").value.trim().toLowerCase();
+      const e = Object.values(E).find((x) => `${x.web_name} (${tShort(x.team)})`.toLowerCase() === v) || Object.values(E).filter((x) => x.web_name.toLowerCase() === v).sort((a, b) => b.total_points - a.total_points)[0];
+      if (!e) { $("#noteMsg").textContent = "Pick a player from the list."; return; }
+      const u = $("#noteU").value;
+      save({ ...NOTES, [e.id]: { tag: $("#noteT").value, text: $("#noteX").value.trim(), until: u ? +u : null, at: Date.now() } });
+    });
+  }
+
+  // ---- Advice tracking: record the plan before the deadline, score it afterwards ----
+  async function recordAdvice(eng) {
+    if (!eng || !ownerKey() || D.source !== "live") return;
+    const ev = D.events.find((x) => x.id === gwNext); if (!ev || Date.now() > Date.parse(ev.deadline)) return;
+    const B = eng.base, adv = eng.adv, cap = adv.find((x) => x.sec === "cap" && x.capId);
+    const bx = bestXI(B.ids);
+    const buys = adv.filter((x) => x.act && x.act.a === "xfer").map((x) => ({ out: x.act.out, inn: x.act.inn, gain: +x.act.gain.toFixed(2), hit: x.act.hit }));
+    const pool = new Set([...B.ids, ...buys.map((b) => b.inn), ...Object.values(E).filter((e) => isFit(e) && e.minutes >= 450).sort((a, b) => gp1(b) - gp1(a)).slice(0, 60).map((e) => e.id)]);
+    const preds = {}; pool.forEach((id) => (preds[id] = +gp1(E[id]).toFixed(2)));
+    const body = { gw: gwNext, at: Date.now(), cap: cap ? cap.capId : null, vc: cap ? cap.vcId : null, xi: bx.ids, squad: B.ids, buys, holds: adv.filter((x) => x.hold).map((x) => x.hold), preds };
+    const hash = JSON.stringify([body.cap, body.vc, body.xi, body.buys, body.holds]);
+    if (store.get("recHash:" + gwNext, "") === hash) return;
+    try { await ownerPost(`rec/${gwNext}`, body); store.set("recHash:" + gwNext, hash); } catch (e) { /* tried; will retry on the next load */ }
+  }
+  // Points a player scored in a gameweek (live for the current one).
+  async function recPts(ids, gw) {
+    if (gw === gwCur) { const o = {}; ids.forEach((id) => (o[id] = E[id] ? E[id].event_points : 0)); return o; }
+    await fetchSumm(ids).catch(() => {});
+    const o = {}; ids.forEach((id) => { const h = FA.summ[id]; o[id] = h ? h.filter((x) => x[0] === gw).reduce((a, x) => a + (x[2] || 0), 0) : null; });
+    return o;
+  }
+  async function renderAdviceScore() {
+    const box = $("#adviceScore"); if (!box) return;
+    let recs = null; try { recs = D.source === "live" ? await fetch("api/recs", { cache: "no-store" }).then((r) => (r.ok ? r.json() : null)) : null; } catch (e) { recs = null; }
+    if (!document.body.contains(box)) return;
+    const gws = recs ? Object.keys(recs).map(Number).filter((g) => recs[g] && g <= gwCur && D.events.find((e) => e.id === g && (e.finished || e.id === gwCur))).sort((a, b) => b - a) : [];
+    const head = `<div class="panel-head"><h3>How the advice did</h3><span class="note">The site's GW plan, recorded before each deadline, against what happened</span></div>`;
+    if (!gws.length) { box.innerHTML = head + `<p class="note">Tracking starts with GW${gwNext}: the site records its plan (captain, vice, best XI, transfers and ${recs && recs[gwNext] ? "projections" : "projections"}) before the deadline${ownerKey() ? "" : " from a device that has opened your owner link"}, then scores it here once the matches are played. After two gameweeks it also corrects any bias in the model's projections.</p>${recs && recs[gwNext] ? `<p class="note">GW${gwNext} plan recorded ${new Date(recs[gwNext].at).toLocaleString("en-GB", { timeZone: "Europe/London", dateStyle: "short", timeStyle: "short" })}.</p>` : ""}`; return; }
+    const rows = [], errs = { 1: [], 2: [], 3: [], 4: [] };
+    for (const g of gws) {
+      const r = recs[g], ids = [...new Set([...Object.keys(r.preds).map(Number), r.cap, ...(r.buys || []).flatMap((b) => [b.out, b.inn])].filter(Boolean))];
+      const act = await recPts(ids, g);
+      const my = await myPicksFor(g), myCap = (my.find((p) => p.cap) || {}).id;
+      if (myCap && !(myCap in act)) Object.assign(act, await recPts([myCap], g));
+      const xiBest = r.xi ? Math.max(...r.xi.map((id) => act[id] ?? 0)) : null;
+      const bt = (r.buys || []).reduce((a, b) => a + ((act[b.inn] ?? 0) - (act[b.out] ?? 0)) - (b.hit ? 4 : 0), 0);
+      Object.entries(r.preds).forEach(([id, p]) => { if (act[id] != null && E[id]) errs[E[id].element_type].push([p, act[id], g]); });
+      rows.push({ g, cap: r.cap, capPts: act[r.cap], myCap, myCapPts: act[myCap], xiBest, buys: r.buys || [], bt, live: g === gwCur && !D.events.find((e) => e.id === g).finished });
+    }
+    const all = Object.values(errs).flat(), mae = all.length ? all.reduce((a, [p, x]) => a + Math.abs(p - x), 0) / all.length : 0, bias = all.length ? all.reduce((a, [p, x]) => a + (x - p), 0) / all.length : 0;
+    // Calibration: per position, actual ÷ projected once there are 2+ finished gameweeks and 30+ samples.
+    const fin = new Set(rows.filter((r) => !r.live).map((r) => r.g));
+    const f = {}; [1, 2, 3, 4].forEach((t) => { const xs = errs[t].filter((x) => fin.has(x[2])); if (fin.size >= 2 && xs.length >= 30) { const pa = xs.reduce((a, x) => a + x[0], 0), aa = xs.reduce((a, x) => a + x[1], 0); f[t] = Math.max(0.85, Math.min(1.15, aa / Math.max(1, pa))); } });
+    if (Object.keys(f).length && ownerKey() && JSON.stringify(f) !== JSON.stringify(CAL && CAL.f)) ownerPost("calib", { f, gws: [...fin], at: Date.now() }).then(() => { CAL = { f }; XS.clear(); }).catch(() => {});
+    const nm = (id) => esc(E[id]?.web_name || "?");
+    box.innerHTML = head + `<div class="tbl-wrap"><table class="cards-sm"><thead><tr><th>GW</th><th>Recommended captain</th><th>Your captain</th><th>Best in XI</th><th>Recommended transfers</th></tr></thead><tbody>
+      ${rows.map((r) => `<tr><td>GW${r.g}${r.live ? ' <span class="pill">Live</span>' : ""}</td><td>${r.cap ? `${nm(r.cap)} <strong>${r.capPts ?? "–"}</strong>` : "–"}</td><td>${r.myCap ? `${nm(r.myCap)} <strong>${r.myCapPts ?? "–"}</strong>${r.myCap !== r.cap && r.capPts != null && r.myCapPts != null ? ` <span class="${r.capPts > r.myCapPts ? "down" : r.capPts < r.myCapPts ? "up" : "note"}">(${r.capPts > r.myCapPts ? "advice +" + 2 * (r.capPts - r.myCapPts) : r.capPts < r.myCapPts ? "you +" + 2 * (r.myCapPts - r.capPts) : "same"})</span>` : ""}` : "–"}</td><td>${r.xiBest ?? "–"}</td><td>${r.buys.length ? r.buys.map((b) => `${nm(b.out)} → ${nm(b.inn)}`).join(", ") + ` <strong class="${r.bt >= 0 ? "up" : "down"}">${r.bt >= 0 ? "+" : ""}${r.bt}</strong>` : "Roll"}</td></tr>`).join("")}
+      </tbody></table></div>
+      <p class="note">Projection accuracy over ${all.length} player-gameweeks: average miss ${mae.toFixed(1)} pts, ${bias >= 0 ? "under" : "over"}-projecting by ${Math.abs(bias).toFixed(2)} pts a player on average. ${Object.keys(f).length ? `Calibration applied: ${Object.entries(f).map(([t, v]) => `${D.positions[t]} ×${v.toFixed(2)}`).join(", ")}.` : "Calibration kicks in after two finished gameweeks."} Single gameweeks are noisy: judge the advice over several. <span class="lab lab-fact">Fact</span></p>`;
+  }
+
+  // ---- Rival watch: the managers around you, their likely captain and where you gain or lose ground ----
+  function renderRivalWatch() {
+    const box = $("#rivalWatch"); if (!box) return;
+    const sorted = [...members].sort((a, b) => a.rank - b.rank), i = sorted.findIndex((x) => x.entry === me), meR = sorted[i];
+    const near = [...new Set([sorted[0], ...sorted.slice(Math.max(0, i - 2), i), ...sorted.slice(i + 1, i + 3)].filter((x) => x && x.entry !== me))];
+    const myIds = baseSquad().map((p) => p[0]), myXI = (OFF ? OFF.picks : squadOf(myM)).filter((p) => p[1] <= 11).map((p) => p[0]), myCap = ((OFF ? OFF.picks : squadOf(myM)).find((p) => p[3]) || [])[0];
+    const P = (id) => (E[id] ? gp1(E[id]) : 0);
+    const myProj = myXI.reduce((a, id) => a + P(id), 0) + (myCap ? P(myCap) : 0);
+    const cards = near.map((x) => {
+      const pk = squadOf(x.m), xi = pk.filter((p) => p[1] <= 11).map((p) => p[0]);
+      const cap = [...xi].sort((a, b) => P(b) - P(a))[0], theirCap = (pk.find((p) => p[3]) || [])[0];
+      const proj = xi.reduce((a, id) => a + P(id), 0) + (cap ? P(cap) : 0);
+      const threats = xi.filter((id) => !myIds.includes(id)).sort((a, b) => P(b) - P(a)).slice(0, 3), edges = myXI.filter((id) => !pk.some((p) => p[0] === id)).sort((a, b) => P(b) - P(a)).slice(0, 3);
+      const swing = myProj - proj, gap = x.total - meR.total;
+      return `<div class="rv-card"><div class="rv-h"><strong>${esc(x.player_name)}</strong><span class="note">${ordinal(x.rank)} · ${gap > 0 ? gap + " ahead" : gap < 0 ? -gap + " behind" : "level"}</span></div>
+        <div class="rv-row"><span class="k">Likely captain</span>${cap ? esc(E[cap].web_name) : "–"} <span class="note">${cap ? P(cap).toFixed(1) + " xP" : ""}${theirCap && theirCap !== cap ? ` · had ${esc(E[theirCap]?.web_name)} in GW${gwCur}` : ""}</span></div>
+        <div class="rv-row"><span class="k">Their threats</span>${threats.map((id) => `${esc(E[id].web_name)} <span class="note">${P(id).toFixed(1)}</span>`).join(", ") || "none"}</div>
+        <div class="rv-row"><span class="k">Your edges</span>${edges.map((id) => `${esc(E[id].web_name)} <span class="note">${P(id).toFixed(1)}</span>`).join(", ") || "none"}</div>
+        <div class="rv-swing ${swing >= 0 ? "up" : "down"}">Projected GW${gwNext} swing: ${swing >= 0 ? "+" : "−"}${Math.abs(swing).toFixed(1)} ${swing >= 0 ? "for you" : "for them"}</div></div>`;
+    });
+    const L = leagueCtx();
+    box.innerHTML = `<div class="panel-head"><h2>Rival watch: GW${gwNext}</h2><span class="note">The leader and the managers just above and below you <span class="lab lab-proj">Projection</span></span></div>
+      <p class="note">Your GW${gwNext} team projects ${myProj.toFixed(1)} pts (captain doubled). Rivals' GW${gwNext} transfers stay private until the deadline, so their teams are as they stood in GW${gwCur}; their likely captain is their highest-projected starter. ${L.text}</p>
+      <div class="rv-grid">${cards.join("")}</div>`;
+  }
+
+  // ---- Multi-week transfer plan: week 1 is the GW plan; weeks 2–3 follow on from it ----
+  function windowXp(e, k, n = 5) { let s = 0; for (let j = 0; j < n && gwNext + k + j <= 38; j++) s += predPer(e, k + j); return s; }
+  function weekMoves(cur, bank, ft, k, sellFor, maxMoves) {
+    const f = (e) => windowXp(e, k), moves = [];
+    const pool = {}; [1, 2, 3, 4].forEach((t) => (pool[t] = Object.values(E).filter((e) => e.element_type === t && isFit(e) && e.minutes >= 450 && buySecure(e).ok).sort((a, b) => f(b) - f(a)).slice(0, 18)));
+    for (let m = 0; m < maxMoves; m++) {
+      const base = bestXI(cur, f).sum, tc = {}; cur.forEach((id) => (tc[E[id].team] = (tc[E[id].team] || 0) + 1));
+      let best = null;
+      cur.forEach((id, slot) => {
+        const e = E[id]; if (noteOf(id)?.tag === "hold") return; if (e.element_type === 1 && slot === 11 && availability(e) > 0) return;
+        const budget = bank + sellFor(id);
+        pool[e.element_type].forEach((c) => {
+          if (cur.includes(c.id) || c.now_cost > budget || ((tc[c.team] || 0) - (c.team === e.team ? 1 : 0)) >= 3) return;
+          const nid = cur.map((x) => (x === id ? c.id : x)), g = bestXI(nid, f).sum - base;
+          if (!best || g > best.gain) best = { out: e, inn: c, gain: g, nid, budget };
+        });
+      });
+      const free = m < ft;
+      if (!best || (free ? best.gain < 3 : best.gain - 4 < 4)) break;
+      moves.push({ ...best, hit: !free, bankAfter: best.budget - best.inn.now_cost });
+      bank = best.budget - best.inn.now_cost; cur = best.nid;
+      if (!free) break;
+    }
+    return { moves, cur, bank };
+  }
+  async function renderSeqPlan() {
+    const box = $("#seqPlan"); if (!box) return;
+    let eng = null; try { eng = await gwEngine(); } catch (e) { eng = null; }
+    if (!document.body.contains(box)) return;
+    const B = eng ? eng.base : null;
+    let cur = B ? [...B.ids] : baseSquad().map((p) => p[0]), bank = B ? B.bank : OFF && OFF.bank != null ? OFF.bank : myM.picks?.bank ?? lastHist(myM)[8];
+    let ft = B ? B.ft : OFF ? OFF.ft : freeTransfers(myM, D.entry.started_event || 1);
+    const bought = new Set(), sellFor = (id) => (bought.has(id) ? E[id].now_cost : B && B.sell[id] != null ? B.sell[id] : sellPrice(id));
+    const weeks = [];
+    // week 1: exactly the GW plan (so every tab agrees)
+    const w1 = eng ? eng.adv.filter((x) => x.act && x.act.a === "xfer").map((x) => ({ out: E[x.act.out], inn: E[x.act.inn], gain: x.act.gain, hit: x.act.hit })) : [];
+    const holds = eng ? eng.adv.filter((x) => x.hold).map((x) => E[x.hold]) : [];
+    w1.forEach((m) => { bank += sellFor(m.out.id) - m.inn.now_cost; cur = cur.map((x) => (x === m.out.id ? m.inn.id : x)); bought.add(m.inn.id); });
+    weeks.push({ g: gwNext, moves: w1, ftUsed: w1.filter((m) => !m.hit).length, ftHad: ft, bank, holds });
+    ft = Math.min(5, Math.max(0, ft - w1.filter((m) => !m.hit).length) + 1);
+    for (let k = 1; k <= 2 && gwNext + k <= 38; k++) {
+      const r = weekMoves(cur, bank, ft, k, sellFor, ft + 1);
+      r.moves.forEach((m) => bought.add(m.inn.id));
+      weeks.push({ g: gwNext + k, moves: r.moves, ftUsed: r.moves.filter((m) => !m.hit).length, ftHad: ft, bank: r.bank });
+      cur = r.cur; bank = r.bank; ft = Math.min(5, Math.max(0, ft - r.moves.filter((m) => !m.hit).length) + 1);
+    }
+    const nm = (e) => esc(e.web_name);
+    box.innerHTML = `<div class="panel-head"><h2>3-gameweek transfer plan</h2><span class="note">GW${gwNext}–${Math.min(38, gwNext + 2)}, sequenced so free transfers and money aren't wasted</span></div>
+      <div class="seq">${weeks.map((w, i) => `<div class="seq-wk"><div class="seq-h"><strong>GW${w.g}</strong><span class="note">${w.ftHad} free transfer${w.ftHad === 1 ? "" : "s"}${w.moves.length ? `, ${w.ftUsed} used` : ""}</span></div>
+        ${w.moves.length ? `<ul>${w.moves.map((m) => `<li><span class="down">${nm(m.out)}</span> → <span class="up">${nm(m.inn)}</span> <span class="note">(${tShort(m.inn.team)}, £${price(m.inn.now_cost)}m)</span> <strong class="up">+${m.gain.toFixed(1)}</strong>${m.hit ? ' <span class="pill sev3">−4</span>' : ""}</li>`).join("")}</ul>` : `<p class="note">${i === 0 ? "No transfer: roll it." : "Roll: nothing gains enough."}</p>`}
+        ${w.holds && w.holds.length ? `<p class="note">Kept this week: ${w.holds.map(nm).join(", ")} (form and fixture).</p>` : ""}
+        <p class="note">Bank after: £${price(w.bank)}m</p></div>`).join("")}</div>
+      <p class="note">Week 1 is the same plan as the Current gameweek tab. Weeks 2–3 then pick the move that most improves your best XI over the following 5 gameweeks: free transfers first, a −4 only when it still gains 4+. Free transfers roll over (up to 5), and the money freed in week 1 is spent in later weeks. It assumes today's prices and fitness, so it will change as news comes in. <span class="lab lab-proj">Projection</span> <span class="lab lab-asm">Assumption</span></p>`;
+  }
 
   // ---------- Matches: every fixture in a gameweek with the score, scorers, assists and your players' stats ----------
   // Shows the current gameweek until every team has played, then moves on to the next one.

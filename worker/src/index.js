@@ -31,9 +31,15 @@ export default {
     const kit = /^\/kit\/(\d{1,3})(_1)?\.png$/.exec(url.pathname);
     if (kit) return kitImage(kit[1], kit[2] || "");
     if (!url.pathname.startsWith("/api/")) return serveStatic(url.pathname);
+    const path = url.pathname.slice("/api/".length);
+    // Owner data: your player notes and the recorded advice (writes need the owner key)
+    if (path === "notes" || path === "notes/") return ownerStore(request, env, "notes", null);
+    const rec = /^rec\/(\d+)\/?$/.exec(path);
+    if (rec) return ownerStore(request, env, "rec:" + rec[1], Number(rec[1]));
+    if (path === "recs" || path === "recs/") return allRecs(env);
+    if (path === "calib" || path === "calib/") return ownerStore(request, env, "calib", null);
     if (request.method !== "GET") return new Response("Method not allowed", { status: 405 });
 
-    const path = url.pathname.slice("/api/".length);
     if (path === "odds" || path === "odds/") return odds(env);
     if (path === "news" || path === "news/") return news();
     if (path === "my-team" || path === "my-team/") return myTeamResponse(env);
@@ -360,4 +366,32 @@ async function myTeamResponse(env) {
     const cached = await env.ODDS.get(TEAM_KEY, "json").catch(() => null);
     return json({ ok: false, reason, last: cached && cached.fetched ? cached : null }, 200);
   }
+}
+
+// ---------- owner data: player notes and recorded advice ----------
+// Reads are public (the page shows them); writes need the X-Owner-Key header to match the OWNER_KEY
+// secret. Advice for a gameweek can only be written before that gameweek's deadline.
+async function ownerStore(request, env, key, gw) {
+  if (request.method === "GET") return json((await env.ODDS.get(key, "json")) || (gw ? null : {}), 200);
+  if (request.method !== "POST") return new Response("Method not allowed", { status: 405 });
+  if (!env.OWNER_KEY || request.headers.get("X-Owner-Key") !== env.OWNER_KEY) return json({ error: "not allowed" }, 403);
+  let body; try { body = await request.json(); } catch (e) { return json({ error: "bad json" }, 400); }
+  const text = JSON.stringify(body);
+  if (text.length > 200000) return json({ error: "too large" }, 413);
+  if (gw) {
+    const dl = await deadlineOf(gw);
+    if (dl && Date.now() > dl) return json({ error: "deadline passed" }, 409);
+    const idx = (await env.ODDS.get("recs", "json")) || [];
+    if (!idx.includes(gw)) { idx.push(gw); await env.ODDS.put("recs", JSON.stringify(idx.sort((a, b) => a - b))); }
+  }
+  await env.ODDS.put(key, text);
+  return json({ ok: true }, 200);
+}
+async function deadlineOf(gw) {
+  try { const r = await fetch(FPL + "bootstrap-static/", { headers: { "User-Agent": "Mozilla/5.0 (compatible; fc27-planner)" } }); const j = await r.json(); const ev = j.events.find((e) => e.id === gw); return ev ? Date.parse(ev.deadline_time) : null; } catch (e) { return null; }
+}
+async function allRecs(env) {
+  const idx = (await env.ODDS.get("recs", "json")) || [];
+  const out = {}; for (const g of idx) out[g] = await env.ODDS.get("rec:" + g, "json");
+  return json(out, 200);
 }
