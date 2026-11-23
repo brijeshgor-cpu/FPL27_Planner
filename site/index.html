@@ -717,6 +717,8 @@ details.why[open] { flex-basis: 100%; }
 .pr-t b { font-size: .95rem; } .pr-t small { font-size: .6rem; font-weight: 600; white-space: nowrap; }
 .pr-t.x-hi { background: var(--fdr2); color: var(--fdr2-ink); } .pr-t.x-md { background: color-mix(in srgb, var(--fdr2) 45%, var(--surface-2)); color: var(--ink); }
 .pr-t.x-lo { background: var(--surface-2); color: var(--ink); } .pr-t.x-vl { background: color-mix(in srgb, var(--fdr4) 35%, var(--surface-2)); color: var(--ink); }
+.pr-key { display: flex; align-items: center; gap: 4px; margin: 4px 0; flex-wrap: wrap; }
+.pr-key > span[class^="fdr"] { display: inline-block; min-width: 26px; text-align: center; font-size: .72rem; font-weight: 700; border-radius: 4px; padding: 2px 0; }
 .pr-t.x-bl { border: 1px dashed var(--line); color: var(--muted); }
 @media (max-width: 1000px) { .pr-card { grid-template-columns: minmax(150px, 1fr) repeat(4, minmax(60px, auto)); } .pr-gws { grid-column: 1 / -1; } }
 @media (max-width: 600px) { .pr-card { grid-template-columns: repeat(4, minmax(0, 1fr)); } .pr-who { grid-column: 1 / -1; } .pr-stat .k { font-size: .62rem; } .pr-gws { grid-template-columns: repeat(var(--n), minmax(56px, 1fr)); } .pr-sort { flex: 1 1 100%; } }
@@ -3558,8 +3560,9 @@ details.why[open] { flex-basis: 100%; }
           <label class="pr-sort"><span class="k">Sort by</span><select id="prSort">${[["pred", "Predicted points"], ["pps", "Points per start"], ["ownD", "Ownership (high to low)"], ["ownA", "Ownership (low to high)"], ["priceD", "Price (high to low)"], ["priceA", "Price (low to high)"], ["value", "Predicted points per £m"]].map(([v, l]) => `<option value="${v}" ${v === PR.sort ? "selected" : ""}>${l}</option>`).join("")}</select></label>
         </div>
       </div>
+      <div class="fdr-key pr-key"><span class="note">Fixture difficulty:</span>${[1, 2, 3, 4, 5].map((d) => `<span class="fdr${d}">${d}</span>`).join("")}<span class="note">easiest → hardest</span></div>
       <div id="prList"></div>
-      <p class="note">Predicted points are the site's minutes-adjusted expected points (xP): appearance, goals, assists, clean sheets, penalties, bonus and defensive contributions under this season's rules, using bookmaker odds for GW${gwNext} and fixture difficulty after that, with injuries, bans, rotation and news. Each tile shows xP, the opponent and expected minutes, coloured by xP. Pts / start is this season's points per start. Ownership is FPL's overall ownership; ★ marks your players. <span class="lab lab-proj">Projection</span></p>
+      <p class="note">Predicted points are the site's minutes-adjusted expected points (xP): appearance, goals, assists, clean sheets, penalties, bonus and defensive contributions under this season's rules, using bookmaker odds for GW${gwNext} and fixture difficulty after that, with injuries, bans, rotation and news. Each tile shows xP, the opponent and expected minutes, coloured by FPL's fixture difficulty (FDR): dark green easiest, through grey, to dark red hardest. Pts / start is this season's points per start. Ownership is FPL's overall ownership; ★ marks your players. <span class="lab lab-proj">Projection</span></p>
       ${freshness()}
     </section>`;
     const redraw = () => { PR.shown = 30; drawPredList(); };
@@ -3590,7 +3593,6 @@ details.why[open] { flex-basis: 100%; }
     const key = { pred: (e) => -pred(e), pps: (e) => -pps(e), ownD: (e) => -(+e.selected_by_percent || 0), ownA: (e) => +e.selected_by_percent || 0, priceD: (e) => -e.now_cost, priceA: (e) => e.now_cost, value: (e) => -pred(e) / (e.now_cost / 10) }[PR.sort];
     const sorted = list.map((e) => ({ e, k: key(e) })).sort((a, b) => a.k - b.k || b.e.total_points - a.e.total_points).map((x) => x.e);
     const show = sorted.slice(0, PR.shown);
-    const cls = (v) => (v >= 6 ? "x-hi" : v >= 4.5 ? "x-md" : v >= 3 ? "x-lo" : "x-vl");
     box.innerHTML = `<p class="note pr-count">${sorted.length} player${sorted.length === 1 ? "" : "s"} · GW${PR.g0}${PR.g1 > PR.g0 ? `–${PR.g1}` : ""} · £${price(PR.p0)}m–£${price(PR.p1)}m</p>` + (show.length ? show.map((e) => {
       const code = T[e.team]?.code, tot = pred(e);
       return `<div class="pr-card ${mine.has(e.id) ? "mine" : ""}">
@@ -3599,7 +3601,7 @@ details.why[open] { flex-basis: 100%; }
         <div class="pr-stat"><span class="k">Ownership</span><strong>${(+e.selected_by_percent || 0).toFixed(1)}%</strong></div>
         <div class="pr-stat"><span class="k">Pts / start</span><strong>${pps(e).toFixed(1)}</strong></div>
         <div class="pr-stat pr-tot"><span class="k">Predicted</span><strong>${tot.toFixed(1)}</strong></div>
-        <div class="pr-gws" style="--n:${ks.length}">${ks.map((k) => { const g = gwNext + k, fx = teamFx[e.team][g] || [], v = predPer(e, k); return `<div class="pr-gw"><span class="pr-gl">GW ${g}</span>${fx.length ? `<span class="pr-t ${cls(v)}"><b>${v.toFixed(1)}</b><small>${fx.map((f) => `${tShort(f.opp).toUpperCase()}(${f.home ? "H" : "A"})`).join(" ")}</small><small>${predMins(e, k)}'</small></span>` : `<span class="pr-t x-bl"><b>0.0</b><small>Blank</small></span>`}</div>`; }).join("")}</div>
+        <div class="pr-gws" style="--n:${ks.length}">${ks.map((k) => { const g = gwNext + k, fx = teamFx[e.team][g] || [], v = predPer(e, k); return `<div class="pr-gw"><span class="pr-gl">GW ${g}</span>${fx.length ? `<span class="pr-t fdr${Math.max(...fx.map((f) => f.fdr))}" title="GW${g}: ${fx.map((f) => `${fxLabel(f)}, FDR ${f.fdr}`).join("; ")}"><b>${v.toFixed(1)}</b><small>${fx.map((f) => `${tShort(f.opp).toUpperCase()}(${f.home ? "H" : "A"})`).join(" ")}</small><small>${predMins(e, k)}'</small></span>` : `<span class="pr-t x-bl"><b>0.0</b><small>Blank</small></span>`}</div>`; }).join("")}</div>
       </div>`;
     }).join("") : `<p class="empty">No players match these filters.</p>`) + (sorted.length > show.length ? `<div class="controls pr-more"><button class="btn" id="prMore">Show ${Math.min(30, sorted.length - show.length)} more</button></div>` : "");
     $("#prMore")?.addEventListener("click", () => { PR.shown += 30; drawPredList(); });
