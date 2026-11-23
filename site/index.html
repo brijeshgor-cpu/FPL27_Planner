@@ -655,6 +655,20 @@ details.why[open] { flex-basis: 100%; }
   .pc .fx3 i { font-size: .5rem; letter-spacing: -.03em; text-overflow: clip; }
   .pc .meta .newtag, .pc .meta .w-start { display: none; }
 }
+.unc { font-size: .8rem; color: var(--muted); margin-top: 4px; padding-left: 8px; border-left: 2px solid var(--line); }
+.unc b { color: var(--ink); font-weight: 600; }
+.lab { display: inline-block; font-size: .62rem; font-weight: 700; text-transform: uppercase; letter-spacing: .05em; padding: 1px 6px; border-radius: 999px; vertical-align: middle; border: 1px solid currentColor; }
+.lab-fact { color: var(--good); } .lab-proj { color: var(--c-solid); } .lab-asm { color: var(--warn); }
+.decision { border: 1px solid var(--accent); border-radius: var(--r); padding: 12px 14px; margin-bottom: 16px; background: var(--surface); }
+.dec-h { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; justify-content: space-between; }
+.dec-h h3 { margin: 0; }
+.decision ol { margin: 8px 0; padding-left: 0; list-style: none; display: grid; gap: 6px; }
+.decision ol li { display: grid; grid-template-columns: 88px minmax(0, 1fr); gap: 8px; font-weight: 600; }
+.decision .dk { font-size: .7rem; text-transform: uppercase; letter-spacing: .06em; color: var(--muted); padding-top: 2px; }
+.stance { font-size: .72rem; font-weight: 700; padding: 2px 8px; border-radius: 999px; background: var(--surface-2); }
+.stance.st-chase { color: var(--bad); } .stance.st-protect { color: var(--good); }
+.decision .src { font-size: .74rem; }
+.adv-sec:last-child { grid-column: auto; }
 </style>
 
 <header class="bar">
@@ -914,7 +928,8 @@ details.why[open] { flex-basis: 100%; }
     const mins = Math.round((Date.now() - new Date(D.generated_at)) / 6e4);
     const when = mins < 1 ? "just now" : mins < 60 ? `${mins} min ago` : mins < 1440 ? `${Math.round(mins / 60)} h ago` : new Date(D.generated_at).toLocaleString("en-GB");
     const gwState = `GW${gwCur} ${D.events.find((e) => e.id === gwCur)?.finished ? "finished" : "in progress"}.`;
-    if (D.source === "live") return `<p class="fresh">Live from the official FPL API, loaded at ${new Date(D.generated_at).toLocaleTimeString("en-GB", { hour: "2-digit", minute: "2-digit" })}. Reload the page for the latest. ${gwState}</p>`;
+    const odT = FA.odds && FA.odds.fetched ? ` Bookmaker odds refreshed ${new Date(FA.odds.fetched).toLocaleString("en-GB", { timeZone: "Europe/London", day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" })}.` : "";
+    if (D.source === "live") return `<p class="fresh">Live from the official FPL API, loaded at ${new Date(D.generated_at).toLocaleTimeString("en-GB", { hour: "2-digit", minute: "2-digit" })}. Reload the page for the latest. ${gwState}${odT}</p>`;
     return `<p class="fresh">Saved snapshot from the official FPL API, taken ${when}${D.liveError ? ` (live data unavailable: ${esc(D.liveError)})` : ""}. ${gwState}</p>`;
   }
 
@@ -999,12 +1014,19 @@ details.why[open] { flex-basis: 100%; }
       });
       // 1. Sales: starters (or anyone unavailable) with a clearly better affordable replacement, in priority order,
       //    up to your free transfers, each with a different replacement and the bank updated after every move.
-      const ft = freeTransfers(myM, D.entry.started_event || 1);
+      let eng = null; try { eng = await gwEngine(); } catch (e) { eng = null; }
+      const ft = eng ? eng.base.ft : freeTransfers(myM, D.entry.started_event || 1);
       const trig = (r) => r.sev >= 3 || r.quiet || r.formD <= -1.5 || r.pm.cls === "down" || r.sev >= 2;
       const cands = rows.filter((r) => (r.slot <= 11 || r.sev >= 3) && r.rep && (r.sev >= 3 || (r.rep.gain >= 6 && trig(r))))
         .sort((a, b) => (b.sev >= 3) - (a.sev >= 3) || b.rep.gain - a.rep.gain);
-      const used = new Set(), sold = new Set(); let bankLeft = bank; const tc2 = { ...tcount };
-      cands.forEach((r) => {
+      const used = new Set(), sold = new Set(); let bankLeft = eng ? eng.base.bank : bank; const tc2 = { ...tcount };
+      if (eng) {
+        eng.adv.filter((x) => x.act && x.act.a === "xfer").forEach((x) => { const r = rows.find((y) => y.e.id === x.act.out); if (r) { r.sellTo = { e: E[x.act.inn], gain: x.act.gain, hit: x.act.hit, unc: x.unc }; sold.add(r.e.id); } bankLeft = x.act.bankAfter; });
+        const xi = eng.adv.find((x) => x.sec === "xi" && x.pairs);
+        if (xi) xi.pairs.forEach(([o, i]) => { const ro = rows.find((y) => y.e.id === o), ri = rows.find((y) => y.e.id === i); if (ro && ri) { ri.startOver = ro; ro.benchFor = ri; ri.startUnc = xi.unc; } });
+        rows.forEach((r) => (r.engine = true));
+      }
+      if (!eng) cands.forEach((r) => {
         const squadNow = new Set([...sqSet, ...used]);
         const c = candidates(r.e.element_type, bankLeft + sellPrice(r.e.id), squadNow, tc2, r.e.team, TOv, new Set(), r.sev >= 3 ? 0 : r.e.now_cost - 30)[0];
         if (!c) return;
@@ -1018,7 +1040,7 @@ details.why[open] { flex-basis: 100%; }
       });
       // 2. Starting decisions after the sales: a bench outfielder who projects clearly more than the weakest remaining starter.
       const outfieldXI = rows.filter((r) => r.slot <= 11 && r.e.element_type > 1 && !sold.has(r.e.id));
-      rows.filter((r) => r.slot > 11 && r.e.element_type > 1 && r.sev < 2).sort((a, b) => b.p1 - a.p1).forEach((b) => {
+      if (!eng) rows.filter((r) => r.slot > 11 && r.e.element_type > 1 && r.sev < 2).sort((a, b) => b.p1 - a.p1).forEach((b) => {
         const weak = outfieldXI.filter((x) => !x.benchFor && (x.e.element_type === b.e.element_type || (x.e.element_type > 2 && b.e.element_type > 2))).sort((a, c) => a.p1 - c.p1)[0];
         if (weak && b.p1 - weak.p1 >= 1.2) { b.startOver = weak; weak.benchFor = b; }
       });
@@ -1045,8 +1067,9 @@ details.why[open] { flex-basis: 100%; }
         else r.v = { k: "keep", label: "Keep", txt: r.rep && r.rep.gain >= 3 ? `Keep: ${esc(r.rep.e.web_name)} would add +${r.rep.gain.toFixed(1)} over 5 GWs, but his numbers don't justify a transfer yet` : "Performing well; no clearly better option within budget" };
         r.v.why = why(r);
       });
-      const capNext = rows.filter((r) => (r.slot <= 11 && !sold.has(r.e.id)) || r.startOver).filter((r) => r.sev < 2).sort((a, b) => b.p1 - a.p1)[0] || null;
-      return { live: !!data, by, rows, fxOf, num, sold, bankLeft, ft, capNext };
+      const engCap = eng && eng.adv.find((x) => x.sec === "cap" && x.capId);
+      const capNext = (engCap && (rows.find((r) => r.e.id === engCap.capId) || { e: E[engCap.capId], p1: gp1(E[engCap.capId]) })) || rows.filter((r) => (r.slot <= 11 && !sold.has(r.e.id)) || r.startOver).filter((r) => r.sev < 2).sort((a, b) => b.p1 - a.p1)[0] || null;
+      return { live: !!data, by, rows, fxOf, num, sold, bankLeft, ft, capNext, eng };
     })());
   }
 
@@ -1522,8 +1545,9 @@ details.why[open] { flex-basis: 100%; }
     const lName = firstName(leader);
     const leaderOwns = new Set(squadOf(leader.m).map((p) => p[0]));
     const picks = squadOf(myM);
-    const ft = freeTransfers(myM, D.entry.started_event || 1);
-    let bank = myM.picks?.bank ?? lastHist(myM)[8];
+    // With your FPL login, free transfers and bank are FPL's own figures for the coming gameweek.
+    const ft = plan && plan.eng ? plan.eng.base.ft : freeTransfers(myM, D.entry.started_event || 1);
+    let bank = plan && plan.eng ? plan.eng.base.bank : myM.picks?.bank ?? lastHist(myM)[8];
     const squad = new Set(picks.map((p) => p[0]));
     const tc = {}; picks.forEach((p) => (tc[E[p[0]].team] = (tc[E[p[0]].team] || 0) + 1));
     const mine = picks.map(([id, slot]) => { const e = E[id], rk = risks(e, TO); return { e, slot, rk, sev: sevOf(rk), p5: expertScore(e, 5, TO), p3: expertScore(e, 3, TO), mins: minutesInfo(e) }; });
@@ -1532,7 +1556,7 @@ details.why[open] { flex-basis: 100%; }
     const moves = (plan ? plan.rows.filter((r) => r.sellTo) : []).map((r) => {
       const ce = r.sellTo.e;
       const reason = [r.quiet ? `blanked in GW${gwCur} with little threat (${num0(r.st.expected_goal_involvements).toFixed(2)} xGI)` : "", r.formD <= -1.5 ? `form ${r.e.form} against ${r.e.points_per_game} a game this season` : "", r.pm.cls === "down" ? "price falling" : ""].filter(Boolean).join("; ");
-      return { m: mine.find((x) => x.e.id === r.e.id), c: { e: ce, p5: expertScore(ce, 5, TO), p3: expertScore(ce, 3, TO), mins: minutesInfo(ce) }, gain: r.sellTo.gain, hit: r.sellTo.hit, reason };
+      return { m: mine.find((x) => x.e.id === r.e.id), c: { e: ce, p5: expertScore(ce, 5, TO), p3: expertScore(ce, 3, TO), mins: minutesInfo(ce) }, gain: r.sellTo.gain, hit: r.sellTo.hit, reason, unc: r.sellTo.unc };
     });
     moves.forEach((mv) => { squad.delete(mv.m.e.id); squad.add(mv.c.e.id); bank += sellPrice(mv.m.e.id) - mv.c.e.now_cost; tc[mv.m.e.team]--; tc[mv.c.e.team] = (tc[mv.c.e.team] || 0) + 1; });
     const starts = plan ? plan.rows.filter((r) => r.startOver) : [];
@@ -1550,7 +1574,8 @@ details.why[open] { flex-basis: 100%; }
     // Captain for next gameweek, after the transfers.
     const capList = myXIafter.map((id) => ({ e: E[id], p: expertScore(E[id], 1, TO) })).sort((a, b) => b.p - a.p);
     const planCap = plan && plan.capNext ? capList.find((c) => c.e.id === plan.capNext.e.id) || { e: plan.capNext.e, p: plan.capNext.p1 } : null;
-    const cap = planCap || capList[0], vice = capList.find((c) => c.e.id !== cap.e.id);
+    const engCap = plan && plan.eng && plan.eng.adv.find((x) => x.sec === "cap" && x.capId);
+    const cap = planCap || capList[0], vice = (engCap && engCap.vcId !== cap.e.id && (capList.find((c) => c.e.id === engCap.vcId) || { e: E[engCap.vcId], p: gp1(E[engCap.vcId]) })) || capList.find((c) => c.e.id !== cap.e.id);
     const leadCap = squadOf(leader.m).find((p) => p[3]);
     const capDiff = capList.find((c) => !leaderOwns.has(c.e.id) && c.p >= cap.p * 0.85);
 
@@ -1627,14 +1652,14 @@ details.why[open] { flex-basis: 100%; }
       const why = [...(mv.reason ? [mv.reason.charAt(0).toUpperCase() + mv.reason.slice(1)] : []), ...rs, `projects ${mv.m.p5.toFixed(1)} pts over the next 5 gameweeks`].join("; ");
       const o = TO[mv.c.e.team];
       const oTxt = o ? (mv.c.e.element_type <= 2 ? `${pct(o.cs)} clean sheet chance in GW${gwNext}` : `${tShort(mv.c.e.team)} ${pct(o.score)} to score in GW${gwNext}`) : "";
-      pr.push({ tag: mv.hit ? "Transfer (−4 hit)" : "Transfer", cls: mv.m.sev >= 3 ? "bad" : "acc",
+      pr.push({ tag: mv.hit ? "Transfer (−4 hit)" : "Transfer", cls: mv.m.sev >= 3 ? "bad" : "acc", unc: mv.unc || `${esc(mv.c.e.web_name)}'s minutes and team news; the 5-gameweek gain is a projection.`,
         t: `Sell ${esc(mv.m.e.web_name)} (sells for £${price(sellPrice(mv.m.e.id))}m) → buy ${esc(mv.c.e.web_name)} (${tShort(mv.c.e.team)}, £${price(mv.c.e.now_cost)}m)`,
         d: `<strong>Why sell:</strong> ${why}. <strong>Why ${esc(mv.c.e.web_name)}:</strong> projects ${mv.c.p5.toFixed(1)} pts over 5 gameweeks (${sign1(mv.gain)} on ${esc(mv.m.e.web_name)}), ${Math.round(mv.c.mins.avg)} mins a game, next 3 ${fxStrip(mv.c.e.team, gwNext, 3)}${oTxt ? ", " + oTxt : ""}. ${banRisk(mv.c.e)?.away === 1 ? `Note: he's on ${banRisk(mv.c.e).y} yellows, one from a ban (already allowed for in his projection). ` : ""}${leaderOwns.has(mv.c.e.id) ? `${lName} owns him, so this protects you rather than gains ground.` : `${lName} doesn't own him: every point he scores is a point gained on the leader.`}` });
     });
-    if (!moves.length) pr.push({ tag: "Transfer", cls: "", t: "No transfer is clearly worth making this week", d: `Nobody in your squad is injured or losing minutes badly, and no replacement projects at least 5 pts more over 5 gameweeks within your £${price(bank)}m budget. Roll the transfer.` });
-    starts.forEach((r) => pr.push({ tag: "Line-up", cls: "acc", t: `Start ${esc(r.e.web_name)} over ${esc(r.startOver.e.web_name)}`, d: `${esc(r.e.web_name)} projects ${r.p1.toFixed(1)} pts next gameweek against ${esc(r.startOver.e.web_name)}'s ${r.startOver.p1.toFixed(1)}${r.sc ? ` and has a ${pct(r.sc.p)} chance of scoring` : ""}${num0(r.st.total_points) ? `, after ${r.st.total_points} pts on your bench in GW${gwCur}` : ""}.` }));
+    if (!moves.length) pr.push({ tag: "Transfer", cls: "", t: "No transfer is clearly worth making this week", d: `Nobody in your squad is injured or losing minutes badly, and no replacement projects at least 5 pts more over 5 gameweeks within your £${price(bank)}m budget. Roll the transfer.`, unc: "An injury in team news before the deadline could make a transfer worthwhile." });
+    starts.forEach((r) => pr.push({ tag: "Line-up", cls: "acc", unc: r.startUnc || `${esc(r.e.web_name)}'s and ${esc(r.startOver.e.web_name)}'s team news.`, t: `Start ${esc(r.e.web_name)} over ${esc(r.startOver.e.web_name)}`, d: `${esc(r.e.web_name)} projects ${r.p1.toFixed(1)} pts next gameweek against ${esc(r.startOver.e.web_name)}'s ${r.startOver.p1.toFixed(1)}${r.sc ? ` and has a ${pct(r.sc.p)} chance of scoring` : ""}${num0(r.st.total_points) ? `, after ${r.st.total_points} pts on your bench in GW${gwCur}` : ""}.` }));
     const leftFT = ft - moves.filter((m) => !m.hit).length;
-    pr.push({ tag: "Captain", cls: "acc", t: `Captain ${esc(cap.e.web_name)} in GW${gwNext}, vice ${esc(vice.e.web_name)}`,
+    pr.push({ tag: "Captain", cls: "acc", unc: engCap ? engCap.unc : `${esc(cap.e.web_name)}'s minutes and team news.`, t: `Captain ${esc(cap.e.web_name)} in GW${gwNext}, vice ${esc(vice.e.web_name)}`,
       d: `${esc(cap.e.web_name)} has the highest projection in your XI (${cap.p.toFixed(1)} pts${nextFx(cap.e.team) ? ", " + fxLabel(nextFx(cap.e.team).list[0]) : ""}). ${leadCap ? `${lName} captained ${esc(E[leadCap[0]]?.web_name)} last week. ` : ""}${capDiff && capDiff.e.id !== cap.e.id ? `If you want to gamble on the gap, ${esc(capDiff.e.web_name)} (${capDiff.p.toFixed(1)} pts) is a captain ${lName} doesn't own.` : leaderOwns.has(cap.e.id) ? `${lName} owns him too, so this is the safe pick: it won't lose you ground.` : `${lName} doesn't own him, so a big haul swings the gap directly.`}` });
     const hold = mine.filter((m) => m.sev >= 2 && !moved.has(m.e.id));
     hold.forEach((m) => pr.push({ tag: "Hold", cls: "warn", t: `Hold ${esc(m.e.web_name)} for now`,
@@ -1694,8 +1719,8 @@ details.why[open] { flex-basis: 100%; }
       })()}
 
       <h3>Your priorities, in order</h3>
-      <p class="note">The same plan as Current gameweek team stats: it weighs this gameweek's performances alongside the season data, projections and news.</p>
-      <ol class="prio">${pr.map((p) => `<li><span class="pill ${p.cls === "acc" ? "acc" : p.cls === "bad" ? "sev3" : p.cls === "warn" ? "sev2" : ""}">${p.tag}</span><div><div class="t">${p.t}</div><div class="d">${p.d}</div></div></li>`).join("")}</ol>
+      <p class="note">${plan && plan.eng ? `Transfers, line-up and captain come from the <a href="#gw">Current gameweek (GW${gwNext})</a> analysis of your GW${gwNext} team on FPL${plan.eng.base.pairs.length ? ` (after ${plan.eng.base.pairs.map(([o, i]) => `${o ? esc(o.web_name) : "?"} → ${i ? esc(i.web_name) : "?"}`).join(", ")})` : ""}, so every tab gives the same decision. ` : ""}${(() => { const L = leagueCtx(); return L.text ? L.text + " " : ""; })()}Each item gives the decision, the evidence and the main uncertainty.</p>
+      <ol class="prio">${pr.map((p) => { const lab = ({ Suspension: "Fact", Watch: "Fact", Chip: "Assumption", Transfers: "Assumption" })[p.tag] || "Projection"; return `<li><span class="pill ${p.cls === "acc" ? "acc" : p.cls === "bad" ? "sev3" : p.cls === "warn" ? "sev2" : ""}">${p.tag}</span><div><div class="t">${p.t} <span class="lab lab-${lab === "Fact" ? "fact" : lab === "Assumption" ? "asm" : "proj"}">${lab}</span></div><div class="d">${p.d}</div>${p.unc ? `<div class="unc"><b>Main uncertainty:</b> ${p.unc}</div>` : ""}</div></li>`; }).join("")}</ol>
 
       <div class="stack">
         <div class="panel">
@@ -1795,7 +1820,7 @@ details.why[open] { flex-basis: 100%; }
       value: tr && tr.value != null ? tr.value : picks.reduce((a, p) => a + E[p[0]].now_cost, 0),
     };
     base.sig = base.ids.join(",") + "|" + base.cap + "|" + base.vc + "|" + base.made + "|" + base.bank;
-    GWE.base = base; GWE.TO = null;
+    GWE.base = base; GWE.TO = null; GWE.buys = null; GWE.chipsAdv = null; GWE.fh = null;
     if (GWE.st && GWE.st.sig === base.sig) return;
     const saved = store.get("gwEdit:" + gwNext, null);
     GWE.st = saved && saved.sig === base.sig && saved.ids.every((id) => E[id]) ? saved : { sig: base.sig, ids: [...base.ids], cap: base.cap, vc: base.vc, xf: [] };
@@ -1827,6 +1852,17 @@ details.why[open] { flex-basis: 100%; }
   }
   document.addEventListener("visibilitychange", () => { if (!document.hidden && view === "gw" && gwTimer) gwCheck(); });
 
+  // The GW12 engine on your official team, shared with the Overview so every tab gives the same decision.
+  async function gwEngine() {
+    if (D.source !== "live") return null;
+    if (!GWE.mtP) GWE.mtP = fetch("api/my-team", { cache: "no-store" }).then((r) => (r.ok ? r.json() : null)).catch(() => null);
+    const mt = await GWE.mtP;
+    if (!mt || !(mt.ok || mt.last)) return null;
+    if (!GWE.base) gwBuild(mt);
+    try { await fetchSumm(GWE.base.ids); } catch (e) { /* season minutes used */ }
+    const B = GWE.base;
+    return { base: B, adv: gwAdvice({ ids: [...B.ids], cap: B.cap, vc: B.vc, xf: [] }) };
+  }
   // ---- editor model ----
   const gwTO = () => GWE.TO || (GWE.TO = teamOdds());
   const gp1 = (e) => expertScore(e, 1, gwTO()), gp5 = (e) => expertScore(e, 5, gwTO());
@@ -1894,28 +1930,74 @@ details.why[open] { flex-basis: 100%; }
     st.xf.splice(i, 1); GWE.sel = null; GWE.msg = ""; gwSave();
   }
 
-  // ---- Minutes model: chance of starting and of playing 70+ minutes ----
-  // From the player's last 5 team matches (FPL match history), blended with his season start rate
-  // (worth 2 matches) and scaled by FPL's chance of playing. A start is counted at 50+ minutes,
-  // which separates starters from substitutes (a half-time sub plays 45).
+  // =====================================================================================
+  // Analyst model (see CLAUDE.md): a clear decision, the evidence, and the main uncertainty.
+  // =====================================================================================
+
+  // ---- Minutes and lineup security for the next gameweek's match ----
+  // From the last 5 team matches (FPL match history), blended with the season rate (worth 2 matches)
+  // and scaled by FPL's chance of playing. A start is counted at 50+ minutes (a half-time sub plays 45).
+  // pAbsent: doesn't play at all (a legal auto-sub can cover). pCameo: comes off the bench (cover is lost).
   function minutesProfile(e) {
     const a = e.status === "s" ? 0 : availability(e);
     const gp = teamPlayed(e.team) || 1;
     const sStart = Math.min(1, e.starts / gp), s70 = Math.min(sStart, sStart * Math.min(1, e.minutes / Math.max(1, e.starts * 80)));
+    const s60 = (sStart + s70) / 2, sApp = Math.min(1, sStart + 0.12);
     const h = (FA.summ[e.id] || []).slice().sort((x, y) => y[0] - x[0]).slice(0, 5);
-    const n = h.length, st = h.filter((x) => x[1] >= 50).length, f70 = h.filter((x) => x[1] >= 70).length;
+    const n = h.length, st = h.filter((x) => x[1] >= 50).length, f70 = h.filter((x) => x[1] >= 70).length, f60 = h.filter((x) => x[1] >= 60).length;
+    const app = h.filter((x) => x[1] > 0).length;
     const cameo = h.filter((x) => x[1] > 0 && x[1] < 30).length, off = h.filter((x) => x[1] >= 50 && x[1] < 70).length, dnp = h.filter((x) => x[1] === 0).length;
     const hasFx = (teamFx[e.team][gwNext] || []).length > 0;
-    const pStart = hasFx ? a * (st + 2 * sStart) / (n + 2) : 0, p70 = hasFx ? a * (f70 + 2 * s70) / (n + 2) : 0;
+    const blend = (k, s) => (k + 2 * s) / (n + 2);
+    const rStart = blend(st, sStart), rPlay = Math.max(rStart, blend(app, sApp));
+    const pStart = hasFx ? a * rStart : 0, p70 = hasFx ? a * blend(f70, s70) : 0, p60 = hasFx ? a * blend(f60, s60) : 0;
+    const pPlay = hasFx ? a * rPlay : 0, pCameo = Math.max(0, pPlay - pStart), pAbsent = hasFx ? 1 - pPlay : 1;
+    const startMins = h.filter((x) => x[1] >= 50).map((x) => x[1]);
+    const xMinsIfStart = startMins.length ? startMins.reduce((s, m) => s + m, 0) / startMins.length : Math.min(90, e.starts ? e.minutes / e.starts : 0);
+    // Genuinely playable (the 14-of-15 rule): fit, not flagged, an established starter, not a cameo player.
+    const playable = a === 1 && e.status === "a" && rStart >= 0.7 && (rPlay - rStart) < 0.25;
     const label = !hasFx ? `No GW${gwNext} match` : pStart >= 0.85 ? "Nailed" : pStart >= 0.65 ? "Likely starter" : pStart >= 0.4 ? "Rotation risk" : "Unlikely to start";
     const gws = h.length ? `GW${h[h.length - 1][0]}–${h[0][0]}` : "";
     const pattern = n ? `Started ${st} of his last ${n} (${gws})${f70 < st ? `, ${st - f70 === 1 ? "once" : st - f70 + " times"} taken off before 70'` : ""}${cameo ? `, ${cameo} cameo${cameo > 1 ? "s" : ""} under 30'` : ""}${dnp ? `, ${dnp} unused` : ""}` : `${e.starts} starts in ${gp} team matches this season`;
-    return { pStart, p70, hasFx, label, n, st, f70, cameo, off, dnp, pattern, mins: h.slice().reverse().map((x) => `GW${x[0]} ${x[1]}'`), a };
+    return { pStart, p60, p70, pPlay, pCameo, pAbsent, xMinsIfStart, playable, rStart, hasFx, label, n, st, f70, cameo, off, dnp, pattern, mins: h.slice().reverse().map((x) => `GW${x[0]} ${x[1]}'`), a };
   }
   const confCls = (p) => (p >= 0.85 ? "ok" : p >= 0.65 ? "" : p >= 0.4 ? "sev2" : "sev3");
   const newsDate = (e) => (e.news_added ? new Date(e.news_added).toLocaleString("en-GB", { timeZone: "Europe/London", day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" }) : "");
+  const ukTime = (t) => (t ? new Date(t).toLocaleString("en-GB", { timeZone: "Europe/London", weekday: "short", day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" }) : "");
+  // Non-penalty xG per 90: FPL's xG includes penalties, so the first-choice taker loses ~0.76 xG per
+  // penalty; teams win about 0.11 a match (an estimate, labelled as such).
+  const npxg90 = (e) => Math.max(0, (+e.expected_goals_per_90 || 0) - (e.penalties_order === 1 ? 0.76 * 0.11 : 0));
+  // Haul potential: chance of 2+ attacking returns, or for defenders and keepers a clean sheet plus a return.
+  function haulChance(e) {
+    const TO = gwTO(), sc = scoreChance(e, TO); if (!sc) return 0;
+    const mp = minutesProfile(e), share = Math.min(1, mp.xMinsIfStart / 90) * mp.pStart;
+    const xg = (+e.expected_goals_per_90 || 0) * share, tf = xg > 0.01 ? sc.lam / xg : 1;
+    const lam = sc.lam + (+e.expected_assists_per_90 || 0) * share * tf;
+    if (e.element_type <= 2) { const cs = (TO[e.team] || {}).cs || 0.25; return cs * mp.p60 * (1 - Math.exp(-lam)); }
+    return poisAtLeast(lam, 2);
+  }
+  // Mini-league context: how much risk to take when the xP trade-off is small.
+  function leagueCtx() {
+    const sorted = [...members].sort((a, b) => a.rank - b.rank), meR = sorted.find((x) => x.entry === me);
+    if (!meR) return { stance: "balanced", text: "" };
+    const lead = sorted[0], second = sorted[1];
+    const gap = meR.rank === 1 ? meR.total - (second ? second.total : 0) : lead.total - meR.total;
+    const left = 38 - gwCur;
+    const stance = meR.rank === 1 ? (gap >= 25 ? "protect" : "balanced") : gap > Math.max(25, left * 2.5) ? "chase" : "balanced";
+    const text = meR.rank === 1 ? `You lead ${esc(D.league.name)} by ${gap} pts with ${left} gameweeks left: ${stance === "protect" ? "protect it. When two options are within about 0.5 xP, take the one more of the league owns" : "keep maximising xP"}.`
+      : `You're ${ordinal(meR.rank)} of ${sorted.length} in ${esc(D.league.name)}, ${gap} pts behind ${esc(lead.player_name)} with ${left} gameweeks left: ${stance === "chase" ? "chase. When two options are within about 0.5 xP, take the one fewer of the league owns" : "keep maximising xP; differentials only when the cost is tiny"}.`;
+    return { stance, text, rank: meR.rank, gap, n: sorted.length };
+  }
+  const lgOwnTxt = (id) => `${Math.round((own[id] || 0) * 100)}% of the league own${capCount[id] ? `, ${capCount[id]} captained him in GW${gwCur}` : ""}`;
+  // The 14-of-15 rule.
+  function squadHealth(ids) {
+    const rows = ids.map((id) => ({ id, mp: minutesProfile(E[id]) }));
+    const bad = rows.filter((r) => !r.mp.playable);
+    return { n: rows.length - bad.length, bad };
+  }
+  const whyNot = (e, mp) => e.status === "s" ? "suspended" : mp.a === 0 ? "ruled out" : mp.a < 1 ? `flagged (${pct(mp.a)} to play)` : e.element_type === 1 && mp.rStart < 0.3 ? "backup keeper" : mp.rStart < 0.7 ? `not a regular starter (${pct(mp.rStart)} start rate)` : "usually a cameo";
 
-  // The "Why?" panel: Opta-based stats and team odds that explain a decision.
+  // The "Why?" panel: the stats and odds behind a call, each labelled by source.
   function whyHTML(list) {
     const TO = gwTO();
     const row = (e) => {
@@ -1923,15 +2005,17 @@ details.why[open] { flex-basis: 100%; }
       const f = (teamFx[e.team][gwNext] || []).map(fxLabel).join(", ") || "no fixture";
       const bits = [
         `GW${gwNext}: ${f}`,
-        `${pct(mp.pStart)} to start, ${pct(mp.p70)} to play 70+`,
-        mp.mins.length ? `Recent minutes: ${mp.mins.join(", ")}` : "",
-        t >= 2 ? `xG ${(+e.expected_goals_per_90 || 0).toFixed(2)}/90, xA ${(+e.expected_assists_per_90 || 0).toFixed(2)}/90` : `Saves ${(+e.saves_per_90 || 0).toFixed(1)}/90`,
-        sc && t >= 2 ? `Anytime scorer ${pct(sc.p)}` : "",
-        o ? (t <= 2 ? `${tShort(e.team)} clean sheet ${pct(o.cs)}` : `${tShort(e.team)} to score ${pct(o.score)}`) : "",
+        `<b>Minutes</b> ${pct(mp.pStart)} to start, ${pct(mp.p60)} 60+, ${pct(mp.p70)} 70+, ${pct(mp.pCameo)} cameo, about ${Math.round(mp.xMinsIfStart)}' when he starts <i>(projection)</i>`,
+        mp.mins.length ? `Recent minutes: ${mp.mins.join(", ")} <i>(FPL)</i>` : "",
+        t >= 2 ? `<b>Threat</b> npxG ${npxg90(e).toFixed(2)}/90${e.penalties_order === 1 ? " (est., excl. pens)" : ""}, xA ${(+e.expected_assists_per_90 || 0).toFixed(2)}/90 over ${fmt(e.minutes)}' <i>(Opta via FPL)</i>` : `Saves ${(+e.saves_per_90 || 0).toFixed(1)}/90 <i>(FPL)</i>`,
+        sc && t >= 2 ? `Anytime scorer ${pct(sc.p)}, haul chance ${pct(haulChance(e))} <i>(projection)</i>` : "",
+        o ? `<b>Team</b> ${tShort(e.team)} ${pct(o.score)} to score, ${pct(o.cs)} clean sheet <i>(bookmakers, margin removed${FA.odds && FA.odds.fetched ? `, ${ukTime(FA.odds.fetched)}` : ""})</i>` : `<b>Team</b> no odds yet: FDR ${(teamFx[e.team][gwNext] || [])[0]?.fdr ?? "–"} used <i>(assumption)</i>`,
         t >= 2 ? `Defcon ${(+e.defensive_contribution_per_90 || 0).toFixed(1)}/90 (${pct(poisAtLeast(+e.defensive_contribution_per_90 || 0, t === 2 ? 10 : 12))} of games hit the bonus)` : "",
         e.minutes ? `BPS ${((e.bps / e.minutes) * 90).toFixed(1)}/90` : "",
-        e.penalties_order === 1 ? "On penalties" : e.penalties_order === 2 ? "Second on penalties" : "",
-        e.news ? `FPL news: ${esc(e.news)}${e.news_added ? ` (updated ${newsDate(e)})` : ""}` : "",
+        e.penalties_order === 1 ? "On penalties <i>(FPL set-piece notes)</i>" : e.penalties_order === 2 ? "Second on penalties" : "",
+        e.corners_and_indirect_freekicks_order === 1 || e.direct_freekicks_order === 1 ? `Set pieces: ${[e.corners_and_indirect_freekicks_order === 1 ? "corners" : "", e.direct_freekicks_order === 1 ? "direct free kicks" : ""].filter(Boolean).join(", ")}` : "",
+        `League: ${lgOwnTxt(e.id)} <i>(GW${gwCur} picks)</i>`,
+        e.news ? `<b>FPL news</b>: ${esc(e.news)}${e.news_added ? ` (updated ${newsDate(e)})` : ""} <i>(fact)</i>` : "",
       ].filter(Boolean);
       return `<div class="why-p"><strong>${esc(e.web_name)}</strong><ul>${bits.map((b) => `<li>${b}</li>`).join("")}</ul></div>`;
     };
@@ -1956,49 +2040,63 @@ details.why[open] { flex-basis: 100%; }
   // Who actually comes on if a starter doesn't play: first bench outfielder (in order) who plays and keeps a legal formation.
   function autoSub(st, outId, playsP = 0.5) {
     const e = E[outId];
-    if (e.element_type === 1) { const g = st.ids[11]; return g && minutesProfile(E[g]).pStart >= playsP ? g : null; }
+    if (e.element_type === 1) { const g = st.ids[11]; return g && minutesProfile(E[g]).pPlay >= playsP ? g : null; }
     const xi = st.ids.slice(0, 11).filter((id) => id !== outId);
     for (const id of st.ids.slice(12)) {
-      if (minutesProfile(E[id]).pStart < playsP) continue;
+      if (minutesProfile(E[id]).pPlay < playsP) continue;
       const cnt = { 2: 0, 3: 0, 4: 0 }; [...xi, id].forEach((x) => E[x].element_type > 1 && cnt[E[x].element_type]++);
       if (cnt[2] >= 3 && cnt[3] >= 2 && cnt[4] >= 1) return id;
     }
     return null;
   }
+  const sameMatch = (a, b) => { const fa = (teamFx[E[a].team][gwNext] || [])[0], fb = (teamFx[E[b].team][gwNext] || [])[0]; return !!fa && !!fb && (E[a].team === E[b].team || fa.opp === E[b].team); };
 
-  // Recommendations for the team as edited. Every item has to pass one test: would it change your
-  // starting XI, captain, vice-captain or bench order before the deadline?
+  // Recommendations for the team as edited. Every item: a decision (t), the evidence (d), the main
+  // uncertainty (unc) and a label (lab: Fact / Projection / Assumption). Each must pass one test:
+  // would it change your XI, captain, vice, bench order, transfers or chip before the deadline?
   function gwAdvice(st) {
-    const TO = gwTO(), out = [];
+    const TO = gwTO(), out = [], L = leagueCtx();
     const xiIds = st.ids.slice(0, 11), benchIds = st.ids.slice(11);
     const P = (id) => gp1(E[id]), MP = (id) => minutesProfile(E[id]), nm = (id) => esc(E[id].web_name);
     const fmt1 = (v) => (v >= 0 ? "+" : "−") + Math.abs(v).toFixed(1);
+    const list = (a) => (a.length > 1 ? a.slice(0, -1).join(", ") + " and " + a[a.length - 1] : a[0]);
+    const routes = (id) => { const e = E[id], t = e.element_type, o = TO[e.team] || {}; return t <= 2 ? `clean sheet ${pct(o.cs ?? 0)}${t === 2 ? `, defcon ${pct(poisAtLeast(+e.defensive_contribution_per_90 || 0, 10))}` : ""}` : `scores ${pct((scoreChance(e, TO) || {}).p || 0)}, xA ${(+e.expected_assists_per_90 || 0).toFixed(2)}/90${e.penalties_order === 1 ? ", pens" : ""}`; };
 
     // 1. Best XI
     const bx = bestXI(st.ids), cur = xiIds.reduce((a, id) => a + P(id), 0), gain = bx.sum - cur;
     const ins = bx.ids.filter((id) => !xiIds.includes(id)).sort((a, b) => P(b) - P(a)), outs = xiIds.filter((id) => !bx.ids.includes(id)).sort((a, b) => P(a) - P(b));
     const curCnt = { 2: 0, 3: 0, 4: 0 }; xiIds.forEach((id) => E[id].element_type > 1 && curCnt[E[id].element_type]++);
     const curForm = `${curCnt[2]}-${curCnt[3]}-${curCnt[4]}`;
-    if (!ins.length || gain < 0.05) out.push({ sec: "xi", k: "good", t: `Your XI is the best XI from your squad (${curForm})`, d: `It projects ${cur.toFixed(1)} pts before the captain. No bench player projects more than the starter he'd replace.` });
-    else {
+    if (!ins.length || gain < 0.05) {
+      const weakest = [...xiIds].filter((id) => E[id].element_type > 1).sort((a, b) => P(a) - P(b))[0];
+      out.push({ sec: "xi", k: "good", lab: "Projection", t: `Keep your XI (${curForm})`, d: `It's the strongest legal XI from your squad: ${cur.toFixed(1)} xP before the captain.`, unc: weakest ? `${nm(weakest)} is your weakest starter (${P(weakest).toFixed(1)} xP, ${pct(MP(weakest).pStart)} to start): check team news.` : "" });
+    } else {
       const close = gain < 0.5;
-      // pair each incoming player with the outgoing one in the same position where possible
       const left = [...outs], rest = [], pairs = [];
       ins.forEach((id) => { const k = left.findIndex((o) => E[o].element_type === E[id].element_type); if (k >= 0) pairs.push([left.splice(k, 1)[0], id]); else rest.push(id); });
       rest.forEach((id) => { const k = left.findIndex((o) => E[o].element_type > 1); pairs.push([left.splice(k >= 0 ? k : 0, 1)[0], id]); });
-      const list = (a) => (a.length > 1 ? a.slice(0, -1).join(", ") + " and " + a[a.length - 1] : a[0]);
+      // A close call goes to lineup security (70+ minutes), then routes to points.
+      const secure = pairs.map(([o, i]) => (MP(i).p70 >= MP(o).p70 ? i : o));
       out.push({
-        sec: "xi", k: close ? "" : "warn",
-        t: close ? `Close call: ${pairs.map(([o, i]) => `${nm(i)} or ${nm(o)}`).join("; ")}` : `Start ${list(pairs.map(([, i]) => nm(i)))} instead of ${list(pairs.map(([o]) => nm(o)))}${bx.formation !== curForm ? ` (switch to ${bx.formation})` : ""}`,
-        d: close ? `Only ${gain.toFixed(1)} pts between them. ${pairs.map(([o, i]) => `${nm(i)} ${pct(MP(i).p70)} to play 70+ vs ${nm(o)} ${pct(MP(o).p70)}`).join("; ")}: go with the one more likely to play the full game.`
-          : `Projects ${fmt1(gain)} pts: ${pairs.map(([o, i]) => `${nm(i)} ${P(i).toFixed(1)} vs ${nm(o)} ${P(o).toFixed(1)}`).join(", ")}.`,
-        why: whyHTML(pairs.flat().map((id) => E[id])), act: close ? null : { a: "bestxi", l: "Apply best XI" },
+        sec: "xi", k: close ? "" : "warn", lab: "Projection",
+        t: close ? `Close call: start ${list(secure.map(nm))}` : `Start ${list(pairs.map(([, i]) => nm(i)))} instead of ${list(pairs.map(([o]) => nm(o)))}${bx.formation !== curForm ? ` (switch to ${bx.formation})` : ""}`,
+        d: close ? `Only ${gain.toFixed(1)} xP separates them, so lineup security decides: ${pairs.map(([o, i]) => `${nm(i)} ${pct(MP(i).p70)} to play 70+ (${routes(i)}) vs ${nm(o)} ${pct(MP(o).p70)} (${routes(o)})`).join("; ")}.`
+          : `${fmt1(gain)} xP: ${pairs.map(([o, i]) => `${nm(i)} ${P(i).toFixed(1)} vs ${nm(o)} ${P(o).toFixed(1)}`).join(", ")}.`,
+        unc: pairs.every(([, i]) => MP(i).pStart >= 0.9) ? `${list(pairs.map(([, i]) => { const o = TO[E[i].team]; return `${nm(i)} ${(teamFx[E[i].team][gwNext] || []).map(fxLabel).join(" + ")}${o ? `: ${tShort(E[i].team)} ${pct(o.score)} to score, ${pct(o.cs)} clean sheet` : ""}`; }))}. The match, not his minutes, is the risk.` : `${list(pairs.map(([, i]) => `${nm(i)}'s minutes (${pct(MP(i).pStart)} to start)`))}. Check the press conferences before the deadline.`,
+        pairs, why: whyHTML(pairs.flat().map((id) => E[id])), act: { a: "bestxi", l: close ? "Apply" : "Apply best XI" },
       });
     }
 
     // 2. Captain and vice
-    const capC = xiIds.map((id) => ({ id, p: P(id), mp: MP(id), sc: scoreChance(E[id], TO) })).filter((x) => x.mp.pStart >= 0.6).sort((a, b) => b.p - a.p);
+    const capC = xiIds.map((id) => ({ id, p: P(id), mp: MP(id), sc: scoreChance(E[id], TO), haul: haulChance(E[id]) })).filter((x) => x.mp.pStart >= 0.6).sort((a, b) => b.p - a.p);
     if (capC.length >= 2) {
+      // Within 0.5 xP the mini-league decides: chasing takes the lower captaincy EO, protecting the higher.
+      const capEO = (id) => (own[id] || 0) + (capCount[id] || 0) / (D._n || 1);
+      let leagueNote = "";
+      if (capC[0].p - capC[1].p < 0.5 && L.stance !== "balanced") {
+        const [x, y] = capC, flip = L.stance === "chase" ? capEO(y.id) < capEO(x.id) - 0.1 : capEO(y.id) > capEO(x.id) + 0.1;
+        if (flip) { capC[0] = y; capC[1] = x; leagueNote = ` League call: only ${(x.p - y.p).toFixed(1)} xP apart, and ${L.stance === "chase" ? `${esc(E[y.id].web_name)} is the differential (league captaincy EO ${Math.round(capEO(y.id) * 100)}% vs ${Math.round(capEO(x.id) * 100)}%), which suits chasing` : `${esc(E[y.id].web_name)} is the safer template pick (EO ${Math.round(capEO(y.id) * 100)}% vs ${Math.round(capEO(x.id) * 100)}%), which suits protecting your lead`}.`; }
+      }
       const [c1, c2] = capC, g = c1.p - c2.p, e1 = E[c1.id], e2 = E[c2.id];
       const reasons = [];
       const s1 = c1.sc ? c1.sc.p : 0, s2 = c2.sc ? c2.sc.p : 0;
@@ -2008,112 +2106,225 @@ details.why[open] { flex-basis: 100%; }
       if ((teamFx[e1.team][gwNext] || []).length > (teamFx[e2.team][gwNext] || []).length) reasons.push([1, "plays twice this gameweek"]);
       if (c1.mp.p70 - c2.mp.p70 >= 0.15) reasons.push([c1.mp.p70 - c2.mp.p70, `more secure minutes (${pct(c1.mp.p70)} vs ${pct(c2.mp.p70)} to play 70+)`]);
       if (e1.penalties_order === 1 && e2.penalties_order !== 1) reasons.push([0.12, "on penalties"]);
-      const x1 = +e1.expected_goal_involvements_per_90 || 0, x2 = +e2.expected_goal_involvements_per_90 || 0;
-      if (x1 - x2 >= 0.12) reasons.push([x1 - x2, `higher xGI (${x1.toFixed(2)} vs ${x2.toFixed(2)} per 90)`]);
+      const n1 = npxg90(e1), n2 = npxg90(e2);
+      if (n1 - n2 >= 0.1) reasons.push([n1 - n2, `more open-play threat (npxG ${n1.toFixed(2)} vs ${n2.toFixed(2)} per 90)`]);
       const a1 = +e1.expected_assists_per_90 || 0, a2 = +e2.expected_assists_per_90 || 0;
-      if (a1 - a2 >= 0.08) reasons.push([a1 - a2, `creates more chances (xA ${a1.toFixed(2)} vs ${a2.toFixed(2)} per 90)`]);
+      if (a1 - a2 >= 0.08) reasons.push([a1 - a2, `creates more (xA ${a1.toFixed(2)} vs ${a2.toFixed(2)} per 90)`]);
       const b1 = e1.minutes ? (e1.bps / e1.minutes) * 90 : 0, b2 = e2.minutes ? (e2.bps / e2.minutes) * 90 : 0;
       if (b1 - b2 >= 4) reasons.push([(b1 - b2) / 40, `more bonus potential (BPS ${b1.toFixed(0)} vs ${b2.toFixed(0)} per 90)`]);
-      if (e1.element_type === 3 && e2.element_type === 4) reasons.push([0.05, "a midfielder gets 5 a goal (a forward 4) and a point for a clean sheet"]);
       reasons.sort((a, b) => b[0] - a[0]);
       const against = s2 - s1 >= 0.08 ? ` ${E[c2.id].web_name} is likelier to score (${pct(s2)} vs ${pct(s1)}), but ${E[c1.id].web_name} adds more elsewhere.` : "";
-      const why1 = (reasons.length ? reasons.slice(0, 2).map((r) => r[1]).join(" and ") : "better all-round projection") + "." + against;
-      const close = g < 0.6;
-      const isCap = st.cap === c1.id, isVc = st.vc === c2.id;
+      const why1 = g < 0 ? "" : (reasons.length ? reasons.slice(0, 2).map((r) => r[1]).join(" and ") : "better all-round projection") + "." + against;
+      // Vice: the most dependable of the next best (85%+ to start), ideally not in the captain's match.
+      const vOpts = capC.slice(1, 5).filter((x) => x.mp.pStart >= 0.85).sort((a, b) => (sameMatch(a.id, c1.id) - sameMatch(b.id, c1.id)) || b.p - a.p);
+      const vice = vOpts[0] || c2;
+      const shared = sameMatch(vice.id, c1.id);
+      const close = g < 0.6, isCap = st.cap === c1.id, isVc = st.vc === vice.id;
       out.push({
-        sec: "cap", k: isCap && isVc ? "good" : "warn",
-        t: `${isCap ? "Keep" : "Captain"} ${nm(c1.id)}, vice ${nm(c2.id)}${close ? " (close call)" : ""}`,
-        d: `${nm(c1.id)} ${c1.p.toFixed(1)} vs ${nm(c2.id)} ${c2.p.toFixed(1)} pts (${(2 * g).toFixed(1)} once doubled). Main edge: ${why1}${close ? ` It's close: ${nm(c1.id)} ${c1.sc ? pct(c1.sc.p) + " to score" : ""}${e1.penalties_order === 1 ? ", on pens" : ""}, ${pct(c1.mp.p70)} for 70+ mins; ${nm(c2.id)} ${c2.sc ? pct(c2.sc.p) + " to score" : ""}${e2.penalties_order === 1 ? ", on pens" : ""}, ${pct(c2.mp.p70)} for 70+ mins.` : ""}${!isCap && st.cap ? ` You have ${nm(st.cap)} (${P(st.cap).toFixed(1)}).` : ""}`,
-        why: whyHTML([e1, e2]), act: isCap && isVc ? null : { a: "cap", id: c1.id, vc: c2.id, l: `Make ${E[c1.id].web_name} captain, ${E[c2.id].web_name} vice` },
+        sec: "cap", k: isCap && isVc ? "good" : "warn", lab: "Projection", capId: c1.id, vcId: vice.id,
+        t: `${isCap ? "Keep" : "Captain"} ${nm(c1.id)}, vice ${nm(vice.id)}${close ? " (close call)" : ""}`,
+        d: `${nm(c1.id)} ${c1.p.toFixed(1)} xP vs ${nm(c2.id)} ${c2.p.toFixed(1)} (${g < 0 ? `${(-2 * g).toFixed(1)} less once doubled, the price of the differential` : `${(2 * g).toFixed(1)} once doubled`}). ${g < 0 ? "" : "Main edge: "} ${why1} Captain haul chance ${pct(c1.haul)}; ${lgOwnTxt(c1.id)}.${vice.id !== c2.id ? ` Vice ${nm(vice.id)} over ${nm(c2.id)}: more dependable (${pct(vice.mp.pStart)} vs ${pct(c2.mp.pStart)} to start)${!shared && sameMatch(c2.id, c1.id) ? " and in a different match" : ""}.` : ""}${shared ? ` Note: your vice plays in the same match as your captain, so a postponement would hit both.` : ""}${!isCap && st.cap ? ` You have ${nm(st.cap)} (${P(st.cap).toFixed(1)}).` : ""}${leagueNote}`,
+        unc: close ? `It's close: ${nm(c1.id)} ${pct(s1)} to score, ${pct(c1.mp.p70)} for 70+; ${nm(c2.id)} ${pct(s2)} to score, ${pct(c2.mp.p70)} for 70+. A late team-news change would flip it.` : `${nm(c1.id)}'s minutes (${pct(c1.mp.pStart)} to start, ${pct(c1.mp.p70)} for 70+).`,
+        why: whyHTML([e1, e2, ...(vice.id !== c2.id ? [E[vice.id]] : [])]), act: isCap && isVc ? null : { a: "cap", id: c1.id, vc: vice.id, l: `Make ${E[c1.id].web_name} captain, ${E[vice.id].web_name} vice` },
       });
+      // Higher-upside alternative: worth it only when chasing, or when the cost is tiny.
+      const alt = capC.slice(1, 6).filter((x) => x.haul - c1.haul >= 0.04 && c1.p - x.p <= 1.5).sort((a, b) => b.haul - a.haul)[0];
+      if (alt) {
+        const cost = 2 * (c1.p - alt.p), eoAlt = (capCount[alt.id] || 0) / (D._n || 1), eo1 = (capCount[c1.id] || 0) / (D._n || 1);
+        const worth = L.stance === "chase" ? cost <= 1.2 : L.stance === "protect" ? false : cost <= 0.6;
+        out.push({ sec: "cap", k: worth ? "warn" : "", lab: "Projection",
+          t: `${worth ? "Upside option worth considering" : "Upside option, not worth it now"}: captain ${nm(alt.id)}`,
+          d: `Costs about ${cost.toFixed(1)} expected pts vs ${nm(c1.id)}, for a ${pct(alt.haul)} haul chance vs ${pct(c1.haul)}. ${Math.round(eoAlt * 100)}% of the league captained him in GW${gwCur} vs ${Math.round(eo1 * 100)}% for ${nm(c1.id)}. ${L.stance === "chase" ? "You're chasing, so a small cost for a bigger ceiling can pay off." : L.stance === "protect" ? "You're protecting a lead, so take the safer captain." : "Only worth it if you want to take a calculated risk this week."} It pays off if he hauls and ${nm(c1.id)} doesn't.`,
+          unc: `Haul chances are projections from xG/xA and odds, so the gap is uncertain.`, why: whyHTML([E[alt.id], e1]), act: worth ? { a: "cap", id: alt.id, vc: c1.id, l: `Captain ${E[alt.id].web_name}` } : null });
+      }
     }
 
-    // 3. Risks before the deadline (starters, and the first substitute)
+    // 3. Risks before the deadline. A likely absence can be covered by an auto-sub; a likely cameo can't.
     const risky = [];
     xiIds.forEach((id) => {
       const e = E[id], mp = MP(id);
-      const trig = [];
-      if (e.status === "s") trig.push("Suspended");
-      else if (mp.a === 0) trig.push(`Ruled out: ${esc(e.news || "unavailable")}`);
-      else if (mp.a < 1) trig.push(`${pct(mp.a)} chance of playing: ${esc(e.news)}`);
-      if (!(teamFx[e.team][gwNext] || []).length) trig.push(`No GW${gwNext} fixture`);
+      const trig = []; let lab = "Projection";
+      if (e.status === "s") { trig.push("Suspended"); lab = "Fact"; }
+      else if (mp.a === 0) { trig.push(`Ruled out: ${esc(e.news || "unavailable")}`); lab = "Fact"; }
+      else if (mp.a < 1) { trig.push(`${pct(mp.a)} chance of playing: ${esc(e.news)}`); lab = "Fact"; }
+      if (!(teamFx[e.team][gwNext] || []).length) { trig.push(`No GW${gwNext} fixture`); lab = "Fact"; }
+      const cameoRisk = mp.a > 0 && mp.pCameo >= 0.2 && mp.pCameo > mp.pAbsent;
       if (mp.a > 0 && mp.pStart < 0.75) trig.push(`${mp.pStart >= 0.65 ? "Not nailed" : mp.label}: ${mp.pattern}`);
       else if (mp.a > 0 && mp.p70 < 0.5 && e.element_type > 1) trig.push(`Often off early: ${mp.pattern}`);
       if (!trig.length) return;
       risky.push(id);
       const cover = autoSub(st, id);
       const better = benchIds.filter((b) => E[b].element_type === e.element_type || (E[b].element_type > 2 && e.element_type > 2)).filter((b) => MP(b).pStart >= 0.75).sort((a, b) => P(b) - P(a))[0];
-      const act = better && E[id].element_type > 1 && P(better) >= P(id) - 0.3 ? { a: "swap", id, with: better, l: `Start ${E[better].web_name} instead` } : null;
-      out.push({ sec: "risk", k: mp.pStart < 0.5 || mp.a === 0 ? "bad" : "warn", t: `${nm(id)}: ${pct(mp.pStart)} to start, ${pct(mp.p70)} to play 70+`, d: `${trig.join(". ")}.${e.news_added && e.news ? ` FPL news updated ${newsDate(e)}.` : mp.n ? ` Based on matches up to GW${gwCur}.` : ""}${cover ? ` If he misses out, ${nm(cover)} comes on (${P(cover).toFixed(1)} pts).` : " If he misses out, nobody on your bench can come on: you'd play with 10."}${act ? ` ${E[better].web_name} projects ${P(better).toFixed(1)} vs his ${P(id).toFixed(1)}.` : ""}`, why: whyHTML([e, ...(cover ? [E[cover]] : [])]), act });
+      const act = better && e.element_type > 1 && P(better) >= P(id) - 0.3 ? { a: "swap", id, with: better, l: `Start ${E[better].web_name} instead` } : null;
+      const coverTxt = cameoRisk ? ` The bigger risk is a short cameo (${pct(mp.pCameo)}): if he comes on late, he scores 1 pt and your bench can't cover him.` : cover ? ` If he doesn't play (${pct(mp.pAbsent)}), ${nm(cover)} comes on (${P(cover).toFixed(1)} xP).` : " If he doesn't play, nobody on your bench can come on: you'd play with 10.";
+      out.push({ sec: "risk", k: mp.pStart < 0.5 || mp.a === 0 ? "bad" : "warn", lab,
+        t: act ? `Start ${E[better].web_name} over ${nm(id)}` : `${cameoRisk ? "Cameo risk" : "Minutes risk"}: ${nm(id)}`,
+        d: `${pct(mp.pStart)} to start, ${pct(mp.p70)} to play 70+. ${trig.join(". ")}.${coverTxt}${act ? ` ${E[better].web_name} projects ${P(better).toFixed(1)} vs his ${P(id).toFixed(1)}.` : ""}`,
+        unc: e.news_added && e.news ? `FPL news last updated ${newsDate(e)}: check the latest press conference.` : `Based on matches up to GW${gwCur}; no injury flag, so it rests on his recent role.`,
+        why: whyHTML([e, ...(cover ? [E[cover]] : [])]), act });
     });
 
-    // 4. Bench cover and order
+    // 4. Bench cover and the 14-of-15 rule
+    const SH = squadHealth(st.ids);
+    out.push({ sec: "bench", k: SH.n >= 14 ? "good" : SH.n >= 13 ? "warn" : "bad", lab: "Projection",
+      t: `${SH.n} of 15 genuinely playable${SH.n >= 14 ? "" : `: aim for 14`}`,
+      d: SH.bad.length ? `Not reliable cover: ${SH.bad.map((r) => `${nm(r.id)} (${whyNot(E[r.id], r.mp)})`).join(", ")}.${SH.n < 14 ? " Fix the weakest of these with your next transfer (see Players to buy)." : ""}` : "Every player is fit and an established starter.",
+      unc: "Start rates come from the last 5 matches; a rotation or injury could change this quickly." });
     risky.filter((id) => E[id].element_type > 1).forEach((id) => {
       const cover = autoSub(st, id); if (!cover) return;
       const c = E[cover], mp = MP(cover), o = TO[c.team];
       const weak = [];
       if (mp.pStart < 0.6) weak.push(`he's a minutes risk himself (${pct(mp.pStart)} to start)`);
-      // a defender is weak cover when both routes to points are poor: unlikely clean sheet and low defcon
       if (c.element_type === 2 && o && o.cs < 0.25 && poisAtLeast(+c.defensive_contribution_per_90 || 0, 10) < 0.2) weak.push(`${tShort(c.team)} are only ${pct(o.cs)} to keep a clean sheet and his defensive contributions are low (${(+c.defensive_contribution_per_90 || 0).toFixed(1)}/90)`);
-      if (P(cover) < 2.5) weak.push(`projects only ${P(cover).toFixed(1)} pts`);
-      if (weak.length) out.push({ sec: "bench", k: "warn", t: `Weak cover for ${nm(id)}: ${nm(cover)} would come on`, d: `Under the formation rules ${nm(cover)} is the first eligible substitute, but ${weak.join(", ")}.`, why: whyHTML([E[id], c]) });
+      if (P(cover) < 2.5) weak.push(`projects only ${P(cover).toFixed(1)} xP`);
+      if (weak.length) out.push({ sec: "bench", k: "warn", lab: "Projection", t: `Weak cover for ${nm(id)}: ${nm(cover)} would come on`, d: `Under the formation rules ${nm(cover)} is the first eligible substitute, but ${weak.join(", ")}.`, unc: `Matters only if ${nm(id)} misses out (${pct(MP(id).pAbsent)}).`, why: whyHTML([E[id], c]) });
     });
-    const outB = benchIds.slice(1), ideal = [...outB].sort((a, b) => P(b) * MP(b).pStart - P(a) * MP(a).pStart);
-    if (outB.join() !== ideal.join() && P(ideal[0]) * MP(ideal[0]).pStart - P(outB[0]) * MP(outB[0]).pStart >= 0.5) {
-      out.push({ sec: "bench", k: "warn", t: `Reorder your bench: ${ideal.map(nm).join(", ")}`, d: `${nm(ideal[0])} is the most valuable substitute (${P(ideal[0]).toFixed(1)} pts, ${pct(MP(ideal[0]).pStart)} to start) but is currently ${["first", "second", "third"][outB.indexOf(ideal[0])]} in line. FPL brings substitutes on in bench order.`, why: whyHTML(ideal.map((id) => E[id])), act: { a: "bench", ids: ideal, l: "Apply bench order" } });
-    }
-    // 5. Transfers to consider: the best affordable upgrades by the 5-gameweek expert score, within your
-    //    free transfers and bank; a −4 hit only when the upgrade still gains 4+ pts over 5 gameweeks after it.
-    out.push(...gwBuys(st));
-    if (!out.some((x) => x.sec === "risk")) out.push({ sec: "risk", k: "good", t: "No minutes or availability risks in your XI", d: "Every starter is fit, has a fixture and has been starting regularly." });
-    if (!out.some((x) => x.sec === "bench")) out.push({ sec: "bench", k: "good", t: "Bench order is right", d: `If a starter misses out, ${(() => { const s = benchIds.slice(1).find((id) => MP(id).pStart >= 0.5); return s ? `${nm(s)} (${P(s).toFixed(1)} pts) is first in line` : "your bench covers the formation"; })()}.` });
+    const outB = benchIds.slice(1), ideal = [...outB].sort((a, b) => P(b) * MP(b).pPlay - P(a) * MP(a).pPlay);
+    if (outB.join() !== ideal.join() && P(ideal[0]) * MP(ideal[0]).pPlay - P(outB[0]) * MP(outB[0]).pPlay >= 0.5) {
+      out.push({ sec: "bench", k: "warn", lab: "Projection", t: `Reorder your bench: ${ideal.map(nm).join(", ")}`, d: `${nm(ideal[0])} is the most valuable substitute (${P(ideal[0]).toFixed(1)} xP, ${pct(MP(ideal[0]).pPlay)} to play) but is ${["first", "second", "third"][outB.indexOf(ideal[0])]} in line. FPL brings substitutes on in bench order.`, unc: "Only matters if a starter misses out.", why: whyHTML(ideal.map((id) => E[id])), act: { a: "bench", ids: ideal, l: "Apply bench order" } });
+    } else out.push({ sec: "bench", k: "good", lab: "Projection", t: "Bench order is right", d: `If a starter misses out, ${(() => { const s = benchIds.slice(1).find((id) => MP(id).pPlay >= 0.5); return s ? `${nm(s)} (${P(s).toFixed(1)} xP) is first in line` : "your bench covers the formation"; })()}.` });
+    if (!out.some((x) => x.sec === "risk")) out.push({ sec: "risk", k: "good", lab: "Projection", t: "No minutes or availability risks in your XI", d: "Every starter is fit, has a fixture and has been starting regularly.", unc: `Team news from the press conferences before the GW${gwNext} deadline.` });
+
+    out.push(...gwBuys(st), ...gwChips(st));
     return out;
   }
+
+  // ---- Transfers: roll vs the strongest move or sequence, valued on your best XI over 5 gameweeks ----
   function gwBuys(st) {
     const B = GWE.base, c = gwCalc(st), key = st.ids.join() + "|" + c.bank + "|" + c.n;
     if (GWE.buys && GWE.buys.key === key) return GWE.buys.out;
     const TO = gwTO(), nm = (e) => esc(e.web_name), fmt1 = (v) => (v >= 0 ? "+" : "−") + Math.abs(v).toFixed(1);
     const ftLeft = B.unlimited ? 15 : Math.max(0, B.ft - c.n);
     const sellFor = (id) => (st.xf.some((t) => t.inn === id) ? E[id].now_cost : B.sell[id] ?? E[id].now_cost);
-    // Each option is valued by how much it raises your best XI's projected points (so a bench upgrade
-    // only counts if he'd get into the team), over 5 gameweeks; the best one is taken, then the next.
+    // Rolling a free transfer keeps flexibility for next week (up to 5 can be saved). Valued at ~1.5 pts
+    // while you hold fewer than 4, ~0.5 at 4 and nothing at 5 (an assumption, labelled as such).
+    const rollValue = B.unlimited ? 0 : ftLeft >= 5 ? 0 : ftLeft === 4 ? 0.5 : 1.5;
+    const sh0 = squadHealth(st.ids).n;
     let bank = c.bank, cur = [...st.ids]; const tc = {}; cur.forEach((id) => (tc[E[id].team] = (tc[E[id].team] || 0) + 1));
     const xi5 = (ids) => bestXI(ids, gp5).sum, xi1 = (ids) => bestXI(ids, gp1).sum;
     const picks = [];
     for (let round = 0; round <= Math.min(ftLeft, 4); round++) {
-      const base5 = xi5(cur); let best = null;
+      const base5 = xi5(cur), sh = squadHealth(cur).n; let best = null;
       cur.forEach((id, slot) => {
         const e = E[id]; if (e.element_type === 1 && slot === 11 && availability(e) > 0) return; // backup keeper
         const budget = bank + sellFor(id);
         candidates(e.element_type, budget, new Set(cur), tc, e.team, TO, new Set()).slice(0, 6).forEach((cd) => {
           const nid = cur.map((x) => (x === id ? cd.e.id : x)), g = xi5(nid) - base5;
-          if (!best || g > best.gain) best = { out: e, inn: cd.e, gain: g, budget, nid, slot };
+          // below 14 playable, restoring a reliable body is worth ~1 pt of cover
+          const cover = sh < 14 && !minutesProfile(e).playable && minutesProfile(cd.e).playable ? 1 : 0;
+          if (!best || g + cover > best.score) best = { out: e, inn: cd.e, gain: g, cover, score: g + cover, budget, nid, slot };
         });
       });
       if (!best) break;
       const free = round < ftLeft;
-      if (free ? best.gain < 3 : best.gain - 4 < 4) break;
-      picks.push({ ...best, g1: xi1(best.nid) - xi1(cur), free, bankAfter: best.budget - best.inn.now_cost });
+      if (free ? best.score < Math.max(3, rollValue + 1.5) : best.score - 4 < 4) break;
+      picks.push({ ...best, g1: xi1(best.nid) - xi1(cur), free, bankAfter: best.budget - best.inn.now_cost, sellP: sellFor(best.out.id) });
       bank = best.budget - best.inn.now_cost; tc[best.out.team]--; tc[best.inn.team] = (tc[best.inn.team] || 0) + 1; cur = best.nid;
       if (!free) break;
     }
-    const res = picks.map((x) => ({
-      sec: "buy", k: x.free ? "good" : "warn",
-      t: `${x.free ? "" : "Worth a −4: "}Sell ${nm(x.out)}, buy ${nm(x.inn)} (${tShort(x.inn.team)}, £${price(x.inn.now_cost)}m)`,
-      d: `Your best XI gains ${fmt1(x.gain)} pts over the next 5 gameweeks${x.free ? "" : ` (${fmt1(x.gain - 4)} after the hit)`} and ${fmt1(x.g1)} in GW${gwNext}${x.slot > 10 ? ` (${nm(x.out)} is on your bench now)` : ""}. ${x.free ? "Uses a free transfer" : "Costs 4 pts"}; leaves £${price(x.bankAfter)}m in the bank. Next 3: ${[0, 1, 2].map((k) => (teamFx[x.inn.team][gwNext + k] || []).map(fxLabel).join(" + ") || "blank").join(", ")}.`,
-      why: whyHTML([x.out, x.inn]), act: { a: "xfer", out: x.out.id, inn: x.inn.id, l: `Make this transfer` },
-    }));
-    if (!res.length) res.push({ sec: "buy", k: "good", t: ftLeft ? `No transfer clearly worth making: save it` : "No upgrade worth a −4 hit", d: ftLeft ? `No affordable signing would add 3+ pts to your best XI over the next 5 gameweeks (bank £${price(c.bank)}m). Rolling gives you ${Math.min(5, ftLeft + 1)} free transfer${ftLeft + 1 > 1 ? "s" : ""} next gameweek.` : `You've used your free transfers. No upgrade gains enough over 5 gameweeks to cover the 4-point cost.` });
+    const dl = Date.parse(D.events.find((x) => x.id === gwNext)?.deadline || 0), hoursLeft = (dl - Date.now()) / 36e5;
+    const res = picks.map((x, i) => {
+      const pmI = priceMove(x.inn), pmO = priceMove(x.out);
+      const timing = pmI.cls === "up" ? `${nm(x.inn)}'s price is rising (${pmI.txt.charAt(0).toLowerCase() + pmI.txt.slice(1)}): buy before the overnight update or pay £0.1m more.`
+        : pmO.cls === "down" ? `${nm(x.out)}'s price is falling (${pmO.txt.charAt(0).toLowerCase() + pmO.txt.slice(1)}): sell before it drops.`
+        : hoursLeft > 30 ? "No price change expected: you can wait for the press conferences before committing." : "Deadline is close: no reason to wait.";
+      const sh1 = squadHealth(x.nid).n;
+      return {
+        sec: "buy", k: x.free ? "good" : "warn", lab: "Projection",
+        t: `${x.free ? "" : "Worth a −4: "}Sell ${nm(x.out)}, buy ${nm(x.inn)} (${tShort(x.inn.team)}, £${price(x.inn.now_cost)}m)`,
+        d: `Your best XI gains ${fmt1(x.gain)} xP over the next 5 gameweeks${x.free ? "" : ` (${fmt1(x.gain - 4)} after the hit)`} and ${fmt1(x.g1)} in GW${gwNext}${x.slot > 10 ? ` (${nm(x.out)} is on your bench now)` : ""}.${i === 0 && x.free ? ` That beats rolling, which is worth about ${rollValue.toFixed(1)} pts of flexibility.` : ""} ${nm(x.out)} sells for £${price(x.sellP)}m (now £${price(x.out.now_cost)}m); leaves £${price(x.bankAfter)}m in the bank.${sh1 !== sh0 ? ` Playable squad ${sh0} → ${sh1} of 15.` : ""} ${timing}`,
+        unc: `${nm(x.inn)}: ${pct(minutesProfile(x.inn).pStart)} to start in GW${gwNext}, next 3 ${[0, 1, 2].map((k) => (teamFx[x.inn.team][gwNext + k] || []).map(fxLabel).join(" + ") || "blank").join(", ")}. The 5-gameweek gain is a projection; fixtures after GW${gwNext} use FDR, not odds.`,
+        why: whyHTML([x.out, x.inn]), act: { a: "xfer", out: x.out.id, inn: x.inn.id, gain: x.gain, hit: !x.free, bankAfter: x.bankAfter, l: `Make this transfer` },
+      };
+    });
+    if (!res.length) res.push({ sec: "buy", k: "good", lab: "Assumption", t: ftLeft ? `Roll your transfer` : "No upgrade worth a −4 hit", d: ftLeft ? `No affordable signing adds more than ${Math.max(3, rollValue + 1.5).toFixed(1)} xP to your best XI over 5 gameweeks (bank £${price(c.bank)}m), which is less than the value of rolling. You'll have ${Math.min(5, ftLeft + 1)} free transfer${ftLeft + 1 > 1 ? "s" : ""} next gameweek.` : `You've used your free transfers. No upgrade gains enough over 5 gameweeks to cover the 4-point cost.`, unc: "An injury in team news could make a transfer worthwhile: check before the deadline." });
     GWE.buys = { key, out: res };
     return res;
   }
+
+  // ---- Chips: use now vs the best plausible window in the next 5 gameweeks ----
+  function gwChips(st) {
+    const B = GWE.base, key = st.ids.join() + "|" + st.cap;
+    if (GWE.chipsAdv && GWE.chipsAdv.key === key) return GWE.chipsAdv.out;
+    const TO = gwTO(), N = Math.min(5, 39 - gwNext);
+    const live = B.mt && (B.mt.ok ? B.mt : B.mt.last);
+    let avail = live && live.chips && live.chips.length ? live.chips.filter((c) => c.status_for_entry === "available").map((c) => c.name) : chipsLeft(myM).filter((c) => !c.used).map((c) => c.name);
+    avail = avail.filter((n) => ["bboost", "3xc", "freehit", "wildcard"].includes(n));
+    const out = [];
+    const def = (D.chips_def || []).find(([n, s, e]) => gwNext >= s && gwNext <= e);
+    const expires = def ? def[2] : 38;
+    const per = (e, k) => Math.max(0, expertScore(e, k + 1, TO) - (k ? expertScore(e, k, TO) : 0));
+    const dgw = (k) => st.ids.filter((id) => (teamFx[E[id].team][gwNext + k] || []).length > 1).length;
+    const blank = (k) => st.ids.filter((id) => !(teamFx[E[id].team][gwNext + k] || []).length).length;
+    const scen = [];
+    for (let g = gwNext; g <= Math.min(38, expires); g++) { const d = st.ids.filter((id) => (teamFx[E[id].team][g] || []).length > 1).length, b = st.ids.filter((id) => !(teamFx[E[id].team][g] || []).length).length; if (d >= 3 || b >= 3) scen.push(`GW${g}: ${d >= 3 ? `${d} of your players play twice` : `${b} of your players have no game`}`); }
+    if (avail.includes("bboost")) {
+      const bench = st.ids.slice(11);
+      const v = [...Array(N)].map((_, k) => bench.reduce((a, id) => a + per(E[id], k), 0));
+      const bestK = v.indexOf(Math.max(...v));
+      const now = bestK === 0 && v[0] >= 10;
+      out.push({ sec: "chip", k: now ? "warn" : "good", lab: "Projection", t: now ? `Bench Boost: use it this week` : `Bench Boost: save it`, d: `Your bench projects ${v[0].toFixed(1)} xP in GW${gwNext}; the best week in the next ${N} is GW${gwNext + bestK} (${v[bestK].toFixed(1)}). A Bench Boost is best in a double gameweek with 15 playable players${dgw(0) ? `; ${dgw(0)} of yours play twice this week` : ""}.`, unc: scen.length ? `Fixture scenarios before it expires (GW${expires}): ${scen.join("; ")}.` : `No double gameweeks are scheduled for your players before it expires (GW${expires}); rearranged fixtures could create one.` });
+    }
+    if (avail.includes("3xc")) {
+      const xi = st.ids.slice(0, 11);
+      const v = [...Array(N)].map((_, k) => Math.max(...st.ids.map((id) => per(E[id], k))));
+      const bestK = v.indexOf(Math.max(...v)), capNow = Math.max(...xi.map((id) => gp1(E[id])));
+      const now = bestK === 0 && capNow >= 9;
+      out.push({ sec: "chip", k: now ? "warn" : "good", lab: "Projection", t: now ? `Triple Captain: use it this week` : `Triple Captain: save it`, d: `Your best captain projects ${capNow.toFixed(1)} xP this week, so the chip adds about ${capNow.toFixed(1)}. The best week in the next ${N} is GW${gwNext + bestK} (${v[bestK].toFixed(1)}). It's worth most on a premium player with two games or a standout home fixture.`, unc: `Must be used by GW${expires}. ${scen.length ? `Scenarios: ${scen.join("; ")}.` : "No doubles scheduled yet."}` });
+    }
+    if (avail.includes("freehit")) {
+      const fh = freeHitXI(st), curBest = bestXI(st.ids).sum, gain = fh ? fh.sum - curBest : 0, blanks = blank(0);
+      const now = gain >= 15 || blanks >= 4;
+      out.push({ sec: "chip", k: now ? "warn" : "good", lab: "Projection", t: now ? `Free Hit: worth using this week` : `Free Hit: save it`, d: fh ? `The best XI you could field for one week within your £${price(fh.budget)}m projects ${fh.sum.toFixed(1)} xP vs ${curBest.toFixed(1)} for your best XI: ${gain >= 0 ? "+" : ""}${gain.toFixed(1)}. ${blanks ? `${blanks} of your players have no GW${gwNext} game. ` : ""}A Free Hit is best saved for a blank or double gameweek, when the gap is much bigger. Your squad returns unchanged afterwards.` : "Couldn't build a Free Hit team.", unc: `Must be used by GW${expires}. ${scen.length ? `Scenarios: ${scen.join("; ")}.` : "No blanks or doubles scheduled yet."}`, why: fh ? `<details class="why"><summary>Free Hit XI</summary><div class="why-b"><div class="why-p"><ul>${fh.ids.map((id) => `<li>${esc(E[id].web_name)} (${tShort(E[id].team)}, £${price(E[id].now_cost)}m) ${gp1(E[id]).toFixed(1)}</li>`).join("")}</ul></div></div></details>` : "" });
+    }
+    if (avail.includes("wildcard")) {
+      const sh = squadHealth(st.ids).n, buys = GWE.buys ? GWE.buys.out.filter((x) => x.act).length : 0;
+      const now = sh <= 12;
+      out.push({ sec: "chip", k: now ? "warn" : "good", lab: "Projection", t: now ? `Wildcard: consider it` : `Wildcard: save it`, d: `${sh} of 15 players are genuinely playable${buys ? ` and ${buys} upgrade${buys > 1 ? "s" : ""} fit within your free transfers` : ""}. A Wildcard pays off when you need 4+ transfers, or before a fixture swing or double gameweek.`, unc: `Must be used by GW${expires}.` });
+    }
+    if (!out.length) out.push({ sec: "chip", k: "good", lab: "Fact", t: "No chips available", d: `You have no chips left to play before GW${expires}.` });
+    GWE.chipsAdv = { key, out };
+    return out;
+  }
+  // Free Hit: the best one-week XI within your total selling value, with a cheap bench.
+  function freeHitXI(st) {
+    if (GWE.fh && GWE.fh.key === gwNext) return GWE.fh.v;
+    const B = GWE.base, budgetAll = GWE.st.ids.reduce((a, id) => a + (B.sell[id] ?? E[id].now_cost), 0) + gwCalc(GWE.st).bank;
+    const pool = Object.values(E).filter((e) => isFit(e) && e.minutes >= 270 && (teamFx[e.team][gwNext] || []).length);
+    const cheap = { 1: 40, 2: 40, 3: 45, 4: 45 };
+    const budget = budgetAll - (cheap[1] + cheap[2] + cheap[3] + 5); // a 4-man bench at near minimum prices
+    const top = {}; [1, 2, 3, 4].forEach((t) => (top[t] = pool.filter((e) => e.element_type === t).sort((a, b) => gp1(b) - gp1(a)).slice(0, 25)));
+    // start from the best XI in 3-4-3/4-4-2/etc., then downgrade where it costs the fewest points per £
+    let best = null;
+    [[3, 4, 3], [3, 5, 2], [4, 4, 2], [4, 3, 3], [4, 5, 1], [5, 3, 2], [5, 4, 1]].forEach(([d, m, f]) => {
+      const need = { 1: 1, 2: d, 3: m, 4: f };
+      let xi = [1, 2, 3, 4].flatMap((t) => top[t].slice(0, need[t]));
+      const ok = () => { const c = {}; xi.forEach((e) => (c[e.team] = (c[e.team] || 0) + 1)); return Object.values(c).every((n) => n <= 3); };
+      let guard = 0;
+      while ((xi.reduce((a, e) => a + e.now_cost, 0) > budget || !ok()) && guard++ < 60) {
+        let move = null;
+        xi.forEach((e, i) => top[e.element_type].forEach((r) => {
+          if (xi.includes(r) || r.now_cost >= e.now_cost) return;
+          const loss = (gp1(e) - gp1(r)) / (e.now_cost - r.now_cost);
+          if (!move || loss < move.loss) move = { i, r, loss };
+        }));
+        if (!move) break; xi[move.i] = move.r;
+      }
+      if (xi.reduce((a, e) => a + e.now_cost, 0) > budget || !ok()) return;
+      const sum = xi.reduce((a, e) => a + gp1(e), 0);
+      if (!best || sum > best.sum) best = { ids: xi.map((e) => e.id), sum, budget: budgetAll };
+    });
+    GWE.fh = { key: gwNext, v: best };
+    return best;
+  }
+
   function gwApply(act) {
     if (act.a === "xfer") { gwTransfer(act.out, act.inn); return; }
     const st = GWE.st;
     if (act.a === "bestxi") {
       const bx = bestXI(st.ids);
       const order = (ids) => [...ids].sort((a, b) => E[a].element_type - E[b].element_type);
-      const bench = [bx.gkBench, ...bx.bench.sort((a, b) => gp1(E[b]) * minutesProfile(E[b]).pStart - gp1(E[a]) * minutesProfile(E[a]).pStart)];
+      const bench = [bx.gkBench, ...bx.bench.sort((a, b) => gp1(E[b]) * minutesProfile(E[b]).pPlay - gp1(E[a]) * minutesProfile(E[a]).pPlay)];
       st.ids = [...order(bx.ids), ...bench];
       const xi = st.ids.slice(0, 11), byP = [...xi].sort((a, b) => gp1(E[b]) - gp1(E[a]));
       if (!xi.includes(st.cap)) st.cap = byP.find((id) => id !== st.vc) || byP[0];
@@ -2158,8 +2369,19 @@ details.why[open] { flex-basis: 100%; }
     const adv = gwAdvice(st);
     if (c.paid) adv.unshift({ sec: "xi", k: "bad", t: `${c.paid} transfer${c.paid > 1 ? "s" : ""} over your free allowance: −${4 * c.paid} pts`, d: `Over 5 gameweeks the new players project ${fmt1(c.gain5)} pts, so ${net >= 0 ? `you're still ${fmt1(net)} ahead after the hit` : `you'd be ${fmt1(net)} worse off after the hit`}.` });
     GWE.adv = adv;
-    const SECS = [["xi", "Best XI this gameweek"], ["cap", "Captain and vice-captain"], ["risk", "Risks before the deadline"], ["bench", "Bench cover"], ["buy", `Players to buy (${B.unlimited ? "chip active" : `${Math.max(0, B.ft - c.n)} free transfer${B.ft - c.n === 1 ? "" : "s"}`}, £${price(c.bank)}m in the bank)`]];
-    const advHTML = SECS.map(([k, l]) => `<div class="adv-sec"><h4>${l}</h4><ul class="insights">${adv.map((x, i) => [x, i]).filter(([x]) => x.sec === k).map(([x, i]) => `<li class="${x.k}"><div><div class="t">${x.t}</div><div class="d">${x.d}</div>${x.act || x.why ? `<div class="adv-acts">${x.act ? `<button class="btn sm pri" data-adv="${i}">${esc(x.act.l)}</button>` : ""}${x.why || ""}</div>` : ""}</div></li>`).join("")}</ul></div>`).join("");
+    const SECS = [["xi", "Best XI this gameweek"], ["cap", "Captain and vice-captain"], ["risk", "Risks before the deadline"], ["bench", "Bench cover and squad health"], ["buy", `Transfers: roll or buy (${B.unlimited ? "chip active" : `${Math.max(0, B.ft - c.n)} free transfer${B.ft - c.n === 1 ? "" : "s"}`}, £${price(c.bank)}m in the bank)`], ["chip", "Chips"]];
+    const LAB = { Fact: "lab-fact", Projection: "lab-proj", Assumption: "lab-asm" };
+    const advHTML = SECS.map(([k, l]) => `<div class="adv-sec"><h4>${l}</h4><ul class="insights">${adv.map((x, i) => [x, i]).filter(([x]) => x.sec === k).map(([x, i]) => `<li class="${x.k}"><div><div class="t">${x.t}${x.lab ? ` <span class="lab ${LAB[x.lab]}">${x.lab}</span>` : ""}</div><div class="d">${x.d}</div>${x.unc ? `<div class="unc"><b>Main uncertainty:</b> ${x.unc}</div>` : ""}${x.act || x.why ? `<div class="adv-acts">${x.act ? `<button class="btn sm pri" data-adv="${i}">${esc(x.act.l)}</button>` : ""}${x.why || ""}</div>` : ""}</div></li>`).join("")}</ul></div>`).join("");
+    // The decision: one line per area, from the first item in each section.
+    const first = (k) => adv.find((x) => x.sec === k);
+    const L = leagueCtx();
+    const dec = [["XI", first("xi")], ["Captain", first("cap")], ["Transfers", first("buy")], ["Chips", adv.filter((x) => x.sec === "chip").find((x) => x.k === "warn") || { t: "Save your chips this week" }]].filter(([, x]) => x);
+    const risksN = adv.filter((x) => x.sec === "risk" && x.k !== "good").length;
+    const odT = FA.odds && FA.odds.fetched ? ukTime(FA.odds.fetched) : null, nwT = FA.news && FA.news.fetched ? ukTime(FA.news.fetched) : null;
+    const decHTML = `<div class="decision"><div class="dec-h"><h3>Your GW${gwNext} decision</h3>${L.text ? `<span class="stance st-${L.stance}">${L.stance === "chase" ? "Chasing" : L.stance === "protect" ? "Protecting a lead" : "Balanced"}</span>` : ""}</div>
+      <ol>${dec.map(([k, x]) => `<li><span class="dk">${k}</span> ${x.t}</li>`).join("")}${risksN ? `<li><span class="dk">Check</span> ${risksN} minutes or availability risk${risksN > 1 ? "s" : ""} below before the deadline</li>` : ""}</ol>
+      ${L.text ? `<p class="note">${L.text}</p>` : ""}
+      <p class="note src">Sources: squad, bank and free transfers from your FPL Pick Team (${B.live ? "live" : "rebuilt from public data"}); player stats from FPL (Opta), loaded ${new Date(D.generated_at).toLocaleTimeString("en-GB", { hour: "2-digit", minute: "2-digit" })}; bookmaker odds ${odT ? `refreshed ${odT}` : "not loaded: fixture difficulty used instead"}; news ${nwT ? `checked ${nwT}` : "not loaded"}. <span class="lab lab-fact">Fact</span> confirmed data, <span class="lab lab-proj">Projection</span> model estimate, <span class="lab lab-asm">Assumption</span> a judgement call.</p></div>`;
     const capSel = `<div class="capsel"><label>Captain <select id="gwCap">${xiIds.map((id) => `<option value="${id}" ${st.cap === id ? "selected" : ""}>${esc(E[id].web_name)} (${gp1(E[id]).toFixed(1)})</option>`).join("")}</select></label><label>Vice-captain <select id="gwVc">${xiIds.map((id) => `<option value="${id}" ${st.vc === id ? "selected" : ""}>${esc(E[id].web_name)} (${gp1(E[id]).toFixed(1)})</option>`).join("")}</select></label></div>`;
 
     const xfList = st.xf.length ? `<ul class="moves">${st.xf.map((t, i) => `<li class="${!B.unlimited && i >= B.ft ? "hit" : ""}"><span><span class="down">${esc(E[t.out].web_name)}</span> <span class="note">£${price(B.sell[t.out] ?? E[t.out].now_cost)}m</span> → <span class="up">${esc(E[t.inn].web_name)}</span> <span class="note">£${price(E[t.inn].now_cost)}m</span> ${!B.unlimited && i >= B.ft ? '<span class="pill sev3">−4 pts</span>' : '<span class="pill ok">Free</span>'} <span class="note">${fmt1(gp1(E[t.inn]) - gp1(E[t.out]))} GW${gwNext}, ${fmt1(gp5(E[t.inn]) - gp5(E[t.out]))} over 5 GWs</span></span><button class="btn sm" data-undo-x="${i}">Undo</button></li>`).join("")}</ul>` : "";
@@ -2183,8 +2405,8 @@ details.why[open] { flex-basis: 100%; }
         <div class="panel ed-team"><div class="panel-head"><h3>Your GW${gwNext} team</h3><span class="note">Each shirt: GW${gwNext} projected points (captain's doubled), next 3 fixtures by FDR, and his chance of starting the GW${gwNext} match</span></div>${capSel}${selBar}${pitch}</div>
         <div class="panel ed-pick" id="gwPick"></div>
       </div>
-      <div class="panel adv"><div class="panel-head"><h3>Recommendations for GW${gwNext}</h3><span class="note">For the team as edited. Only what could change your XI, captain or bench order before the deadline.</span></div><div class="adv-grid">${advHTML}</div>
-        <p class="note">Chance of starting and of playing 70+ minutes come from each player's last 5 matches (a start counts at 50+ minutes), blended with his season start rate and FPL's chance of playing. Tap Why? for the stats and odds behind a call.</p></div>
+      <div class="panel adv"><div class="panel-head"><h3>Recommendations for GW${gwNext}</h3><span class="note">For the team as edited. Only what could change your XI, captain, bench, transfers or chips before the deadline.</span></div>${decHTML}<div class="adv-grid">${advHTML}</div>
+        <p class="note">xP is minutes-adjusted expected points (appearance, goals, assists, clean sheets, penalties, bonus and defensive contributions under this season's rules). Minutes come from each player's last 5 matches (a start counts at 50+ minutes), blended with his season rate and FPL's chance of playing. Penalty-box touches, shots, chances created and manager comments aren't in FPL's free data, so they aren't used. Tap Why? for the stats and odds behind a call.</p></div>
       <p class="note">Changes here are a sandbox saved in this browser only: make them on the FPL site to make them real. Projected points use the site's expert score (xG, xA, clean sheet odds, defensive contributions, bonus, fixtures and bookmaker odds, minutes, injuries and news). Sale prices follow FPL's rule that you keep half of any rise.</p>
       ${freshness()}
     </section>`;
@@ -3057,7 +3279,8 @@ details.why[open] { flex-basis: 100%; }
         <div><div class="k">Transfer</div><div class="v ${hit ? "down" : ""}">${hit ? "−4 hit" : "Free"}</div><small>${ftLeft} of ${ft} free left${used ? ` after ${used} planned` : ""}</small></div>
         <div><div class="k">Net gain, ${n} GWs</div><div class="v ${net >= 0 ? "up" : "down"}">${sign(Number(net.toFixed(1)))}</div><small>${hit ? `${sign(Number(gain.toFixed(1)))} less 4` : "projected points"}</small></div>
       </div>
-      <p class="cmp-verdict ${verdict.cls}">${verdict.t}</p>
+      <p class="cmp-verdict ${verdict.cls}">${verdict.t} <span class="lab lab-proj">Projection</span></p>
+      <p class="unc"><b>Main uncertainty:</b> ${(() => { const mi = minutesProfile(inn), mo = minutesProfile(out); return `${esc(inn.web_name)} ${pct(mi.pStart)} to start in GW${gwNext} (${pct(mi.p70)} for 70+), ${esc(out.web_name)} ${pct(mo.pStart)}. The ${n}-gameweek projection uses bookmaker odds for GW${gwNext} and fixture difficulty after that.${squadHealth(squadIds).n < 14 ? ` Your squad has ${squadHealth(squadIds).n} of 15 genuinely playable players: favour an established starter.` : ""}`; })()}</p>
       <ul class="cmp-px">${priceNote(out, true)}${priceNote(inn, false)}</ul>
       ${!blockers.length ? `<div class="controls"><button class="btn pri" id="cmpAdd">Add ${esc(out.web_name)} → ${esc(inn.web_name)} to my plan</button></div>` : ""}`;
     } else if (ownA && ownB) {
