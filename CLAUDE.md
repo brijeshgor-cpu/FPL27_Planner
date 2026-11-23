@@ -129,6 +129,9 @@ bench order, transfers or chip before the deadline?*
   purchase prices. The Transfer planner (`baseSquad()`, `sellPrice()`, `boughtPrice()`), the
   Overview's free-transfers box, Insights, Fixtures and the GW12 engine all read it, so every tab starts from the real
   team. `squadOf(myM)` is last gameweek's team: use it only for last gameweek's results.
+- **Player predictions tab:** `renderPredict()` and `drawPredList()`. Per-gameweek xP is
+  `predPer(e, k)`, the difference between `expertScore` horizons, and expected minutes are
+  `predMins(e, k)`. `teamOdds()` is cached per odds download, because the Poisson fit is expensive.
 - **Current gameweek tab:** `gwAdvice()` for the recommendations, `gwBuys()` for transfers,
   `gwChips()` for chips, `bestXI()`, `autoSub()` and `squadHealth()`.
 - **Data you can't get for free:** penalty-box touches, shots, chances created, duels and manager

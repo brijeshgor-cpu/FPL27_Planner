@@ -683,6 +683,43 @@ details.why[open] { flex-basis: 100%; }
 #lgTrend .lt-tbl td:first-child { white-space: nowrap; }
 @media (max-width: 600px) { #lgTrend .lt-tbl td, #lgTrend .lt-tbl th { font-size: .74rem; padding: 6px 5px; } #lgTrend .lt-tbl .pill { font-size: .6rem; padding: 0 5px; } }
 .lt-tbl tr.lt-diff td { background: var(--surface-2); }
+/* Player predictions */
+.pr-filters { display: grid; gap: 14px; }
+.pr-row { display: flex; flex-wrap: wrap; gap: 14px 20px; align-items: flex-end; }
+.pr-filters .k { display: block; font-size: .72rem; text-transform: uppercase; letter-spacing: .06em; color: var(--muted); font-weight: 600; margin-bottom: 4px; }
+.pr-search { flex: 1 1 240px; } .pr-search input { width: 100%; }
+.pr-pos button { min-width: 52px; }
+.pr-slider { flex: 1 1 280px; min-width: 0; }
+.pr-sh { display: flex; justify-content: space-between; align-items: center; gap: 8px; }
+.pr-sort { flex: 0 1 240px; } .pr-sort select { width: 100%; }
+.dual { display: flex; align-items: center; gap: 8px; }
+.dual .pill { font-size: .78rem; padding: 4px 8px; white-space: nowrap; }
+.dual-track { position: relative; flex: 1; height: 28px; min-width: 120px; }
+.dual-track::before { content: ""; position: absolute; left: 10px; right: 10px; top: 12px; height: 4px; border-radius: 2px; background: linear-gradient(to right, var(--line) var(--a, 0%), var(--accent) var(--a, 0%), var(--accent) var(--b, 100%), var(--line) var(--b, 100%)); }
+.dual-track input { position: absolute; left: 0; width: 100%; top: 4px; margin: 0; background: none; pointer-events: none; -webkit-appearance: none; appearance: none; height: 20px; }
+.dual-track input::-webkit-slider-thumb { -webkit-appearance: none; pointer-events: auto; width: 20px; height: 20px; border-radius: 50%; background: var(--surface); border: 3px solid var(--accent); cursor: pointer; }
+.dual-track input::-moz-range-thumb { pointer-events: auto; width: 16px; height: 16px; border-radius: 50%; background: var(--surface); border: 3px solid var(--accent); cursor: pointer; }
+.dual-track input::-webkit-slider-runnable-track { background: none; }
+.pr-count { margin: 4px 0 8px; }
+.pr-card { display: grid; grid-template-columns: minmax(170px, 1.4fr) repeat(3, 76px) 92px minmax(0, 3fr); gap: 10px; align-items: center; padding: 10px 12px; border: 1px solid var(--line); border-radius: var(--r); background: var(--surface); margin-bottom: 8px; }
+.pr-card.mine { border-color: var(--accent); }
+.pr-who { display: flex; align-items: center; gap: 8px; min-width: 0; }
+.pr-who img { width: 44px; height: 44px; object-fit: contain; flex: none; }
+.pr-who > span { display: grid; min-width: 0; } .pr-who strong { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.pr-who small { color: var(--muted); font-size: .74rem; }
+.pr-who .star { color: var(--accent); }
+.pr-stat { display: grid; text-align: center; } .pr-stat .k { font-size: .7rem; color: var(--muted); } .pr-stat strong { font-size: .95rem; }
+.pr-tot { background: var(--surface-2); border-radius: 8px; padding: 6px 4px; } .pr-tot strong { font-size: 1.1rem; }
+.pr-gws { display: grid; grid-template-columns: repeat(var(--n), minmax(58px, 1fr)); gap: 6px; overflow-x: auto; }
+.pr-gw { display: grid; justify-items: center; gap: 3px; }
+.pr-gl { font-size: .66rem; color: var(--muted); }
+.pr-t { display: grid; justify-items: center; border-radius: 8px; padding: 4px 6px; min-width: 54px; line-height: 1.2; }
+.pr-t b { font-size: .95rem; } .pr-t small { font-size: .6rem; font-weight: 600; white-space: nowrap; }
+.pr-t.x-hi { background: var(--fdr2); color: var(--fdr2-ink); } .pr-t.x-md { background: color-mix(in srgb, var(--fdr2) 45%, var(--surface-2)); color: var(--ink); }
+.pr-t.x-lo { background: var(--surface-2); color: var(--ink); } .pr-t.x-vl { background: color-mix(in srgb, var(--fdr4) 35%, var(--surface-2)); color: var(--ink); }
+.pr-t.x-bl { border: 1px dashed var(--line); color: var(--muted); }
+@media (max-width: 1000px) { .pr-card { grid-template-columns: minmax(150px, 1fr) repeat(4, minmax(60px, auto)); } .pr-gws { grid-column: 1 / -1; } }
+@media (max-width: 600px) { .pr-card { grid-template-columns: repeat(4, minmax(0, 1fr)); } .pr-who { grid-column: 1 / -1; } .pr-stat .k { font-size: .62rem; } .pr-gws { grid-template-columns: repeat(var(--n), minmax(56px, 1fr)); } .pr-sort { flex: 1 1 100%; } }
 </style>
 
 <header class="bar">
@@ -696,6 +733,7 @@ details.why[open] { flex-basis: 100%; }
     <a href="#analysis" data-v="analysis">Mini League analysis</a>
     <a href="#league" data-v="league">Standings</a>
     <a href="#planner" data-v="planner">Transfer planner</a>
+    <a href="#predict" data-v="predict">Player predictions</a>
     <a href="#insights" data-v="insights">Insights</a>
     <a href="#fixtures" data-v="fixtures">Fixtures</a>
     <a href="#odds" data-v="odds">Bookmaker odds</a>
@@ -924,9 +962,9 @@ details.why[open] { flex-basis: 100%; }
   // ---------- routing ----------
   function route() {
     const v = (location.hash || "#overview").slice(1);
-    view = ["overview", "gw", "analysis", "league", "planner", "insights", "fixtures", "odds"].includes(v) ? v : "overview";
+    view = ["overview", "gw", "analysis", "league", "planner", "predict", "insights", "fixtures", "odds"].includes(v) ? v : "overview";
     document.querySelectorAll(".tabs a").forEach((a) => { if (a.dataset.v === view) a.setAttribute("aria-current", "page"); else a.removeAttribute("aria-current"); });
-    ({ overview: renderOverview, gw: renderGw, analysis: renderAnalysis, league: renderLeague, planner: renderPlanner, insights: renderInsights, fixtures: renderFixtures, odds: renderOdds })[view]();
+    ({ overview: renderOverview, gw: renderGw, analysis: renderAnalysis, league: renderLeague, planner: renderPlanner, predict: renderPredict, insights: renderInsights, fixtures: renderFixtures, odds: renderOdds })[view]();
   }
 
   function tick() {
@@ -1364,8 +1402,12 @@ details.why[open] { flex-basis: 100%; }
     return a === 0 ? 0.3 : Math.max(a, 0.9);
   }
   // Next-gameweek clean sheet / scoring chances per team, from the bookmaker odds.
+  // Fitted once per odds download and gameweek (the Poisson fit is expensive), then reused.
+  let TO_CACHE = null;
   function teamOdds() {
+    if (TO_CACHE && TO_CACHE.odds === FA.odds && TO_CACHE.gw === gwNext) return TO_CACHE.m;
     const m = {}; if (!FA.odds || !FA.odds.events) return m;
+    TO_CACHE = { odds: FA.odds, gw: gwNext, m };
     D.fixtures.filter((f) => f[1] === gwNext).forEach((f) => {
       const o = FA.odds.events.find((x) => oddsTeamId(x.home) === f[2] && oddsTeamId(x.away) === f[3]); if (!o) return;
       const [lh, la] = fitGoals(o.h2h[0], o.h2h[1], o.h2h[2], o.over25);
@@ -3472,6 +3514,95 @@ details.why[open] { flex-basis: 100%; }
     }));
     box.querySelectorAll("[data-player]").forEach((s) => s.addEventListener("change", () => { const ns = [...sel]; ns[+s.dataset.player] = Number(s.value); save(ns); }));
     box.querySelector("#cmpAdd")?.addEventListener("click", () => { const p = planState(); p.push({ out: out.id, inn: inn.id }); setPlan(p); selOut = null; renderPlanner(); window.scrollTo({ top: 0, behavior: "smooth" }); });
+  }
+
+  // ---------- Player predictions: per-gameweek expected points for every player ----------
+  // xP per gameweek is the site's expert score for that gameweek (bookmaker odds for the next one,
+  // fixture difficulty after that), so it's minutes-adjusted and includes injuries, bans and news.
+  const PR = { pos: 0, q: "", g0: null, g1: null, p0: null, p1: null, sort: "pred", shown: 30 };
+  const PRC = {};
+  function predPer(e, k) {
+    const key = e.id + ":" + k; if (key in PRC) return PRC[key];
+    const TO = teamOdds();
+    return (PRC[key] = Math.max(0, expertScore(e, k + 1, TO) - (k ? expertScore(e, k, TO) : 0)));
+  }
+  // Expected minutes in a gameweek: chance of starting × minutes when he starts, plus cameo minutes.
+  function predMins(e, k) {
+    const g = gwNext + k, fx = teamFx[e.team][g] || []; if (!fx.length) return 0;
+    const mp = minutesProfile(e);
+    const start = k === 0 ? mp.pStart : mp.rStart * availFor(e, g, k), cameo = k === 0 ? mp.pCameo : Math.max(0, mp.pPlay - mp.pStart) * (availFor(e, g, k) > 0 ? 1 : 0);
+    return Math.round((start * mp.xMinsIfStart + cameo * 20) * fx.length);
+  }
+  async function renderPredict() {
+    const app = $("#app");
+    app.innerHTML = `<section class="view"><div class="panel-head"><h2>Player predictions</h2></div><p class="empty">Working out every player's expected points…</p></section>`;
+    try { await ensureFA([]); await loadOfficial(); } catch (e) { /* season data used */ }
+    if (view !== "predict") return;
+    Object.keys(PRC).forEach((k) => delete PRC[k]);
+    const maxG = Math.min(38, gwNext + 9);
+    if (PR.g0 == null || PR.g0 < gwNext) { PR.g0 = gwNext; PR.g1 = Math.min(maxG, gwNext + 3); }
+    const prices = Object.values(E).map((e) => e.now_cost), pMin = Math.min(...prices), pMax = Math.max(...prices);
+    if (PR.p0 == null) { PR.p0 = pMin; PR.p1 = pMax; }
+    app.innerHTML = `<section class="view">
+      <div class="panel-head"><h2>Player predictions</h2><span class="note">Expected points per gameweek for every player</span></div>
+      <div class="panel pr-filters">
+        <div class="pr-row">
+          <label class="pr-search"><span class="k">Search</span><input type="search" id="prQ" placeholder="Search by player or team" value="${esc(PR.q)}"></label>
+          <div class="seg pr-pos" role="group" aria-label="Position">${[[0, "All"], [1, "GK"], [2, "DEF"], [3, "MID"], [4, "FWD"]].map(([v, l]) => `<button data-prpos="${v}" aria-pressed="${v === PR.pos}">${l}</button>`).join("")}</div>
+        </div>
+        <div class="pr-row">
+          <div class="pr-slider"><div class="pr-sh"><span class="k">GW range</span><button class="btn sm" id="prNext">Next GW</button></div>
+            <div class="dual"><span class="pill acc" id="prG0">GW${PR.g0}</span><div class="dual-track"><input type="range" id="prGa" min="${gwNext}" max="${maxG}" step="1" value="${PR.g0}" aria-label="First gameweek"><input type="range" id="prGb" min="${gwNext}" max="${maxG}" step="1" value="${PR.g1}" aria-label="Last gameweek"></div><span class="pill acc" id="prG1">GW${PR.g1}</span></div></div>
+          <div class="pr-slider"><div class="pr-sh"><span class="k">Price</span></div>
+            <div class="dual"><span class="pill acc" id="prP0">£${price(PR.p0)}m</span><div class="dual-track"><input type="range" id="prPa" min="${pMin}" max="${pMax}" step="1" value="${PR.p0}" aria-label="Minimum price"><input type="range" id="prPb" min="${pMin}" max="${pMax}" step="1" value="${PR.p1}" aria-label="Maximum price"></div><span class="pill acc" id="prP1">£${price(PR.p1)}m</span></div></div>
+          <label class="pr-sort"><span class="k">Sort by</span><select id="prSort">${[["pred", "Predicted points"], ["pps", "Points per start"], ["ownD", "Ownership (high to low)"], ["ownA", "Ownership (low to high)"], ["priceD", "Price (high to low)"], ["priceA", "Price (low to high)"], ["value", "Predicted points per £m"]].map(([v, l]) => `<option value="${v}" ${v === PR.sort ? "selected" : ""}>${l}</option>`).join("")}</select></label>
+        </div>
+      </div>
+      <div id="prList"></div>
+      <p class="note">Predicted points are the site's minutes-adjusted expected points (xP): appearance, goals, assists, clean sheets, penalties, bonus and defensive contributions under this season's rules, using bookmaker odds for GW${gwNext} and fixture difficulty after that, with injuries, bans, rotation and news. Each tile shows xP, the opponent and expected minutes, coloured by xP. Pts / start is this season's points per start. Ownership is FPL's overall ownership; ★ marks your players. <span class="lab lab-proj">Projection</span></p>
+      ${freshness()}
+    </section>`;
+    const redraw = () => { PR.shown = 30; drawPredList(); };
+    app.querySelectorAll("[data-prpos]").forEach((b) => b.addEventListener("click", () => { PR.pos = +b.dataset.prpos; app.querySelectorAll("[data-prpos]").forEach((x) => x.setAttribute("aria-pressed", String(+x.dataset.prpos === PR.pos))); redraw(); }));
+    $("#prQ").addEventListener("input", debounce(() => { PR.q = $("#prQ").value; redraw(); }, 200));
+    $("#prSort").addEventListener("change", (ev) => { PR.sort = ev.target.value; redraw(); });
+    const dual = (a, b, set, lab) => {
+      const A = $(a), B = $(b);
+      const fill = () => { const lo = +A.min, hi = +A.max, f = (v) => ((v - lo) / Math.max(1, hi - lo)) * 100; A.parentNode.style.setProperty("--a", f(+A.value) + "%"); A.parentNode.style.setProperty("--b", f(+B.value) + "%"); };
+      const upd = (final) => { let x = +A.value, y = +B.value; if (x > y) { if (document.activeElement === A) A.value = x = y; else B.value = y = x; } set(x, y); lab(x, y); fill(); if (final) redraw(); };
+      fill();
+      [A, B].forEach((el) => { el.addEventListener("input", () => upd(false)); el.addEventListener("change", () => upd(true)); });
+    };
+    dual("#prGa", "#prGb", (x, y) => { PR.g0 = x; PR.g1 = y; }, (x, y) => { $("#prG0").textContent = `GW${x}`; $("#prG1").textContent = `GW${y}`; });
+    dual("#prPa", "#prPb", (x, y) => { PR.p0 = x; PR.p1 = y; }, (x, y) => { $("#prP0").textContent = `£${price(x)}m`; $("#prP1").textContent = `£${price(y)}m`; });
+    $("#prNext").addEventListener("click", () => { PR.g0 = PR.g1 = gwNext; $("#prGa").value = $("#prGb").value = gwNext; $("#prGa").parentNode.style.setProperty("--a", "0%"); $("#prGa").parentNode.style.setProperty("--b", "0%"); $("#prG0").textContent = $("#prG1").textContent = `GW${gwNext}`; redraw(); });
+    drawPredList();
+  }
+  function drawPredList() {
+    const box = $("#prList"); if (!box) return;
+    const q = PR.q.trim().toLowerCase(), mine = new Set(baseSquad().map((p) => p[0]));
+    const ks = []; for (let g = PR.g0; g <= PR.g1; g++) ks.push(g - gwNext);
+    const list = Object.values(E).filter((e) => (!PR.pos || e.element_type === PR.pos) && e.now_cost >= PR.p0 && e.now_cost <= PR.p1
+      && (!q || `${e.web_name} ${e.first_name} ${e.second_name} ${T[e.team]?.name} ${T[e.team]?.short}`.toLowerCase().includes(q))
+      && (e.minutes > 0 || q || e.status === "a" && e.chance_of_playing_next_round !== 0 && e.now_cost >= 50));
+    const pred = (e) => ks.reduce((a, k) => a + predPer(e, k), 0);
+    const pps = (e) => (e.starts ? e.total_points / e.starts : 0);
+    const key = { pred: (e) => -pred(e), pps: (e) => -pps(e), ownD: (e) => -(+e.selected_by_percent || 0), ownA: (e) => +e.selected_by_percent || 0, priceD: (e) => -e.now_cost, priceA: (e) => e.now_cost, value: (e) => -pred(e) / (e.now_cost / 10) }[PR.sort];
+    const sorted = list.map((e) => ({ e, k: key(e) })).sort((a, b) => a.k - b.k || b.e.total_points - a.e.total_points).map((x) => x.e);
+    const show = sorted.slice(0, PR.shown);
+    const cls = (v) => (v >= 6 ? "x-hi" : v >= 4.5 ? "x-md" : v >= 3 ? "x-lo" : "x-vl");
+    box.innerHTML = `<p class="note pr-count">${sorted.length} player${sorted.length === 1 ? "" : "s"} · GW${PR.g0}${PR.g1 > PR.g0 ? `–${PR.g1}` : ""} · £${price(PR.p0)}m–£${price(PR.p1)}m</p>` + (show.length ? show.map((e) => {
+      const code = T[e.team]?.code, tot = pred(e);
+      return `<div class="pr-card ${mine.has(e.id) ? "mine" : ""}">
+        <div class="pr-who">${code != null ? `<img src="kit/${code}${e.element_type === 1 ? "_1" : ""}.png" alt="" width="44" height="44" loading="lazy" onerror="this.remove()">` : ""}<span><strong>${esc(e.web_name)}${mine.has(e.id) ? ' <span class="star" title="In your team">★</span>' : ""}${availability(e) < 1 ? ` <span class="flag-i ${availability(e) === 0 ? "out" : ""}" title="${esc(e.news)}">!</span>` : ""}</strong><small>${esc(T[e.team]?.name)} · ${({ 1: "Goalkeeper", 2: "Defender", 3: "Midfielder", 4: "Forward" })[e.element_type]}</small></span></div>
+        <div class="pr-stat"><span class="k">Price</span><strong>£${price(e.now_cost)}m</strong></div>
+        <div class="pr-stat"><span class="k">Ownership</span><strong>${(+e.selected_by_percent || 0).toFixed(1)}%</strong></div>
+        <div class="pr-stat"><span class="k">Pts / start</span><strong>${pps(e).toFixed(1)}</strong></div>
+        <div class="pr-stat pr-tot"><span class="k">Predicted</span><strong>${tot.toFixed(1)}</strong></div>
+        <div class="pr-gws" style="--n:${ks.length}">${ks.map((k) => { const g = gwNext + k, fx = teamFx[e.team][g] || [], v = predPer(e, k); return `<div class="pr-gw"><span class="pr-gl">GW ${g}</span>${fx.length ? `<span class="pr-t ${cls(v)}"><b>${v.toFixed(1)}</b><small>${fx.map((f) => `${tShort(f.opp).toUpperCase()}(${f.home ? "H" : "A"})`).join(" ")}</small><small>${predMins(e, k)}'</small></span>` : `<span class="pr-t x-bl"><b>0.0</b><small>Blank</small></span>`}</div>`; }).join("")}</div>
+      </div>`;
+    }).join("") : `<p class="empty">No players match these filters.</p>`) + (sorted.length > show.length ? `<div class="controls pr-more"><button class="btn" id="prMore">Show ${Math.min(30, sorted.length - show.length)} more</button></div>` : "");
+    $("#prMore")?.addEventListener("click", () => { PR.shown += 30; drawPredList(); });
   }
 
   // ---- Players to target: a points model built from FPL's scoring rules ----
