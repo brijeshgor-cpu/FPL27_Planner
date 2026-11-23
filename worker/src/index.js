@@ -23,6 +23,7 @@ export default {
   // Hourly cron (see wrangler.toml): refresh the odds as soon as a refresh point has passed.
   async scheduled(event, env, ctx) {
     ctx.waitUntil(odds(env));
+    ctx.waitUntil(myTeam(env, true).catch(() => null)); // keeps the FPL login fresh
   },
 
   async fetch(request, env) {
@@ -35,6 +36,7 @@ export default {
     const path = url.pathname.slice("/api/".length);
     if (path === "odds" || path === "odds/") return odds(env);
     if (path === "news" || path === "news/") return news();
+    if (path === "my-team" || path === "my-team/") return myTeamResponse(env);
     const gpl = /^gwplayers\/(\d+)\/?$/.exec(path);
     if (gpl) return gwPlayers(Number(gpl[1]), url.searchParams.get("ids"));
     const gwp = /^gw\/(\d+)\/?$/.exec(path);
@@ -275,5 +277,75 @@ async function gwPlayers(gw, ids) {
     return json({ gw, players: live.elements.filter((e) => want.has(e.id)).map((e) => ({ id: e.id, stats: e.stats, explain: e.explain })) }, 200);
   } catch (e) {
     return json({ error: "fpl_unreachable", detail: String(e.message || e) }, 502);
+  }
+}
+
+// ---------- your FPL Pick Team (logged in) ----------
+// FPL only shows next gameweek's team (transfers, captain, bench order) to the logged-in manager.
+// The login is FPL's own renewable sign-in token (from the browser, saved as the FPL_LOGIN secret:
+// {"authority","client_id","refresh_token"}); no password is stored. Each renewal returns a new
+// token, which is saved in KV so the login keeps going. The hourly cron renews it even when nobody visits.
+const AUTH_KEY = "fpl_auth", TEAM_KEY = "my_team";
+const UA = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0 Safari/537.36";
+const plHost = (u) => { try { const h = new URL(u).hostname; return new URL(u).protocol === "https:" && (h === "premierleague.com" || h.endsWith(".premierleague.com")); } catch (e) { return false; } };
+
+async function accessToken(env) {
+  let seed = null;
+  try { seed = env.FPL_LOGIN ? JSON.parse(env.FPL_LOGIN) : null; } catch (e) { throw new Error("bad_secret"); }
+  if (!seed || !seed.refresh_token || !seed.client_id || !plHost(seed.authority)) throw new Error("not_configured");
+  let st = (await env.ODDS.get(AUTH_KEY, "json")) || {};
+  // A new secret (logged in again) replaces whatever was saved.
+  if (st.seed !== seed.refresh_token) st = { seed: seed.refresh_token, rt: seed.refresh_token };
+  if (st.at && st.exp > Date.now() + 30000) return st.at;
+  const disc = await fetch(seed.authority.replace(/\/$/, "") + "/.well-known/openid-configuration", { headers: { Accept: "application/json", "User-Agent": UA } });
+  if (!disc.ok) throw new Error("discovery_" + disc.status);
+  const tokenUrl = (await disc.json()).token_endpoint;
+  if (!plHost(tokenUrl)) throw new Error("bad_token_endpoint");
+  const r = await fetch(tokenUrl, {
+    method: "POST",
+    headers: { "Content-Type": "application/x-www-form-urlencoded", Accept: "application/json", "User-Agent": UA },
+    body: new URLSearchParams({ grant_type: "refresh_token", client_id: seed.client_id, refresh_token: st.rt }),
+  });
+  if (r.status === 400 || r.status === 401) { st.dead = Date.now(); await env.ODDS.put(AUTH_KEY, JSON.stringify(st)); throw new Error("expired"); }
+  if (!r.ok) throw new Error("token_" + r.status);
+  const j = await r.json();
+  st = { seed: st.seed, rt: j.refresh_token || st.rt, at: j.access_token, exp: Date.now() + (j.expires_in || 300) * 1000, renewed: Date.now() };
+  await env.ODDS.put(AUTH_KEY, JSON.stringify(st));
+  return st.at;
+}
+
+async function authed(env, path, tok) {
+  return fetch(FPL + path, { headers: { "X-Api-Authorization": "Bearer " + tok, Accept: "application/json", "User-Agent": UA }, redirect: "manual" });
+}
+
+async function myTeam(env, fromCron) {
+  const cached = await env.ODDS.get(TEAM_KEY, "json");
+  if (!fromCron && cached && Date.now() - cached.fetched < 60000) return cached;
+  let tok = await accessToken(env);
+  const me = await authed(env, "me/", tok);
+  if (!me.ok) throw new Error("me_" + me.status);
+  const entry = (await me.json()).player?.entry;
+  if (!entry) throw new Error("no_entry");
+  const [t, tl] = await Promise.all([authed(env, `my-team/${entry}/`, tok), authed(env, `entry/${entry}/transfers-latest/`, tok)]);
+  if (!t.ok) throw new Error("my_team_" + t.status);
+  const team = await t.json();
+  const latest = tl.ok ? await tl.json().catch(() => []) : [];
+  const out = {
+    ok: true, entry, fetched: Date.now(),
+    picks: (team.picks || []).map((p) => ({ element: p.element, position: p.position, multiplier: p.multiplier, is_captain: p.is_captain, is_vice_captain: p.is_vice_captain, selling_price: p.selling_price, purchase_price: p.purchase_price })),
+    transfers: team.transfers || null,
+    chips: (team.chips || []).map((c) => ({ name: c.name, status_for_entry: c.status_for_entry, played_by_entry: c.played_by_entry, is_pending: c.is_pending })),
+    latest: Array.isArray(latest) ? latest.map((x) => ({ element_in: x.element_in, element_out: x.element_out, element_in_cost: x.element_in_cost, element_out_cost: x.element_out_cost, event: x.event, time: x.time })) : [],
+  };
+  await env.ODDS.put(TEAM_KEY, JSON.stringify(out));
+  return out;
+}
+
+async function myTeamResponse(env) {
+  try { return json(await myTeam(env, false), 200); }
+  catch (e) {
+    const reason = String(e.message || e);
+    const cached = await env.ODDS.get(TEAM_KEY, "json").catch(() => null);
+    return json({ ok: false, reason, last: cached && cached.fetched ? cached : null }, 200);
   }
 }

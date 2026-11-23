@@ -66,7 +66,7 @@ Don't paste the key into the Name box.
 - **Worker:** `fc27-planner`, configured in `wrangler.toml`
 - **KV store:** `ODDS` (id `1612f48a342645ad8d40ddcb5b9303dc`). It caches odds, deadlines, league picks and gameweek stats.
 - **Hourly cron** `7 * * * *`: refreshes the odds 3 days and 1 day before each deadline.
-- **Secret:** `ODDS_API_KEY`
+- **Secrets:** `ODDS_API_KEY`, and `FPL_LOGIN`. FPL_LOGIN is your FPL sign-in token, used to read Pick Team for the Current gameweek tab. To create it, follow the steps in that tab: copy a line from the browser console on fantasy.premierleague.com, then paste it into Cloudflare as the secret's value. No password is stored. The token renews itself hourly and is saved in KV as `fpl_auth`.
 - **Development branch:** `claude/lucid-lamport-bu8fxu`
 
 ## Starting the next site

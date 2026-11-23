@@ -584,6 +584,11 @@ select, input[type="search"] { font: inherit; color: var(--ink); background: var
   .db-row { grid-template-columns: 78px 36px minmax(0, 1fr) minmax(0, 1fr) 36px; font-size: .8rem; }
   .db-head > span:first-child { display: none; } .db-head { grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); }
 }
+.setup summary { cursor: pointer; display: flex; flex-wrap: wrap; gap: 8px; align-items: baseline; }
+.setup ol { margin: 12px 0 8px; padding-left: 20px; display: grid; gap: 8px; }
+.setup pre { white-space: pre-wrap; word-break: break-all; background: var(--surface-2); border: 1px solid var(--line); border-radius: 8px; padding: 8px 10px; font-size: .75rem; margin: 6px 0 0; }
+tr.benchrow td { background: var(--surface-2); }
+.gw-top { align-items: start; }
 </style>
 
 <header class="bar">
@@ -593,6 +598,7 @@ select, input[type="search"] { font: inherit; color: var(--ink); background: var
   </div>
   <nav class="wrap tabs" aria-label="Views">
     <a href="#overview" data-v="overview">Overview</a>
+    <a href="#gw" data-v="gw" id="gwTab">Current gameweek</a>
     <a href="#analysis" data-v="analysis">Mini League analysis</a>
     <a href="#league" data-v="league">Standings</a>
     <a href="#planner" data-v="planner">Transfer planner</a>
@@ -728,6 +734,7 @@ select, input[type="search"] { font: inherit; color: var(--ink); background: var
     T = {}; D.teams.forEach((t) => (T[t.id] = t));
     me = D.me; myM = D.managers[me];
     gwCur = D.current_gw; gwNext = D.next_gw || gwCur;
+    const gt = document.getElementById("gwTab"); if (gt) gt.textContent = `Current gameweek (GW${gwNext})`;
     members = D.standings.map((s) => ({ ...s, m: D.managers[s.entry] })).filter((x) => x.m);
 
     // FPL's per-gameweek history isn't updated until a gameweek is fully processed, so overlay the
@@ -823,9 +830,9 @@ select, input[type="search"] { font: inherit; color: var(--ink); background: var
   // ---------- routing ----------
   function route() {
     const v = (location.hash || "#overview").slice(1);
-    view = ["overview", "analysis", "league", "planner", "insights", "fixtures", "odds"].includes(v) ? v : "overview";
+    view = ["overview", "gw", "analysis", "league", "planner", "insights", "fixtures", "odds"].includes(v) ? v : "overview";
     document.querySelectorAll(".tabs a").forEach((a) => { if (a.dataset.v === view) a.setAttribute("aria-current", "page"); else a.removeAttribute("aria-current"); });
-    ({ overview: renderOverview, analysis: renderAnalysis, league: renderLeague, planner: renderPlanner, insights: renderInsights, fixtures: renderFixtures, odds: renderOdds })[view]();
+    ({ overview: renderOverview, gw: renderGw, analysis: renderAnalysis, league: renderLeague, planner: renderPlanner, insights: renderInsights, fixtures: renderFixtures, odds: renderOdds })[view]();
   }
 
   function tick() {
@@ -1668,7 +1675,114 @@ select, input[type="search"] { font: inherit; color: var(--ink); background: var
   }
   function ordinal(n) { const s = ["th", "st", "nd", "rd"], v = n % 100; return n + (s[(v - 20) % 10] || s[v] || s[0]); }
 
-  function pitchHTML(m) {
+  // ---------- Current gameweek: your team for the upcoming gameweek (FPL Pick Team) ----------
+  // Logged-in data comes from the site's /api/my-team (the Worker signs in with your saved FPL login).
+  // Without it, the team is rebuilt from public data: last gameweek's picks plus any published transfers.
+  async function renderGw() {
+    const app = $("#app");
+    app.innerHTML = `<section class="view"><div class="panel-head"><h2>Current gameweek: GW${gwNext}</h2></div><p class="empty">Loading your GW${gwNext} team from FPL…</p></section>`;
+    let mt = null;
+    if (D.source === "live") mt = await fetch("api/my-team", { cache: "no-store" }).then((r) => (r.ok ? r.json() : null)).catch(() => null);
+    try { await ensureFA(squadOf(myM).map((p) => p[0])); } catch (e) { /* season data used */ }
+    if (view !== "gw") return;
+    const live = mt && mt.ok ? mt : mt && mt.last ? mt.last : null;
+    const stale = !!(mt && !mt.ok && mt.last);
+    const old = squadOf(myM);
+    let picks, src;
+    if (live && live.picks && live.picks.length === 15) {
+      picks = live.picks.map((p) => [p.element, p.position, p.multiplier, p.is_captain, p.is_vice_captain, p.selling_price, p.purchase_price]);
+      src = stale ? `From your FPL Pick Team as of ${new Date(live.fetched).toLocaleString("en-GB", { timeZone: "Europe/London", dateStyle: "short", timeStyle: "short" })} (FPL login needs renewing, see below)` : `Live from your FPL Pick Team, loaded at ${new Date(live.fetched).toLocaleTimeString("en-GB", { hour: "2-digit", minute: "2-digit" })}`;
+    } else {
+      // Public fallback: last gameweek's squad with published transfers for this gameweek applied in place.
+      const map = new Map(); (D.transfers || []).filter((t) => t[0] === gwNext).forEach((t) => map.set(t[3], t[1]));
+      picks = old.map((p) => [map.get(p[0]) || p[0], p[1], p[1] <= 11 ? 1 : 0, p[3], p[4]]);
+      src = `Rebuilt from public data: your GW${gwCur} team${map.size ? ` plus ${map.size} published transfer${map.size > 1 ? "s" : ""}` : ""}. FPL keeps GW${gwNext} transfers private until the deadline`;
+    }
+    const TO = teamOdds();
+    const oldIds = new Set(old.map((p) => p[0])), newIds = new Set(picks.map((p) => p[0]));
+    const outs = old.filter((p) => !newIds.has(p[0])).map((p) => E[p[0]]), ins = picks.filter((p) => !oldIds.has(p[0])).map((p) => E[p[0]]);
+    // pair outs and ins by position for display
+    const pairs = []; const insLeft = [...ins];
+    outs.forEach((o) => { const i = insLeft.findIndex((x) => x.element_type === o.element_type); pairs.push([o, i >= 0 ? insLeft.splice(i, 1)[0] : null]); });
+    insLeft.forEach((x) => pairs.push([null, x]));
+    const p1 = (e) => expertScore(e, 1, TO);
+    const rows = picks.map((p) => ({ p, e: E[p[0]], slot: p[1], cap: p[3], vc: p[4], pts: p1(E[p[0]]), rk: risks(E[p[0]], TO) })).sort((a, b) => a.slot - b.slot);
+    rows.forEach((r) => (r.sev = sevOf(r.rk)));
+    const xi = rows.filter((r) => r.slot <= 11), bench = rows.filter((r) => r.slot > 11);
+    const capR = rows.find((r) => r.cap), vcR = rows.find((r) => r.vc);
+    const tripled = live && (live.chips || []).some((c) => c.name === "3xc" && c.is_pending);
+    const pending = live ? (live.chips || []).filter((c) => c.is_pending).map((c) => CHIP_LABEL[c.name] || c.name) : [];
+    const bb = pending.includes("BB");
+    const xiPts = (bb ? rows : xi).reduce((a, r) => a + r.pts, 0) + (capR ? capR.pts * (tripled ? 2 : 1) : 0);
+
+    // Checks
+    const checks = [];
+    xi.filter((r) => r.sev >= 3).forEach((r) => checks.push({ k: "bad", t: `${esc(r.e.web_name)} is in your XI but ${r.e.status === "s" ? "suspended" : "unlikely to play"}`, d: esc(r.rk.find((x) => x[0] >= 3)[1]) }));
+    xi.filter((r) => r.sev === 2 && availability(r.e) < 1).forEach((r) => checks.push({ k: "warn", t: `${esc(r.e.web_name)} is a doubt`, d: esc(r.rk.find((x) => x[0] === 2)[1]) }));
+    const bestCap = [...xi].filter((r) => r.sev < 2).sort((a, b) => b.pts - a.pts)[0];
+    if (capR && bestCap && bestCap.e.id !== capR.e.id && bestCap.pts - capR.pts >= 0.8) checks.push({ k: "warn", t: `Captain: ${esc(bestCap.e.web_name)} projects more than ${esc(capR.e.web_name)}`, d: `${bestCap.pts.toFixed(1)} vs ${capR.pts.toFixed(1)} pts in GW${gwNext}. Doubled, that's about ${(2 * (bestCap.pts - capR.pts)).toFixed(1)} pts.` });
+    else if (capR) checks.push({ k: "good", t: `Captain ${esc(capR.e.web_name)} is your best option`, d: `${capR.pts.toFixed(1)} projected pts in GW${gwNext}${(() => { const f = nextFx(capR.e.team, gwNext); return f && f.gw === gwNext ? ` (${f.list.map(fxLabel).join(", ")})` : ""; })()}.` });
+    if (!bb) bench.filter((b) => b.e.element_type > 1 && b.sev < 2).forEach((b) => {
+      const weak = xi.filter((x) => x.e.element_type > 1 && (x.e.element_type === b.e.element_type || (x.e.element_type > 2 && b.e.element_type > 2))).sort((a, c) => a.pts - c.pts)[0];
+      if (weak && b.pts - weak.pts >= 1.2) checks.push({ k: "warn", t: `Consider starting ${esc(b.e.web_name)} over ${esc(weak.e.web_name)}`, d: `${b.pts.toFixed(1)} vs ${weak.pts.toFixed(1)} projected pts in GW${gwNext}.` });
+    });
+    const firstSub = bench.find((b) => b.e.element_type > 1);
+    if (firstSub && firstSub.sev >= 2) checks.push({ k: "warn", t: `Your first substitute ${esc(firstSub.e.web_name)} is a doubt`, d: "If a starter misses out, the next fit bench player comes on instead; consider reordering the bench." });
+    xi.filter((r) => !(teamFx[r.e.team][gwNext] || []).length).forEach((r) => checks.push({ k: "bad", t: `${esc(r.e.web_name)} has no GW${gwNext} fixture`, d: "Blank gameweek: he scores nothing if he starts." }));
+    if (!checks.some((c) => c.k !== "good")) checks.push({ k: "good", t: "No problems spotted in your line-up", d: "Every starter is available with a fixture." });
+
+    const tr = live && live.transfers;
+    const ft = tr ? Math.max(0, tr.limit == null ? 0 : tr.limit) : freeTransfers(myM, D.entry.started_event || 1);
+    const made = tr ? tr.made : pairs.length;
+    const bankNow = tr ? tr.bank : (myM.picks?.bank ?? lastHist(myM)[8]) + pairs.reduce((a, [o, i]) => a + (o ? sellPrice(o.id) : 0) - (i ? i.now_cost : 0), 0);
+    const sellOf = (r) => (r.p[5] != null ? r.p[5] : oldIds.has(r.e.id) ? sellPrice(r.e.id) : r.e.now_cost);
+    const value = tr && tr.value != null ? tr.value : rows.reduce((a, r) => a + r.e.now_cost, 0);
+    const projMap = {}; rows.forEach((r) => (projMap[r.e.id] = r.pts));
+    const ev = D.events.find((x) => x.id === gwNext);
+
+    let setup = "";
+    if (!live || stale) {
+      const why = !mt ? "Logged-in data only loads on the live site." : mt.reason === "not_configured" ? "The site isn't signed in to your FPL account yet." : mt.reason === "expired" ? "Your saved FPL login has expired or you signed out of FPL." : `FPL login problem (${esc(mt.reason)}).`;
+      setup = `<details class="panel setup" ${mt && mt.reason === "not_configured" ? "open" : ""}><summary><strong>Connect your FPL account</strong> <span class="note">${why}</span></summary>
+        <ol>
+          <li>On a computer, sign in at <strong>fantasy.premierleague.com</strong> in Chrome, Edge or Firefox and open the Pick Team page.</li>
+          <li>Press <strong>F12</strong> (Mac: <strong>⌥⌘J</strong>) and open the <strong>Console</strong> tab. If it asks, type <code>allow pasting</code> and press Enter.</li>
+          <li>Paste this line and press Enter. It copies your sign-in token (not your password) to the clipboard:
+            <pre><code>const s=[localStorage,sessionStorage].flatMap(x=>Object.keys(x).filter(k=>k.startsWith("oidc.user:")).map(k=>[x,k]))[0];const m=s[1].match(/^oidc\\.user:(.+):([^:]+)$/);copy(JSON.stringify({authority:m[1],client_id:m[2],refresh_token:JSON.parse(s[0][s[1]]).refresh_token}))</code></pre></li>
+          <li>In Cloudflare: <strong>Workers &amp; Pages → fc27-planner → Settings → Variables and Secrets → Add</strong>. Type <strong>Secret</strong>, Name <code>FPL_LOGIN</code>, and paste into the <strong>Value</strong> box. Save, then reload this page.</li>
+        </ol>
+        <p class="note">The token lets the site read your team only; it can't make transfers through this site, which only reads. It renews itself every hour. If you sign out of FPL everywhere or it stops working, repeat these steps. Anyone with this site's link will see your GW${gwNext} team before the deadline.</p></details>`;
+    }
+
+    app.innerHTML = `<section class="view">
+      <div class="panel-head"><h2>Current gameweek: GW${gwNext}</h2><span class="note">Deadline ${ev ? new Date(ev.deadline).toLocaleString("en-GB", { timeZone: "Europe/London", weekday: "short", day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" }) : ""} UK</span></div>
+      <p class="fresh">${src}.</p>
+      ${setup}
+      <div class="kpis">
+        <div class="kpi"><span class="k">Transfers made</span><span class="v">${made}</span><span class="s">${tr ? `${ft} free${tr.cost ? `, −${tr.cost} pts hit` : ""}` : `of about ${ft} free`}</span></div>
+        <div class="kpi"><span class="k">In the bank</span><span class="v">£${price(bankNow)}m</span><span class="s">team value £${price(value)}m</span></div>
+        <div class="kpi"><span class="k">Projected GW${gwNext} pts</span><span class="v">${xiPts.toFixed(0)}</span><span class="s">your XI${capR ? `, ${esc(capR.e.web_name)} ${tripled ? "tripled" : "doubled"}` : ""}${bb ? ", Bench Boost" : ""}</span></div>
+        <div class="kpi"><span class="k">Chip</span><span class="v">${pending.length ? pending.join(", ") : "None"}</span><span class="s">${live ? "active for this gameweek" : "known once logged in"}</span></div>
+      </div>
+      <div class="panel"><div class="panel-head"><h3>Transfers for GW${gwNext}</h3></div>
+        ${pairs.length ? `<ul class="moves">${pairs.map(([o, i]) => `<li><span>${o ? `<span class="down">${esc(o.web_name)}</span> <span class="note">sold £${price(sellPrice(o.id))}m</span>` : ""} → ${i ? `<span class="up">${esc(i.web_name)}</span> <span class="note">bought £${price(i.now_cost)}m · ${POSN(i)} · ${tShort(i.team)}</span>` : ""}</span>${o && i ? `<span class="note">${(p1(i) - p1(o) >= 0 ? "+" : "−") + Math.abs(p1(i) - p1(o)).toFixed(1)} pts in GW${gwNext}</span>` : ""}</li>`).join("")}</ul>` : `<p class="note">${live ? `No transfers made for GW${gwNext} yet.` : `None published yet. Connect your FPL account (below) to see transfers before the deadline.`}</p>`}
+      </div>
+      <div class="grid-2 gw-top">
+        <div class="panel"><div class="panel-head"><h3>Your GW${gwNext} team</h3><span class="note">Projected points on each shirt</span></div>${pitchHTML({ picks: { picks } }, projMap)}</div>
+        <div class="panel"><div class="panel-head"><h3>Line-up checks</h3></div><ul class="insights">${checks.map((c) => `<li class="${c.k}"><div><div class="t">${c.t}</div><div class="d">${c.d}</div></div></li>`).join("")}</ul></div>
+      </div>
+      <div class="panel"><div class="panel-head"><h3>Player by player</h3></div>
+        <div class="tbl-wrap"><table class="cards-sm">
+          <thead><tr><th>Player</th><th>Role</th><th>GW${gwNext} fixture</th><th class="n">Proj pts</th><th class="n">FPL xP</th><th>Status</th><th class="n">Sells for</th><th>Notes</th></tr></thead>
+          <tbody>${rows.map((r) => `<tr class="${r.slot > 11 ? "benchrow" : ""}"><td><span class="mgr"><span>${esc(r.e.web_name)}${ycBadge(r.e)}${oldIds.has(r.e.id) ? "" : ' <span class="pill acc">New</span>'}</span><small>${POSN(r.e)} · ${tShort(r.e.team)} · £${price(r.e.now_cost)}m</small></span></td><td>${r.cap ? "Captain" : r.vc ? "Vice-captain" : r.slot > 11 ? `Bench ${r.slot - 11}` : "Starting"}</td><td>${fxStrip(r.e.team, gwNext, 1)}</td><td class="n"><strong>${r.pts.toFixed(1)}</strong></td><td class="n">${r.e.ep_next}</td><td>${statusPill(r.e)}</td><td class="n">£${price(sellOf(r))}m</td><td class="why">${r.rk.filter((x) => x[0] >= 1).slice(0, 2).map((x) => x[1]).join("; ") || "No concerns"}</td></tr>`).join("")}</tbody>
+        </table></div>
+        <p class="note">Projected points use the site's expert score (xG, xA, clean sheet odds, defensive contributions, bonus, fixture and bookmaker odds, minutes, injuries and news). FPL xP is FPL's own expected points.</p>
+      </div>
+      ${freshness()}
+    </section>`;
+  }
+
+  function pitchHTML(m, proj) {
     const picks = squadOf(m);
     if (!picks.length) return `<p class="empty">No picks available yet.</p>`;
     const xi = picks.filter((p) => p[1] <= 11), bench = picks.filter((p) => p[1] > 11);
@@ -1683,7 +1797,7 @@ select, input[type="search"] { font: inherit; color: var(--ink); background: var
         <span class="kit">${cap ? '<span class="badge">C</span>' : vc ? '<span class="badge vc">V</span>' : ""}${flag}${code != null ? `<img src="kit/${code}${e.element_type === 1 ? "_1" : ""}.png" alt="${esc(T[e.team]?.name)} ${e.element_type === 1 ? "goalkeeper " : ""}kit" width="56" height="56" decoding="async" onerror="this.parentNode.classList.add('nokit');this.remove()">` : ""}</span>
         <span class="plate">
           <span class="nm">${esc(e.web_name)}</span>
-          <span class="pts">${mult === 0 && p[1] <= 11 ? "–" : pts}</span>
+          <span class="pts">${proj ? (proj[el] || 0).toFixed(1) : mult === 0 && p[1] <= 11 ? "–" : pts}</span>
           <span class="fx fdr${f ? f.fdr : 0}">${f ? fxLabel(f) + (nf.list.length > 1 ? " +1" : "") : "No fixture"}</span>
           <span class="meta">${Math.round((own[el] || 0) * 100)}% league</span>
         </span>
