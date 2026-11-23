@@ -1758,7 +1758,7 @@ tr.benchrow td { background: var(--surface-2); }
     const base = {
       ids: picks.map((p) => p[0]), cap: (picks.find((p) => p[3]) || [])[0] || null, vc: (picks.find((p) => p[4]) || [])[0] || null,
       sell, bank: tr ? tr.bank : (myM.picks?.bank ?? lastHist(myM)[8]) + pairs.reduce((a, [o, i]) => a + (o ? sellPrice(o.id) : 0) - (i ? i.now_cost : 0), 0),
-      ft: baseFt, made: tr ? tr.made : pairs.length, cost: tr ? tr.cost || 0 : 0, unlimited, pending, live: !!live, stale, mt, src, pairs, oldIds,
+      ft: baseFt, made: tr ? tr.made : pairs.length, cost: tr ? Math.max(0, (tr.made || 0) - (tr.limit || 0)) * (tr.cost || 4) : 0, unlimited: unlimited || !!(tr && tr.status === "unlimited"), pending, live: !!live, stale, mt, src, pairs, oldIds,
       value: tr && tr.value != null ? tr.value : picks.reduce((a, p) => a + E[p[0]].now_cost, 0),
     };
     base.sig = base.ids.join(",") + "|" + base.cap + "|" + base.vc;

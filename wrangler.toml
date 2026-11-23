@@ -2,6 +2,8 @@ name = "fc27-planner"
 main = "worker/src/index.js"
 compatibility_date = "2025-06-01"
 workers_dev = true
+# Keep variables added in the Cloudflare dashboard (e.g. FPL_LOGIN) when deploying.
+keep_vars = true
 
 # The page and the data snapshot are bundled into the Worker as text.
 [[rules]]

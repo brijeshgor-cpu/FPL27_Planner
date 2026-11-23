@@ -289,9 +289,21 @@ const AUTH_KEY = "fpl_auth", TEAM_KEY = "my_team";
 const UA = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0 Safari/537.36";
 const plHost = (u) => { try { const h = new URL(u).hostname; return new URL(u).protocol === "https:" && (h === "premierleague.com" || h.endsWith(".premierleague.com")); } catch (e) { return false; } };
 
+// Reads the FPL_LOGIN value. Accepts proper JSON, and also a copy that lost its quotes or picked up
+// smart quotes on the way (e.g. {"authority":https://...,client_id:...,refresh_token:...}).
+function parseLogin(raw) {
+  if (!raw) return null;
+  const txt = String(raw).trim().replace(/[\u201c\u201d\u2018\u2019]/g, '"');
+  try { const j = JSON.parse(txt); if (j && j.refresh_token) return j; } catch (e) { /* try the loose form */ }
+  const get = (k) => { const m = new RegExp(`"?${k}"?\\s*:\\s*"?([^",}\\s]+)`).exec(txt); return m ? m[1] : null; };
+  const o = { authority: get("authority"), client_id: get("client_id"), refresh_token: get("refresh_token") };
+  return o.authority && o.client_id && o.refresh_token ? o : null;
+}
+
 async function accessToken(env) {
   let seed = null;
-  try { seed = env.FPL_LOGIN ? JSON.parse(env.FPL_LOGIN) : null; } catch (e) { throw new Error("bad_secret"); }
+  seed = parseLogin(env.FPL_LOGIN);
+  if (env.FPL_LOGIN && !seed) throw new Error("bad_secret");
   if (!seed || !seed.refresh_token || !seed.client_id || !plHost(seed.authority)) throw new Error("not_configured");
   let st = (await env.ODDS.get(AUTH_KEY, "json")) || {};
   // A new secret (logged in again) replaces whatever was saved.
