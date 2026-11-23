@@ -722,6 +722,35 @@ details.why[open] { flex-basis: 100%; }
 .pr-t.x-bl { border: 1px dashed var(--line); color: var(--muted); }
 @media (max-width: 1000px) { .pr-card { grid-template-columns: minmax(150px, 1fr) repeat(5, minmax(56px, auto)); } .pr-gws { grid-column: 1 / -1; } }
 @media (max-width: 600px) { .pr-card { grid-template-columns: repeat(5, minmax(0, 1fr)); } .pr-who { grid-column: 1 / -1; } .pr-stat .k { font-size: .62rem; } .pr-gws { grid-template-columns: repeat(var(--n), minmax(56px, 1fr)); } .pr-sort { flex: 1 1 100%; } }
+/* Fixtures (rebuilt) */
+.fx-filters { display: flex; flex-wrap: wrap; gap: 14px 18px; align-items: flex-end; }
+.fx-filters .k { display: block; font-size: .72rem; text-transform: uppercase; letter-spacing: .06em; color: var(--muted); font-weight: 600; margin-bottom: 4px; }
+.fx-filters > label { flex: 1 1 170px; min-width: 0; } .fx-filters select { width: 100%; }
+.fx-gw { flex: 2 1 300px; min-width: 0; }
+.fx-quick { display: inline-flex; gap: 4px; align-items: center; } .fx-quick .btn { min-width: 30px; padding: 2px 8px; }
+.fx-toggle { flex: 0 0 auto !important; display: inline-flex; align-items: center; gap: 8px; border: 1px solid var(--line); border-radius: 10px; padding: 8px 12px; cursor: pointer; font-weight: 600; }
+.fx-toggle input { position: absolute; opacity: 0; width: 1px; height: 1px; }
+.fx-toggle .sw { width: 34px; height: 20px; border-radius: 999px; background: var(--line); position: relative; transition: background .15s; flex: none; }
+.fx-toggle .sw::after { content: ""; position: absolute; top: 2px; left: 2px; width: 16px; height: 16px; border-radius: 50%; background: var(--surface); transition: transform .15s; box-shadow: 0 1px 2px rgba(0,0,0,.3); }
+.fx-toggle input:checked + .sw { background: var(--accent); } .fx-toggle input:checked + .sw::after { transform: translateX(14px); }
+.fx-toggle input:focus-visible + .sw { outline: 2px solid var(--accent); outline-offset: 2px; }
+.fx-head { align-items: flex-start; gap: 12px; flex-wrap: wrap; } .fx-head h3 { margin: 0 0 2px; } .fx-head .note { margin: 0; }
+table.fx2 { width: 100%; border-collapse: separate; border-spacing: 0; }
+table.fx2 th { font-size: .72rem; text-transform: uppercase; letter-spacing: .05em; color: var(--muted); text-align: left; padding: 8px 6px; white-space: nowrap; }
+table.fx2 th.fx2-g { text-align: center; } table.fx2 th small { display: block; text-transform: none; letter-spacing: 0; font-weight: 400; }
+table.fx2 td { padding: 6px; border-top: 1px solid var(--line); vertical-align: middle; }
+table.fx2 tr.me td { background: color-mix(in srgb, var(--accent) 7%, transparent); }
+.fx2-team { display: flex; align-items: center; gap: 8px; min-width: 150px; } .fx2-team img { width: 28px; height: 28px; object-fit: contain; flex: none; }
+.fx2-team > span { display: grid; } .fx2-team small { color: var(--muted); font-size: .72rem; }
+.fx2-avg { display: flex; align-items: center; gap: 10px; min-width: 150px; } .fx2-avg b { font-family: var(--font-display); font-size: 1.5rem; min-width: 46px; }
+.fx2-run { display: grid; gap: 2px; } .fx2-run small { color: var(--muted); font-size: .7rem; }
+.fx2-run .bars { display: flex; align-items: flex-end; gap: 2px; height: 20px; }
+.fx2-run .bars i { display: block; width: 10px; border-radius: 2px; } .fx2-run .bars i.blank { background: var(--line); }
+td.fx2-c { padding: 4px 3px; }
+.fx2-cell { display: flex; justify-content: space-between; align-items: center; gap: 8px; border-radius: 8px; padding: 8px 10px; min-width: 92px; font-weight: 700; font-size: .85rem; margin: 2px 0; }
+.fx2-cell small { font-weight: 400; opacity: .85; } .fx2-cell b { font-weight: 600; }
+.fx2-cell.blank { justify-content: center; border: 1px dashed var(--line); color: var(--muted); font-weight: 500; }
+@media (max-width: 700px) { .fx2-cell { min-width: 74px; padding: 6px 7px; font-size: .76rem; gap: 4px; } .fx2-avg { min-width: 120px; } .fx2-avg b { font-size: 1.2rem; min-width: 36px; } .fx2-team { min-width: 120px; } .fx-toggle { flex: 1 1 100% !important; } }
 </style>
 
 <header class="bar">
@@ -4511,44 +4540,125 @@ details.why[open] { flex-basis: 100%; }
   }).join("");
   const avgBadge = (a) => `<span class="fdrc fdr${Math.min(5, Math.max(1, Math.round(a)))}" title="Average FDR">${a.toFixed(1)}</span>`;
 
+  // ---------- Fixtures: rank every team's run by difficulty, attack, defence, goals or clean sheets ----------
+  // Overall uses FPL's official FDR (×2, on a 1–10 scale) unless "Team strength" is on. Team strength is
+  // built from this season's data (team xG and goals for attack; xG and goals conceded for defence),
+  // with bookmaker odds for the next gameweek. Cells are always coloured by FPL's FDR.
+  const FXS = { sort: "overall", order: "best", team: "all", g0: null, g1: null, str: false };
+  let TSTR = null;
+  function teamStrength() {
+    if (TSTR && TSTR.gw === gwNext && TSTR.odds === FA.odds) return TSTR;
+    const att = {}, def = {}, gf = {}, ga = {}, gp = {};
+    D.teams.forEach((t) => { att[t.id] = 0; gf[t.id] = 0; ga[t.id] = 0; gp[t.id] = 0; });
+    Object.values(E).forEach((e) => (att[e.team] += +e.expected_goals || 0));
+    D.fixtures.forEach((f) => { if (!f[7] || f[9] == null) return; gf[f[2]] += f[9]; ga[f[2]] += f[10]; gf[f[3]] += f[10]; ga[f[3]] += f[9]; gp[f[2]]++; gp[f[3]]++; });
+    D.teams.forEach((t) => {
+      const g = Math.max(1, gp[t.id]);
+      const keeper = Object.values(E).filter((e) => e.team === t.id && e.element_type === 1).sort((a, b) => b.minutes - a.minutes)[0];
+      const xga = keeper && keeper.minutes >= 270 ? +keeper.expected_goals_conceded_per_90 || 1.35 : ga[t.id] / g;
+      att[t.id] = 0.6 * (att[t.id] / g) + 0.4 * (gf[t.id] / g);
+      def[t.id] = 0.6 * xga + 0.4 * (ga[t.id] / g);
+    });
+    const avg = (o) => Object.values(o).reduce((a, b) => a + b, 0) / Object.values(o).length;
+    TSTR = { gw: gwNext, odds: FA.odds, att, def, aAtt: avg(att), aDef: avg(def) };
+    return TSTR;
+  }
+  // Expected goals for and against one fixture (bookmaker odds for the next gameweek when available).
+  function fixtureGoals(team, f, g) {
+    const S = teamStrength(), mu = (S.aAtt + S.aDef) / 2;
+    if (g === gwNext) { const o = teamOdds()[team], oo = teamOdds()[f.opp]; if (o && oo) return { for: o.lam, against: oo.lam }; }
+    const hf = f.home ? 1.12 : 0.89, ha = f.home ? 0.89 : 1.12;
+    return { for: mu * (S.att[team] / S.aAtt) * (S.def[f.opp] / S.aDef) * hf, against: mu * (S.att[f.opp] / S.aAtt) * (S.def[team] / S.aDef) * ha };
+  }
+  const clamp10 = (v) => Math.max(1, Math.min(10, v));
+  // One fixture's value for the chosen measure. Difficulties are 1–10 (lower is easier).
+  function fxValue(team, f, g, sort, str) {
+    const x = fixtureGoals(team, f, g);
+    const attD = clamp10(10 - ((x.for - 0.6) / 2) * 9), defD = clamp10(1 + ((x.against - 0.6) / 2) * 9);
+    if (sort === "attack") return attD;
+    if (sort === "defence") return defD;
+    if (sort === "goals") return x.for;
+    if (sort === "cs") return Math.exp(-x.against);
+    return str ? (attD + defD) / 2 : f.fdr * 2;
+  }
   function renderFixtures() {
     if (OFF === undefined) {
       $("#app").innerHTML = `<section class="view"><p class="empty">Loading your GW${gwNext} team from FPL…</p></section>`;
-      loadOfficial().then(() => { if (view === "fixtures") renderFixtures(); });
+      loadOfficial().then(() => ensureFA([]).catch(() => null)).then(() => { if (view === "fixtures") renderFixtures(); });
       return;
     }
-    let n = store.get("fxN", 5); if (n !== 3 && n !== 5) n = 5;
-    const gws = []; for (let g = gwNext; g < gwNext + n && g <= 38; g++) gws.push(g);
-    const mineTeams = {}; baseSquad().forEach((p) => { const t = E[p[0]]?.team; mineTeams[t] = (mineTeams[t] || 0) + 1; });
-    const rows = D.teams.map((t) => ({ t, a: windowFdr(t.id, n) })).sort((x, y) => x.a - y.a || x.t.name.localeCompare(y.t.name));
-    const squad = baseSquad().map((p) => ({ e: E[p[0]], slot: p[1] })).filter((x) => x.e)
-      .sort((a, b) => a.e.element_type - b.e.element_type || windowFdr(a.e.team, n) - windowFdr(b.e.team, n));
-    const head = `<th>GW${gws.join("</th><th>GW")}</th>`;
+    const maxG = Math.min(38, gwNext + 9);
+    if (FXS.g0 == null || FXS.g0 < gwNext) { FXS.g0 = gwNext; FXS.g1 = Math.min(maxG, gwNext + 5); }
+    const sel = (id, opts, v) => `<select id="${id}">${opts.map(([k, l]) => `<option value="${k}" ${String(k) === String(v) ? "selected" : ""}>${l}</option>`).join("")}</select>`;
     $("#app").innerHTML = `
     <section class="view">
-      <div class="panel-head"><h2>Fixture difficulty</h2>
-        <div class="controls"><span class="note">Show</span><div class="seg" role="group" aria-label="Gameweeks to show">${[3, 5].map((v) => `<button data-fxn="${v}" aria-pressed="${v === n}">Next ${v} GWs</button>`).join("")}</div></div></div>
-      <div class="fdr-legend"><span>FDR</span>${[1, 2, 3, 4, 5].map((v) => `<span class="fdrc fdr${v}">${v} ${["Very easy", "Easy", "Medium", "Hard", "Very hard"][v - 1]}</span>`).join("")}</div>
-      <div class="panel">
-        <div class="panel-head"><h3>Your players' next ${n} gameweeks</h3><span class="note">Grouped by position, easiest run first</span></div>
-        <div class="tbl-wrap"><table class="fx-tbl">
-          <thead><tr><th>Player</th><th>Team</th><th class="n">Avg FDR</th>${head}</tr></thead>
-          <tbody>${squad.map(({ e, slot }) => `<tr><td><span class="mgr">${esc(e.web_name)}<small>${D.positions[e.element_type]}${slot > 11 ? " · bench" : ""}</small></span></td><td>${tShort(e.team)}</td><td class="n">${avgBadge(windowFdr(e.team, n))}</td>${fdrCells(e.team, gws)}</tr>`).join("")}</tbody>
-        </table></div>
+      <div class="panel-head"><h2>Fixtures</h2><span class="note">Rank every team's upcoming run by fixture difficulty, expected goals or clean sheet probability.</span></div>
+      <div class="panel fx-filters">
+        <label><span class="k">Sort by</span>${sel("fxSort", [["overall", "Overall"], ["attack", "Attack"], ["defence", "Defence"], ["goals", "Goals"], ["cs", "Clean sheets"]], FXS.sort)}</label>
+        <label><span class="k">Order</span>${sel("fxOrder", [["best", "Best runs first"], ["worst", "Worst runs first"]], FXS.order)}</label>
+        <label><span class="k">Teams</span>${sel("fxTeam", [["all", "All teams"], ["mine", "Your players' teams"], ...[...D.teams].sort((a, b) => a.name.localeCompare(b.name)).map((t) => [t.id, t.name])], FXS.team)}</label>
+        <div class="fx-gw"><div class="pr-sh"><span class="k">Gameweeks</span><span class="fx-quick"><span class="note">quick set</span>${[3, 5, 8].map((n) => `<button class="btn sm" data-fxq="${n}">${n}</button>`).join("")}</span></div>
+          <div class="dual"><span class="pill acc" id="fxG0">GW${FXS.g0}</span><div class="dual-track"><input type="range" id="fxGa" min="${gwNext}" max="${maxG}" value="${FXS.g0}" aria-label="First gameweek"><input type="range" id="fxGb" min="${gwNext}" max="${maxG}" value="${FXS.g1}" aria-label="Last gameweek"></div><span class="pill acc" id="fxG1">GW${FXS.g1}</span></div></div>
+        <label class="fx-toggle" title="Off: Overall uses FPL's official FDR. On: Overall uses team strength built from this season's xG, goals and the bookmaker odds."><input type="checkbox" id="fxStr" ${FXS.str ? "checked" : ""}><span class="sw"></span>Team strength</label>
       </div>
-      <div class="panel">
-        <div class="panel-head"><h3>All teams, best fixtures first</h3><span class="note">Highlighted rows are teams you own players from</span></div>
-        <div class="tbl-wrap"><table class="fx-tbl">
-          <thead><tr><th class="n">#</th><th>Team</th><th class="n">Avg FDR</th>${head}</tr></thead>
-          <tbody>${rows.map(({ t, a }, i) => `<tr class="${mineTeams[t.id] ? "me" : ""}"><td class="n">${i + 1}</td><td>${esc(t.name)} ${mineTeams[t.id] ? `<span class="pill acc" title="Players you own">${mineTeams[t.id]}</span>` : ""}</td><td class="n">${avgBadge(a)}</td>${fdrCells(t.id, gws)}</tr>`).join("")}</tbody>
-        </table></div>
-        <p class="note">FDR is FPL's official fixture difficulty rating. A blank gameweek counts as 5 in the average; a double gameweek shows both games.</p>
-      </div>
+      <div class="panel" id="fxTable"></div>
+      <div class="panel" id="fxMine"></div>
       <div class="panel" id="rotation">${rotationHTML()}</div>
       ${freshness()}
     </section>`;
     wireRotation();
-    document.querySelectorAll("[data-fxn]").forEach((b) => b.addEventListener("click", () => { store.set("fxN", Number(b.dataset.fxn)); renderFixtures(); }));
+    const redraw = () => drawFxTable();
+    $("#fxSort").addEventListener("change", (e) => { FXS.sort = e.target.value; redraw(); });
+    $("#fxOrder").addEventListener("change", (e) => { FXS.order = e.target.value; redraw(); });
+    $("#fxTeam").addEventListener("change", (e) => { FXS.team = e.target.value; redraw(); });
+    $("#fxStr").addEventListener("change", (e) => { FXS.str = e.target.checked; redraw(); });
+    const A = $("#fxGa"), B = $("#fxGb");
+    const fill = () => { const lo = +A.min, hi = +A.max, f = (v) => ((v - lo) / Math.max(1, hi - lo)) * 100; A.parentNode.style.setProperty("--a", f(+A.value) + "%"); A.parentNode.style.setProperty("--b", f(+B.value) + "%"); };
+    const upd = (final) => { let x = +A.value, y = +B.value; if (x > y) { if (document.activeElement === A) A.value = x = y; else B.value = y = x; } FXS.g0 = x; FXS.g1 = y; $("#fxG0").textContent = `GW${x}`; $("#fxG1").textContent = `GW${y}`; fill(); if (final) redraw(); };
+    [A, B].forEach((el) => { el.addEventListener("input", () => upd(false)); el.addEventListener("change", () => upd(true)); });
+    document.querySelectorAll("[data-fxq]").forEach((b) => b.addEventListener("click", () => { A.value = gwNext; B.value = Math.min(maxG, gwNext + +b.dataset.fxq - 1); upd(true); }));
+    fill(); redraw();
+  }
+  function drawFxTable() {
+    const box = $("#fxTable"); if (!box) return;
+    const gws = []; for (let g = FXS.g0; g <= FXS.g1; g++) gws.push(g);
+    const mineTeams = {}; baseSquad().forEach((p) => { const t = E[p[0]]?.team; mineTeams[t] = (mineTeams[t] || 0) + 1; });
+    const s = FXS.sort, higherBetter = s === "goals" || s === "cs";
+    const fmtV = (v) => (s === "cs" ? pct(v) : v.toFixed(1));
+    // Per-team run: each gameweek's fixtures with their value; blanks count as the worst case.
+    const rows = D.teams.filter((t) => FXS.team === "all" || (FXS.team === "mine" ? mineTeams[t.id] : String(t.id) === String(FXS.team))).map((t) => {
+      let home = 0, away = 0;
+      const per = gws.map((g) => { const l = teamFx[t.id][g] || []; l.forEach((f) => (f.home ? home++ : away++)); return { g, l, v: l.map((f) => fxValue(t.id, f, g, s, FXS.str)) }; });
+      const vals = per.flatMap((p) => (p.l.length ? p.v : [higherBetter ? 0 : 10]));
+      const score = higherBetter ? (s === "goals" ? vals.reduce((a, b) => a + b, 0) : vals.reduce((a, b) => a + b, 0) / vals.length) : vals.reduce((a, b) => a + b, 0) / vals.length;
+      return { t, per, score, home, away };
+    });
+    rows.sort((a, b) => (higherBetter ? b.score - a.score : a.score - b.score) * (FXS.order === "best" ? 1 : -1) || a.t.name.localeCompare(b.t.name));
+    const runLabel = (sc) => { const good = higherBetter ? (s === "goals" ? sc / gws.length >= 1.7 : sc >= 0.38) : sc <= 5, bad = higherBetter ? (s === "goals" ? sc / gws.length <= 1.15 : sc <= 0.22) : sc >= 6.6; return good ? "Good run" : bad ? "Tough run" : "Average run"; };
+    const ease = (v) => (s === "goals" ? Math.min(1, v / 2.6) : s === "cs" ? Math.min(1, v / 0.6) : (10 - v) / 9);
+    const title = { overall: FXS.str ? "Overall difficulty (team strength)" : "Overall difficulty", attack: "Attacking difficulty", defence: "Defensive difficulty", goals: "Expected goals", cs: "Clean sheet chance" }[s];
+    const sub = { overall: FXS.str ? "Average of attacking and defensive difficulty from team strength, on a 1–10 scale. Lower is easier." : "Average of FPL's official fixture difficulty (FDR × 2) on a 1–10 scale. Lower is easier.", attack: "How hard it is to score against each opponent, on a 1–10 scale. Lower is easier.", defence: "How hard it is to keep each opponent out, on a 1–10 scale. Lower is easier.", goals: "Expected goals the team scores in each fixture, and the total over the run. Higher is better.", cs: "Chance of a clean sheet in each fixture, and the average over the run. Higher is better." }[s];
+    const dl = (g) => { const ev = D.events.find((e) => e.id === g); return ev ? new Date(ev.deadline).toLocaleDateString("en-GB", { day: "numeric", month: "short" }) : ""; };
+    box.innerHTML = `<div class="panel-head fx-head"><div><h3>${title} over GW${FXS.g0}${FXS.g1 > FXS.g0 ? `–${FXS.g1}` : ""}</h3><p class="note">${sub} Cells are coloured by FPL's fixture difficulty (FDR).</p></div>
+        <div class="fdr-key pr-key"><span class="note">Easier</span>${[1, 2, 3, 4, 5].map((d) => `<span class="fdr${d}">${d}</span>`).join("")}<span class="note">Harder</span></div></div>
+      <div class="tbl-wrap"><table class="fx2">
+        <thead><tr><th class="n">Rk</th><th>Team</th><th>${s === "goals" ? "Exp. goals" : s === "cs" ? "Clean sheets" : "Difficulty"}</th>${gws.map((g) => `<th class="fx2-g">GW${g}<small>${dl(g)}</small></th>`).join("")}</tr></thead>
+        <tbody>${rows.map((r, i) => `<tr class="${mineTeams[r.t.id] ? "me" : ""}">
+          <td class="n">${i + 1}</td>
+          <td><span class="fx2-team">${r.t.code != null ? `<img src="kit/${r.t.code}.png" alt="" width="28" height="28" decoding="async" onerror="this.remove()">` : ""}<span><strong>${esc(r.t.name)}${mineTeams[r.t.id] ? ` <span class="pill acc" title="${mineTeams[r.t.id]} of your players">${mineTeams[r.t.id]}</span>` : ""}</strong><small>${r.home} home · ${r.away} away</small></span></span></td>
+          <td><span class="fx2-avg"><b>${fmtV(r.score)}</b><span class="fx2-run"><span class="bars">${r.per.map((p) => { if (!p.l.length) return `<i class="blank" style="height:3px"></i>`; const v = p.v.reduce((a, b) => a + b, 0) / p.v.length; return `<i class="fdr${Math.max(...p.l.map((f) => f.fdr))}" style="height:${Math.round(4 + ease(v) * 16)}px"></i>`; }).join("")}</span><small>${runLabel(r.score)}</small></span></span></td>
+          ${r.per.map((p) => `<td class="fx2-c">${p.l.length ? p.l.map((f, k) => `<span class="fx2-cell fdr${f.fdr}" title="GW${p.g}: ${esc(T[f.opp].name)} ${f.home ? "home" : "away"}, FDR ${f.fdr}"><span>${tShort(f.opp).toUpperCase()} <small>${f.home ? "H" : "A"}</small></span><b>${fmtV(p.v[k])}</b></span>`).join("") : `<span class="fx2-cell blank">Blank</span>`}</td>`).join("")}
+        </tr>`).join("")}</tbody>
+      </table></div>
+      <p class="note">${FXS.str || s !== "overall" ? `Team strength comes from this season's data: attack from team xG (60%) and goals scored (40%), defence from xG conceded (60%) and goals conceded (40%), adjusted for home and away. GW${gwNext} uses the bookmaker odds with the margin removed. <span class="lab lab-proj">Projection</span>` : `FDR is FPL's official fixture difficulty rating. <span class="lab lab-fact">Fact</span>`} A blank gameweek counts as the worst case; a double gameweek shows both games.</p>`;
+    // your players' fixtures over the same range
+    const mb = $("#fxMine");
+    if (mb) {
+      const squad = baseSquad().map((p) => ({ e: E[p[0]], slot: p[1] })).filter((x) => x.e).sort((a, b) => a.e.element_type - b.e.element_type || windowFdr(a.e.team, gws.length) - windowFdr(b.e.team, gws.length));
+      mb.innerHTML = `<div class="panel-head"><h3>Your players' fixtures, GW${FXS.g0}${FXS.g1 > FXS.g0 ? `–${FXS.g1}` : ""}</h3><span class="note">Grouped by position, easiest run first</span></div>
+        <div class="tbl-wrap"><table class="fx-tbl"><thead><tr><th>Player</th><th>Team</th><th class="n">Avg FDR</th>${gws.map((g) => `<th>GW${g}</th>`).join("")}</tr></thead>
+        <tbody>${squad.map(({ e, slot }) => `<tr><td><span class="mgr">${esc(e.web_name)}<small>${D.positions[e.element_type]}${slot > 11 ? " · bench" : ""}</small></span></td><td>${tShort(e.team)}</td><td class="n">${avgBadge(windowFdr(e.team, gws.length))}</td>${fdrCells(e.team, gws)}</tr>`).join("")}</tbody></table></div>`;
+    }
   }
 
   // ---------- rotation pairs ----------

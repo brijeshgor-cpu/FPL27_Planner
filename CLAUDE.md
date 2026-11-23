@@ -132,6 +132,13 @@ bench order, transfers or chip before the deadline?*
 - **Player predictions tab:** `renderPredict()` and `drawPredList()`. Per-gameweek xP is
   `predPer(e, k)`, the difference between `expertScore` horizons, and expected minutes are
   `predMins(e, k)`. `teamOdds()` is cached per odds download, because the Poisson fit is expensive.
+- **Fixtures tab:** `renderFixtures()` and `drawFxTable()`. Sort by Overall (FPL FDR × 2, or team
+  strength when the toggle is on), Attack, Defence, Goals or Clean sheets, with an Order, a Teams
+  filter, a GW range slider with quick-set 3/5/8, and a Team strength toggle. FPL's own strength
+  fields are zero this season, so `teamStrength()` builds attack from 60% team xG and 40% goals scored,
+  and defence from 60% xG conceded and 40% goals conceded. `fixtureGoals()` uses the bookmaker odds
+  for the next gameweek. Cells are always coloured by FPL's FDR. The Rotation section
+  (`rotationHTML()`) is the owner's and stays as it is.
 - **Current gameweek tab:** `gwAdvice()` for the recommendations, `gwBuys()` for transfers,
   `gwChips()` for chips, `bestXI()`, `autoSub()` and `squadHealth()`.
 - **Data you can't get for free:** penalty-box touches, shots, chances created, duels and manager
