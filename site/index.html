@@ -751,6 +751,32 @@ td.fx2-c { padding: 4px 3px; }
 .fx2-cell small { font-weight: 400; opacity: .85; } .fx2-cell b { font-weight: 600; }
 .fx2-cell.blank { justify-content: center; border: 1px dashed var(--line); color: var(--muted); font-weight: 500; }
 @media (max-width: 700px) { .fx2-cell { min-width: 74px; padding: 6px 7px; font-size: .76rem; gap: 4px; } .fx2-avg { min-width: 120px; } .fx2-avg b { font-size: 1.2rem; min-width: 36px; } .fx2-team { min-width: 120px; } .fx-toggle { flex: 1 1 100% !important; } }
+/* Matches */
+.mt-nav { display: flex; align-items: center; gap: 10px; } .mt-nav strong { font-family: var(--font-display); font-size: 1.2rem; min-width: 52px; text-align: center; }
+.mt-day { margin: 18px 0 8px; font-size: .95rem; color: var(--muted); font-weight: 600; }
+.mt-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(420px, 1fr)); gap: 12px; }
+.mt-card { border: 1px solid var(--line); border-radius: var(--r); background: var(--surface); padding: 12px 14px; display: grid; grid-template-columns: minmax(0, 1fr); gap: 10px; min-width: 0; }
+.mt-card.has-mine { border-color: var(--accent); }
+.mt-score { display: grid; grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr); align-items: center; gap: 10px; }
+.mt-team { display: flex; align-items: center; gap: 8px; font-weight: 700; min-width: 0; } .mt-team span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.mt-team.h { justify-content: flex-end; text-align: right; } .mt-team img { width: 34px; height: 34px; object-fit: contain; flex: none; }
+.mt-res { display: grid; justify-items: center; } .mt-res b { font-family: var(--font-display); font-size: 1.7rem; line-height: 1; white-space: nowrap; } .mt-res b.mt-ko { font-size: 1.2rem; }
+.mt-res small { font-size: .7rem; color: var(--muted); font-weight: 600; white-space: nowrap; } .mt-res small.live { color: var(--bad); }
+.mt-events { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 12px; font-size: .82rem; }
+.mt-score > *, .mt-events > * { min-width: 0; } .mt-ev { overflow-wrap: anywhere; }
+.mt-events .h { text-align: right; } .mt-events .h .mt-ev { justify-content: flex-end; }
+.mt-ev { display: flex; gap: 6px; align-items: baseline; flex-wrap: wrap; margin-bottom: 2px; }
+.mt-i { font-size: .75rem; } .mt-i.mt-a { font-weight: 800; color: var(--muted); font-size: .7rem; border: 1px solid var(--line); border-radius: 3px; padding: 0 3px; }
+.mt-i.mt-rc { display: inline-block; width: 8px; height: 11px; background: var(--bad); border-radius: 1px; }
+.mt-mine { color: var(--accent); font-weight: 700; }
+.mt-bonus { font-size: .78rem; color: var(--muted); border-top: 1px dashed var(--line); padding-top: 6px; } .mt-bonus .k { font-weight: 700; text-transform: uppercase; font-size: .66rem; letter-spacing: .06em; margin-right: 4px; }
+.mt-my { background: color-mix(in srgb, var(--accent) 8%, var(--surface-2)); border-radius: 8px; padding: 8px 10px; }
+.mt-my .k { font-size: .68rem; text-transform: uppercase; letter-spacing: .06em; font-weight: 700; color: var(--accent); margin-bottom: 4px; }
+.mt-my table { width: 100%; border-collapse: collapse; font-size: .8rem; table-layout: fixed; }
+.mt-my td:first-child { width: 30%; } .mt-my td.n { width: 72px; text-align: right; } .mt-my td { overflow-wrap: anywhere; }
+.mt-card td { white-space: normal !important; } .mt-card td.n { white-space: nowrap !important; } .mt-my td { padding: 3px 4px; vertical-align: top; } .mt-my td small { color: var(--muted); }
+.mt-my td:first-child { white-space: nowrap; } .mt-my .mt-stats { color: var(--muted); } .mt-my tr.mt-dnp td { opacity: .6; }
+@media (max-width: 600px) { .mt-grid { grid-template-columns: minmax(0, 1fr); } .mt-team { font-size: .85rem; gap: 4px; } .mt-team img { width: 26px; height: 26px; } .mt-res b { font-size: 1.4rem; } .mt-my td:first-child { white-space: normal; } }
 </style>
 
 <header class="bar">
@@ -767,6 +793,7 @@ td.fx2-c { padding: 4px 3px; }
     <a href="#predict" data-v="predict">Player predictions</a>
     <a href="#insights" data-v="insights">Insights</a>
     <a href="#fixtures" data-v="fixtures">Fixtures</a>
+    <a href="#matches" data-v="matches">Matches</a>
     <a href="#odds" data-v="odds">Bookmaker odds</a>
   </nav>
 </header>
@@ -993,9 +1020,9 @@ td.fx2-c { padding: 4px 3px; }
   // ---------- routing ----------
   function route() {
     const v = (location.hash || "#overview").slice(1);
-    view = ["overview", "gw", "analysis", "league", "planner", "predict", "insights", "fixtures", "odds"].includes(v) ? v : "overview";
+    view = ["overview", "gw", "analysis", "league", "planner", "predict", "insights", "fixtures", "matches", "odds"].includes(v) ? v : "overview";
     document.querySelectorAll(".tabs a").forEach((a) => { if (a.dataset.v === view) a.setAttribute("aria-current", "page"); else a.removeAttribute("aria-current"); });
-    ({ overview: renderOverview, gw: renderGw, analysis: renderAnalysis, league: renderLeague, planner: renderPlanner, predict: renderPredict, insights: renderInsights, fixtures: renderFixtures, odds: renderOdds })[view]();
+    ({ overview: renderOverview, gw: renderGw, analysis: renderAnalysis, league: renderLeague, planner: renderPlanner, predict: renderPredict, insights: renderInsights, fixtures: renderFixtures, matches: renderMatches, odds: renderOdds })[view]();
   }
 
   function tick() {
@@ -4539,6 +4566,104 @@ td.fx2-c { padding: 4px 3px; }
     return `<td>${l.length ? l.map((f) => `<span class="fdrc fdr${f.fdr}" title="FDR ${f.fdr}">${esc(tShort(f.opp))} (${f.home ? "H" : "A"})</span>`).join("") : '<span class="fdrc fdr0">Blank</span>'}</td>`;
   }).join("");
   const avgBadge = (a) => `<span class="fdrc fdr${Math.min(5, Math.max(1, Math.round(a)))}" title="Average FDR">${a.toFixed(1)}</span>`;
+
+  // ---------- Matches: every fixture in a gameweek with the score, scorers, assists and your players' stats ----------
+  // Shows the current gameweek until every team has played, then moves on to the next one.
+  const MT = { gw: null, fx: null, picks: {}, stats: {} };
+  function matchesDefaultGw() {
+    const cur = D.events.find((e) => e.id === gwCur);
+    const fxs = (MT.fx || []).filter((f) => f.event === gwCur);
+    const allPlayed = fxs.length ? fxs.every((f) => f.finished || f.finished_provisional) : cur && cur.finished;
+    return allPlayed && gwNext > gwCur ? gwNext : gwCur;
+  }
+  async function myPicksFor(gw) {
+    if (MT.picks[gw]) return MT.picks[gw];
+    if (gw === gwCur) return (MT.picks[gw] = squadOf(myM).map((p) => ({ id: p[0], slot: p[1], cap: !!p[3], vc: !!p[4] })));
+    if (gw > gwCur) return (MT.picks[gw] = baseSquad().map((p) => ({ id: p[0], slot: p[1], cap: !!p[3], vc: !!p[4] })));
+    try { const j = await api(`entry/${me}/event/${gw}/picks/`); return (MT.picks[gw] = j.picks.map((p) => ({ id: p.element, slot: p.position, cap: p.is_captain, vc: p.is_vice_captain }))); } catch (e) { return (MT.picks[gw] = []); }
+  }
+  async function renderMatches() {
+    const app = $("#app");
+    app.innerHTML = `<section class="view"><div class="panel-head"><h2>Matches</h2></div><p class="empty">Loading the gameweek's matches…</p></section>`;
+    if (!MT.fx) { try { MT.fx = await api("fixtures/"); } catch (e) { MT.fx = null; } }
+    if (view !== "matches") return;
+    if (!MT.fx) { app.innerHTML = `<section class="view"><div class="panel-head"><h2>Matches</h2></div><p class="note">Match details load on the live site.</p>${freshness()}</section>`; return; }
+    if (MT.gw == null) MT.gw = matchesDefaultGw();
+    const gw = MT.gw;
+    try { await loadOfficial(); await ensureFA([]); } catch (e) { /* season data used */ }
+    const picks = await myPicksFor(gw), mine = new Map(picks.map((p) => [p.id, p]));
+    const fxs = MT.fx.filter((f) => f.event === gw).sort((a, b) => Date.parse(a.kickoff_time) - Date.parse(b.kickoff_time) || a.id - b.id);
+    const started = fxs.some((f) => f.started);
+    // your players' match stats (full Opta set from FPL's live data, per fixture)
+    if (started && picks.length && !MT.stats[gw]) {
+      try { const r = await fetch(`api/gwplayers/${gw}?ids=${picks.map((p) => p.id).join(",")}`, { cache: "no-store" }); MT.stats[gw] = r.ok ? await r.json() : null; } catch (e) { MT.stats[gw] = null; }
+    }
+    if (view !== "matches" || MT.gw !== gw) return;
+    const st = {}; (MT.stats[gw]?.players || []).forEach((p) => (st[p.id] = p));
+    const nm = (id) => esc(E[id]?.web_name || "?");
+    const TO = teamOdds();
+    const dayKey = (f) => new Date(f.kickoff_time).toLocaleDateString("en-GB", { timeZone: "Europe/London", weekday: "long", day: "numeric", month: "long" });
+    const time = (f) => new Date(f.kickoff_time).toLocaleTimeString("en-GB", { timeZone: "Europe/London", hour: "2-digit", minute: "2-digit" });
+    const status = (f) => (f.finished || f.finished_provisional ? "FT" : f.started ? `Live ${f.minutes}'` : time(f));
+    const statList = (f, id, side) => ((f.stats || []).find((s) => s.identifier === id) || { h: [], a: [] })[side] || [];
+    const evLine = (f, side) => {
+      const g = statList(f, "goals_scored", side), og = statList(f, "own_goals", side === "h" ? "a" : "h"), a = statList(f, "assists", side);
+      const rc = statList(f, "red_cards", side), pm = statList(f, "penalties_missed", side), ps = statList(f, "penalties_saved", side);
+      const tag = (x) => `<span class="${mine.has(x.element) ? "mt-mine" : ""}">${nm(x.element)}${x.value > 1 ? ` ×${x.value}` : ""}</span>`;
+      return [
+        g.length || og.length ? `<div class="mt-ev"><span class="mt-i" title="Goals">⚽</span>${[...g.map(tag), ...og.map((x) => `${tag(x)} <small>(OG)</small>`)].join(", ")}</div>` : "",
+        a.length ? `<div class="mt-ev"><span class="mt-i mt-a" title="Assists">A</span>${a.map(tag).join(", ")}</div>` : "",
+        pm.length ? `<div class="mt-ev"><span class="mt-i" title="Penalty missed">✕</span>${pm.map(tag).join(", ")} <small>pen missed</small></div>` : "",
+        ps.length ? `<div class="mt-ev"><span class="mt-i" title="Penalty saved">🧤</span>${ps.map(tag).join(", ")} <small>pen saved</small></div>` : "",
+        rc.length ? `<div class="mt-ev"><span class="mt-i mt-rc" title="Red card"></span>${rc.map(tag).join(", ")}</div>` : "",
+      ].join("");
+    };
+    const bonusLine = (f) => { const b = [...statList(f, "bonus", "h"), ...statList(f, "bonus", "a")].sort((x, y) => y.value - x.value); return b.length ? `<div class="mt-bonus"><span class="k">Bonus</span> ${b.map((x) => `<span class="${mine.has(x.element) ? "mt-mine" : ""}">${nm(x.element)} ${x.value}</span>`).join(" · ")}</div>` : ""; };
+    // your players in this fixture
+    const myIn = (f) => picks.filter((p) => E[p.id] && (E[p.id].team === f.team_h || E[p.id].team === f.team_a)).sort((a, b) => a.slot - b.slot);
+    const statRow = (p, f) => {
+      const e = E[p.id], s = st[p.id], x = s && s.stats, role = p.cap ? " (C)" : p.vc ? " (V)" : p.slot > 11 ? " (bench)" : "";
+      if (!f.started) { const mp = minutesProfile(e); return `<tr><td><strong>${nm(p.id)}</strong><small>${role}</small></td><td colspan="2">${f.event === gwNext ? `${gp1 ? gp1(e).toFixed(1) : "–"} xP · ${pct(mp.pStart)} to start` : "Not played yet"}</td></tr>`; }
+      if (!x) return `<tr><td><strong>${nm(p.id)}</strong><small>${role}</small></td><td colspan="2" class="note">Stats not available yet</td></tr>`;
+      const t = e.element_type, n = (v) => (+v || 0);
+      const bits = [
+        `${x.minutes}'`,
+        x.goals_scored ? `${x.goals_scored} goal${x.goals_scored > 1 ? "s" : ""}` : "", x.assists ? `${x.assists} assist${x.assists > 1 ? "s" : ""}` : "",
+        t >= 2 ? `xG ${n(x.expected_goals).toFixed(2)}` : "", t >= 2 ? `xA ${n(x.expected_assists).toFixed(2)}` : "",
+        t <= 2 ? `xGC ${n(x.expected_goals_conceded).toFixed(2)}` : "", t <= 2 && x.clean_sheets ? "clean sheet" : "", t <= 2 && x.goals_conceded ? `${x.goals_conceded} conceded` : "",
+        t === 1 ? `${x.saves} saves` : "", t >= 2 ? `defcon ${x.defensive_contribution}${x.defensive_contribution >= (t === 2 ? 10 : 12) ? " ✓" : ""}` : "",
+        `BPS ${x.bps}`, x.bonus ? `bonus ${x.bonus}` : "", x.yellow_cards ? "yellow" : "", x.red_cards ? "red" : "",
+      ].filter(Boolean);
+      return `<tr class="${x.minutes === 0 ? "mt-dnp" : ""}"><td><strong>${nm(p.id)}</strong><small>${role}</small></td><td class="mt-stats">${x.minutes === 0 ? "Didn't play" : bits.join(" · ")}</td><td class="n"><strong>${x.total_points * (p.cap ? 2 : 1)}</strong><small> pts${p.cap ? " (×2)" : ""}</small></td></tr>`;
+    };
+    const kit = (t) => (T[t]?.code != null ? `<img src="kit/${T[t].code}.png" alt="" width="34" height="34" decoding="async" onerror="this.remove()">` : "");
+    const card = (f) => {
+      const my = myIn(f), done = f.started, o = TO[f.team_h], oa = TO[f.team_a];
+      return `<div class="mt-card ${my.length ? "has-mine" : ""}">
+        <div class="mt-score">
+          <div class="mt-team h"><span>${esc(T[f.team_h].name)}</span>${kit(f.team_h)}</div>
+          <div class="mt-res">${done ? `<b>${f.team_h_score ?? 0} – ${f.team_a_score ?? 0}</b>` : `<b class="mt-ko">${time(f)}</b>`}<small class="${f.started && !(f.finished || f.finished_provisional) ? "live" : ""}">${done ? status(f) : f.event === gwNext && o && oa ? `Win ${pct(o.win)} · ${pct(oa.win)}` : ""}</small></div>
+          <div class="mt-team a">${kit(f.team_a)}<span>${esc(T[f.team_a].name)}</span></div>
+        </div>
+        ${done ? `<div class="mt-events"><div class="h">${evLine(f, "h")}</div><div class="a">${evLine(f, "a")}</div></div>${bonusLine(f)}` : ""}
+        ${my.length ? `<div class="mt-my"><div class="k">Your players</div><table>${my.map((p) => statRow(p, f)).join("")}</table></div>` : ""}
+      </div>`;
+    };
+    const days = []; fxs.forEach((f) => { const k = dayKey(f); let d = days.find((x) => x.k === k); if (!d) days.push((d = { k, list: [] })); d.list.push(f); });
+    const played = fxs.filter((f) => f.finished || f.finished_provisional).length;
+    const myPts = picks.filter((p) => p.slot <= 11).reduce((a, p) => a + (st[p.id]?.stats?.total_points || 0) * (p.cap ? 2 : 1), 0);
+    const minGw = Math.max(1, gwCur - 10), maxGw = Math.min(38, gwNext);
+    app.innerHTML = `<section class="view">
+      <div class="panel-head"><h2>Matches</h2>
+        <div class="controls mt-nav"><button class="btn sm" id="mtPrev" ${gw <= minGw ? "disabled" : ""} aria-label="Previous gameweek">◀</button><strong>GW${gw}</strong><button class="btn sm" id="mtNext" ${gw >= maxGw ? "disabled" : ""} aria-label="Next gameweek">▶</button></div></div>
+      <p class="fresh">${started ? `${played} of ${fxs.length} matches played${played < fxs.length ? " (scores update on reload)" : ""}.${picks.length ? ` Your GW${gw} starting XI has ${myPts} pts so far, captain doubled (before auto-subs).` : ""}` : `GW${gw} hasn't started: kick-off times (UK) and bookmaker win chances${gw === gwNext ? ", plus your players' projected points and chance of starting" : ""}.`} This page moves on to the next gameweek once every team has played. <span class="lab lab-fact">Fact</span></p>
+      ${days.map((d) => `<h3 class="mt-day">${d.k}</h3><div class="mt-grid">${d.list.map(card).join("")}</div>`).join("") || `<p class="empty">No fixtures in GW${gw}.</p>`}
+      <p class="note">Scores, scorers, assists, own goals, cards and bonus come from FPL's official match data; your players' stats are FPL's Opta numbers for that game (xG, xA, xG conceded, defensive contributions, saves and BPS). FPL doesn't say which assist set up which goal, or when goals were scored, so they're listed separately.</p>
+      ${freshness()}
+    </section>`;
+    $("#mtPrev")?.addEventListener("click", () => { MT.gw = gw - 1; renderMatches(); });
+    $("#mtNext")?.addEventListener("click", () => { MT.gw = gw + 1; renderMatches(); });
+  }
 
   // ---------- Fixtures: rank every team's run by difficulty, attack, defence, goals or clean sheets ----------
   // Overall uses FPL's official FDR (×2, on a 1–10 scale) unless "Team strength" is on. Team strength is

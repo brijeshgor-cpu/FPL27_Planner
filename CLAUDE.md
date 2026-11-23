@@ -139,6 +139,12 @@ bench order, transfers or chip before the deadline?*
   and defence from 60% xG conceded and 40% goals conceded. `fixtureGoals()` uses the bookmaker odds
   for the next gameweek. Cells are always coloured by FPL's FDR. The Rotation section
   (`rotationHTML()`) is the owner's and stays as it is.
+- **Matches tab:** `renderMatches()`. It shows every fixture of a gameweek from FPL's `fixtures/` data:
+  the score, scorers, assists, own goals, penalties, red cards and bonus. A "Your players" panel per
+  fixture gives that gameweek's squad, from `myPicksFor(gw)`, with minutes, points and Opta stats
+  from `/api/gwplayers`. It shows the current gameweek until every match is played
+  (`matchesDefaultGw()`), then the next one with kick-off times, win odds and your players' xP and
+  start chance. Arrows browse other gameweeks.
 - **Current gameweek tab:** `gwAdvice()` for the recommendations, `gwBuys()` for transfers,
   `gwChips()` for chips, `bestXI()`, `autoSub()` and `squadHealth()`.
 - **Data you can't get for free:** penalty-box touches, shots, chances created, duels and manager
