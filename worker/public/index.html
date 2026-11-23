@@ -1504,7 +1504,7 @@ details.why[open] { flex-basis: 100%; }
     return Object.values(E).filter((e) => e.element_type === type && !squad.has(e.id) && e.now_cost <= budget && e.now_cost >= minPrice && isFit(e)
         && ((tc[e.team] || 0) - (e.team === outTeam ? 1 : 0)) < 3)
       .map((e) => { const p5 = expertScore(e, 5, TO), p3 = expertScore(e, 3, TO); return { e, p5, p3, mins: minutesInfo(e), swing: p3 * (avoid.has(e.id) ? 0 : 1) }; })
-      .filter((c) => c.mins.avg >= 60 && sevOf(risks(c.e, TO)) < 2)
+      .filter((c) => c.mins.avg >= 60 && sevOf(risks(c.e, TO)) < 2 && buySecure(c.e).ok)
       .sort((a, b) => b.p5 + 0.4 * b.swing - (a.p5 + 0.4 * a.swing));
   }
 
@@ -1783,7 +1783,7 @@ details.why[open] { flex-basis: 100%; }
     try { await ensureFA(squadOf(myM).map((p) => p[0])); } catch (e) { /* season data used */ }
     if (view !== "gw") return;
     gwBuild(mt);
-    try { await fetchSumm(GWE.st.ids); } catch (e) { /* season minutes used */ }
+    try { await fetchSumm(GWE.st.ids); await prefetchBuyPool(); } catch (e) { /* season minutes used */ }
     if (view !== "gw") return;
     GWE.sel = null; GWE.msg = "";
     drawGw();
@@ -1861,7 +1861,7 @@ details.why[open] { flex-basis: 100%; }
     const mt = await GWE.mtP;
     if (!mt || !(mt.ok || mt.last)) return null;
     // odds, news and minutes must be in before any projection is cached
-    try { await ensureFA((OFF ? OFF.picks : squadOf(myM)).map((p) => p[0])); } catch (e) { /* season data used */ }
+    try { await ensureFA((OFF ? OFF.picks : squadOf(myM)).map((p) => p[0])); await prefetchBuyPool(); } catch (e) { /* season data used */ }
     if (!GWE.base) gwBuild(mt);
     GWE.TO = null;
     try { await fetchSumm(GWE.base.ids); } catch (e) { /* season minutes used */ }
@@ -1967,6 +1967,22 @@ details.why[open] { flex-basis: 100%; }
     return { pStart, p60, p70, pPlay, pCameo, pAbsent, xMinsIfStart, playable, rStart, hasFx, label, n, st, f70, cameo, off, dnp, pattern, mins: h.slice().reverse().map((x) => `GW${x[0]} ${x[1]}'`), a };
   }
   const confCls = (p) => (p >= 0.85 ? "ok" : p >= 0.65 ? "" : p >= 0.4 ? "sev2" : "sev3");
+  // Last match: spots a sudden change in role or minutes (a cameo, a benching) that an average hides.
+  const lastMatch = (e) => { const h = FA.summ[e.id]; if (!h || !h.length) return null; const r = Math.max(...h.map((x) => x[0])); return { gw: r, mins: h.filter((x) => x[0] === r).reduce((a, x) => a + x[1], 0) }; };
+  // A player worth buying must be fit, an established starter, and not have dropped out of the side last time.
+  function buySecure(e) {
+    const mp = minutesProfile(e), lm = lastMatch(e);
+    const why = mp.a < 1 ? `flagged (${pct(mp.a)} to play${e.news ? ": " + esc(e.news) : ""})` : lm && lm.mins < 45 ? `only ${lm.mins}' in GW${lm.gw}${lm.mins ? "" : " (unused)"}, a possible rotation or role change` : mp.rStart < 0.7 ? `not a regular starter (${pct(mp.rStart)} of matches)` : "";
+    return { ok: !why, why, mp, lm };
+  }
+  const minsLine = (s) => (s.lm ? `started ${s.mp.st} of his last ${s.mp.n}, ${s.lm.mins}' in GW${s.lm.gw}` : `starts ${pct(s.mp.rStart)} of matches`);
+  // Fetch match histories for the strongest buy options, so the last-match check can run on them.
+  async function prefetchBuyPool(per = 12) {
+    if (D.source !== "live") return;
+    const TO = teamOdds();
+    const ids = [1, 2, 3, 4].flatMap((t) => Object.values(E).filter((e) => e.element_type === t && isFit(e) && e.minutes >= 450).sort((a, b) => expertScore(b, 5, TO) - expertScore(a, 5, TO)).slice(0, per).map((e) => e.id));
+    await fetchSumm(ids);
+  }
   const newsDate = (e) => (e.news_added ? new Date(e.news_added).toLocaleString("en-GB", { timeZone: "Europe/London", day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" }) : "");
   const ukTime = (t) => (t ? new Date(t).toLocaleString("en-GB", { timeZone: "Europe/London", weekday: "short", day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" }) : "");
   // Non-penalty xG per 90: FPL's xG includes penalties, so the first-choice taker loses ~0.76 xG per
@@ -3911,6 +3927,13 @@ details.why[open] { flex-basis: 100%; }
   const INS = {};
   function renderSummary() {
     const box = $("#insSummary"); if (!box) return;
+    if (D.source === "live" && !INS.poolFetched) {
+      INS.poolFetched = true;
+      const att0 = Object.values(E).filter((e) => e.element_type >= 3 && e.minutes >= 450 && (+e.expected_goals_per_90) >= 0.25).sort((a, b) => (a.goals_scored - (+a.expected_goals || 0)) - (b.goals_scored - (+b.expected_goals || 0))).slice(0, 10);
+      const bps0 = Object.values(E).filter((e) => e.minutes >= 450).sort((a, b) => b.bps / b.minutes - a.bps / a.minutes).slice(0, 10);
+      const val0 = INS.value ? INS.value.best.slice(0, 10).map((d) => d.e) : [];
+      fetchSumm([...att0, ...bps0, ...val0].map((e) => e.id)).then(prefetchBuyPool).then(() => { if (view === "insights") renderSummary(); }).catch(() => {});
+    }
     INS.swap = null;
     const TO = teamOdds();
     const mineIds = baseSquad().map((p) => p[0]), mine = new Set(mineIds);
@@ -3938,7 +3961,7 @@ details.why[open] { flex-basis: 100%; }
     }
     // 2. Best value buy and weakest value in your squad
     if (INS.value) {
-      const bv = INS.value.best.find((d) => !mine.has(d.e.id));
+      const bv = INS.value.best.find((d) => !mine.has(d.e.id) && buySecure(d.e).ok);
       if (bv) cards.push({ k: "buy", label: "Best value buy", head: bv.e.web_name, sub: `£${bv.x.toFixed(1)}m · ${bv.y.toFixed(1)} pts over 4 GWs · +${bv.res.toFixed(1)} above the value line`, foot: `${POSN(bv.e)} · ${tShort(bv.e.team)} · ${lgOwn[bv.e.id] || 0} of ${N} own` });
       const fit = (d) => INS.value.icpt + INS.value.slope * d;
       const starters = baseSquad().filter((p) => p[1] <= 11).map((p) => E[p[0]]);
@@ -3962,17 +3985,22 @@ details.why[open] { flex-basis: 100%; }
     // 3. Due a goal / hot streak
     const att = Object.values(E).filter((e) => e.element_type >= 3 && e.minutes >= 450);
     const gap = (e) => e.goals_scored - (+e.expected_goals || 0);
-    const due = att.filter((e) => okFit(e) && !mine.has(e.id) && (+e.expected_goals_per_90) >= 0.25).sort((a, b) => gap(a) - gap(b))[0];
-    if (due && gap(due) <= -1) cards.push({ k: "goal", label: "Due a goal", head: due.e ? due.e.web_name : due.web_name, sub: `${due.goals_scored} goal${due.goals_scored === 1 ? "" : "s"} from ${(+due.expected_goals).toFixed(2)} xG (${gap(due).toFixed(1)}) · £${price(due.now_cost)}m`, foot: `${tShort(due.team)} ${fx(due)} · ${due.selected_by_percent}% own · ${lgOwn[due.id] || 0} of ${N} in league` });
+    // Buy suggestions only include secure starters; anyone skipped is named with the reason.
+    const pickSecure = (list) => { const skipped = []; for (const e of list.slice(0, 10)) { const s = buySecure(e); if (s.ok) return { e, s, skipped }; skipped.push({ e, why: s.why }); } return { e: null, skipped }; };
+    const skipTxt = (sk) => (sk.length ? ` Skipped ${sk.slice(0, 2).map((x) => `${esc(x.e.web_name)} (${x.why})`).join(", ")}.` : "");
+    const dueSel = pickSecure(att.filter((e) => okFit(e) && !mine.has(e.id) && (+e.expected_goals_per_90) >= 0.25 && gap(e) <= -1).sort((a, b) => gap(a) - gap(b)));
+    const due = dueSel.e;
+    if (due) cards.push({ k: "goal", label: "Due a goal", head: due.web_name, sub: `${due.goals_scored} goal${due.goals_scored === 1 ? "" : "s"} from ${(+due.expected_goals).toFixed(2)} xG (${gap(due).toFixed(1)}) · £${price(due.now_cost)}m · ${minsLine(dueSel.s)}`, foot: `${tShort(due.team)} ${fx(due)} · ${due.selected_by_percent}% own · ${lgOwn[due.id] || 0} of ${N} in league.${skipTxt(dueSel.skipped)}` });
     const hot = att.filter((e) => mine.has(e.id)).sort((a, b) => gap(b) - gap(a))[0];
     if (hot && gap(hot) >= 1.5) cards.push({ k: "watch", label: "Hot streak in your squad", head: hot.web_name, mine: true, sub: `${hot.goals_scored} goal${hot.goals_scored === 1 ? "" : "s"} from ${(+hot.expected_goals).toFixed(2)} xG (+${gap(hot).toFixed(1)})`, foot: "Finishing above his chances; returns may slow down" });
     // 4. Defence target and bonus magnet
     const g90 = (e) => (e.minutes ? (+e.expected_goals_conceded || 0) / e.minutes * 90 : 9);
-    const def = Object.values(E).filter((e) => e.element_type === 2 && e.minutes >= 450 && okFit(e) && !mine.has(e.id))
-      .map((e) => ({ e, s: expertScore(e, 4, TO) })).sort((a, b) => b.s - a.s)[0];
-    if (def) cards.push({ k: "buy", label: "Defence target", head: def.e.web_name, sub: `xGA ${g90(def.e).toFixed(2)}/90 · defcon in ~${pct(poisAtLeast(+def.e.defensive_contribution_per_90 || 0, 10))} of games · £${price(def.e.now_cost)}m`, foot: `${tShort(def.e.team)} next 3: ${[0, 1, 2].map((i) => { const l = teamFx[def.e.team][gwNext + i] || []; return l.length ? tShort(l[0].opp) + (l[0].home ? " (H)" : " (A)") : "blank"; }).join(", ")}` });
-    const bps = Object.values(E).filter((e) => e.minutes >= 450 && okFit(e) && !mine.has(e.id)).sort((a, b) => b.bps / b.minutes - a.bps / a.minutes)[0];
-    if (bps) cards.push({ k: "diff", label: "Bonus magnet you don't own", head: bps.web_name, sub: `${((bps.bps / bps.minutes) * 90).toFixed(1)} BPS per 90 · ${bps.bonus} bonus pts · ${bps.total_points} total`, foot: `${POSN(bps)} · £${price(bps.now_cost)}m · ${lgOwn[bps.id] || 0} of ${N} in league own` });
+    const defSel = pickSecure(Object.values(E).filter((e) => e.element_type === 2 && e.minutes >= 450 && okFit(e) && !mine.has(e.id)).sort((a, b) => expertScore(b, 4, TO) - expertScore(a, 4, TO)));
+    const def = defSel.e ? { e: defSel.e } : null;
+    if (def) cards.push({ k: "buy", label: "Defence target", head: def.e.web_name, sub: `xGA ${g90(def.e).toFixed(2)}/90 · defcon in ~${pct(poisAtLeast(+def.e.defensive_contribution_per_90 || 0, 10))} of games · £${price(def.e.now_cost)}m · ${minsLine(defSel.s)}`, foot: `${tShort(def.e.team)} next 3: ${[0, 1, 2].map((i) => { const l = teamFx[def.e.team][gwNext + i] || []; return l.length ? tShort(l[0].opp) + (l[0].home ? " (H)" : " (A)") : "blank"; }).join(", ")}.${skipTxt(defSel.skipped)}` });
+    const bpsSel = pickSecure(Object.values(E).filter((e) => e.minutes >= 450 && okFit(e) && !mine.has(e.id)).sort((a, b) => b.bps / b.minutes - a.bps / a.minutes));
+    const bps = bpsSel.e;
+    if (bps) cards.push({ k: "diff", label: "Bonus magnet you don't own", head: bps.web_name, sub: `${((bps.bps / bps.minutes) * 90).toFixed(1)} BPS per 90 · ${bps.bonus} bonus pts · ${bps.total_points} total · ${minsLine(bpsSel.s)}`, foot: `${POSN(bps)} · £${price(bps.now_cost)}m · ${lgOwn[bps.id] || 0} of ${N} in league own.${skipTxt(bpsSel.skipped)}` });
     // 5. Price and form trends in your squad
     const moves = mineIds.map((id) => ({ e: E[id], pm: priceMove(E[id]) })).filter((x) => x.pm.cls);
     if (moves.length) cards.push({ k: moves.some((x) => x.pm.cls === "down") ? "sell" : "watch", label: "Price moves in your squad", head: `${moves.filter((x) => x.pm.cls === "up").length} rising · ${moves.filter((x) => x.pm.cls === "down").length} falling`,

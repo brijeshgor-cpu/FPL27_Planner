@@ -99,6 +99,10 @@ bench order, transfers or chip before the deadline?*
 - **Minutes:** `minutesProfile(e)`. It returns the chance of starting, of 60+ and of 70+ minutes,
   expected minutes if he starts, the chance of a cameo and of not playing, and a reliability flag,
   all for the next gameweek's match.
+- **Buy safety:** `buySecure(e)` checks that a player is fit, starts at least 70% of matches and played 45+
+  minutes in his last match (`lastMatch`). Every buy suggestion must pass it: `candidates()` (GW plan,
+  Overview, planner) and the Insights cards. Name anyone skipped and say why. `prefetchBuyPool()`
+  loads match histories for the strongest options so the last-match check has data.
 - **Odds:** `teamOdds()`, which removes the margin from the 1X2 and over/under 2.5 prices (a Poisson
   fit), and `scoreChance()` for anytime-scorer chances.
 - **Mini-league context:** `leagueCtx()` gives your position, the gaps and a risk stance; `own` and
