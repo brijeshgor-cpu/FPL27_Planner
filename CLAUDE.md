@@ -157,6 +157,27 @@ bench order, transfers or chip before the deadline?*
   from `/api/gwplayers`. It shows the current gameweek until every match is played
   (`matchesDefaultGw()`), then the next one with kick-off times, win odds and your players' xP and
   start chance. Arrows browse other gameweeks.
+- **Your notes (human touch):** `NOTES`, loaded by `loadNotes()` from `/api/notes` (KV). Writes need
+  the `OWNER_KEY` Worker secret, which a device stores after opening `?owner=KEY` once.
+  The tags change the model everywhere:
+  - trust: xP +10%;
+  - rotation: start rate ×0.75 and xP ×0.8;
+  - injury: chance of playing capped at 50% and xP ×0.5;
+  - avoid: `buySecure` fails, so he's never suggested as a buy;
+  - hold: `gwBuys` never sells him.
+
+  `noteFactor` and `calFactor` are applied in `expertScore`. The panel is on the Current gameweek tab.
+- **Advice tracking:** `recordAdvice()` posts the GW plan before the deadline to `/api/rec/{gw}`. That
+  covers captain, vice, best XI, transfers, holds and projections; the Worker refuses writes after the
+  deadline. `renderAdviceScore()` (Insights) scores it afterwards. Once there are 2+ finished
+  gameweeks and 30+ samples per position, it saves per-position calibration to `/api/calib`, which
+  `calFactor` applies.
+- **Rival watch:** `renderRivalWatch()`, at the top of Mini League analysis. It shows the leader and
+  the 2 managers above and below you: their likely captain, their threats, your edges and the
+  projected swing.
+- **3-gameweek plan:** `renderSeqPlan()` in the Transfer planner. Week 1 is the GW plan; weeks 2–3
+  come from `weekMoves()`, using best-XI gain over the next 5 gameweeks with `windowXp`. Free
+  transfers roll and the money freed is carried forward.
 - **Current gameweek tab:** `gwAdvice()` for the recommendations, `gwBuys()` for transfers,
   `gwChips()` for chips, `bestXI()`, `autoSub()` and `squadHealth()`.
 - **Data you can't get for free:** penalty-box touches, shots, chances created, duels and manager
