@@ -4666,20 +4666,27 @@ td.fx2-c { padding: 4px 3px; }
       <p class="note">Add what the numbers can't see: a manager's hint, a hunch or a fitness worry. A note changes that player's projection everywhere on the site:
       <strong>Trust him</strong> +10% · <strong>Rotation risk</strong> −20% and a lower start chance · <strong>Injury doubt</strong> −50% · <strong>Avoid buying</strong> never suggested as a buy · <strong>Hold</strong> never suggested as a sale.</p>
       ${list.length ? `<ul class="notes-list">${list.map(([id, n]) => `<li><span class="pill ${NOTE_TAGS[n.tag].cls}">${NOTE_TAGS[n.tag].l}</span> <strong>${esc(E[id].web_name)}</strong> <span class="note">${tShort(E[id].team)}${n.until ? ` · until GW${n.until}` : " · until removed"}</span>${n.text ? `<div class="d">${esc(n.text)}</div>` : ""}${can ? `<button class="btn sm" data-delnote="${id}">Remove</button>` : ""}</li>`).join("")}</ul>` : `<p class="empty">No notes yet.</p>`}
-      ${can ? `<div class="note-form"><input list="noteNames" id="noteP" placeholder="Player name"><datalist id="noteNames">${Object.values(E).filter((e) => e.minutes > 0 || baseSquad().some((p) => p[0] === e.id)).sort((a, b) => b.total_points - a.total_points).map((e) => `<option value="${esc(e.web_name)} (${tShort(e.team)})"></option>`).join("")}</datalist>
+      ${can ? `<div class="note-form"><select id="noteC" aria-label="Club"><option value="mine">Your squad</option>${[...D.teams].sort((x, y) => x.name.localeCompare(y.name)).map((t) => `<option value="${t.id}">${esc(t.name)}</option>`).join("")}</select>
+        <select id="noteP" aria-label="Player">${noteOpts("mine")}</select>
         <select id="noteT">${Object.entries(NOTE_TAGS).map(([k, v]) => `<option value="${k}">${v.l}</option>`).join("")}</select>
         <select id="noteU"><option value="${gwNext}">This gameweek</option><option value="${Math.min(38, gwNext + 2)}">Next 3 gameweeks</option><option value="">Until I remove it</option></select>
         <input id="noteX" placeholder="Why? (optional)" maxlength="140"><button class="btn pri" id="noteAdd">Add note</button></div><p class="note" id="noteMsg"></p>`
         : `<p class="note">${D.source === "live" ? "Notes can only be added on a device that has opened your private owner link once." : "Notes load on the live site."}</p>`}`;
   }
+  // Player list for the notes form: your squad, or one club's players, grouped by position.
+  function noteOpts(club) {
+    const list = club === "mine" ? baseSquad().map((p) => E[p[0]]).filter(Boolean) : Object.values(E).filter((e) => String(e.team) === String(club));
+    const POSL = { 1: "Goalkeepers", 2: "Defenders", 3: "Midfielders", 4: "Forwards" };
+    return [1, 2, 3, 4].map((t) => { const g = list.filter((e) => e.element_type === t).sort((a, b) => b.total_points - a.total_points || a.web_name.localeCompare(b.web_name)); return g.length ? `<optgroup label="${POSL[t]}">${g.map((e) => `<option value="${e.id}">${esc(e.web_name)}${club === "mine" ? ` (${tShort(e.team)})` : ""} · £${price(e.now_cost)}m${noteOf(e.id) ? " ✎" : ""}</option>`).join("")}</optgroup>` : ""; }).join("");
+  }
   function wireNotes(box, after) {
     if (!box) return;
+    $("#noteC")?.addEventListener("change", (ev) => { $("#noteP").innerHTML = noteOpts(ev.target.value); });
     const save = async (next) => { try { await ownerPost("notes", next); NOTES = next; XS.clear(); NF.clear(); GWE.buys = null; GWE.chipsAdv = null; GWE.fh = null; Object.keys(PRC).forEach((k) => delete PRC[k]); after(); } catch (e) { const m = $("#noteMsg"); if (m) m.textContent = "Couldn't save: " + e.message; } };
     box.querySelectorAll("[data-delnote]").forEach((b) => b.addEventListener("click", () => { const n = { ...NOTES }; delete n[b.dataset.delnote]; save(n); }));
     $("#noteAdd")?.addEventListener("click", () => {
-      const v = $("#noteP").value.trim().toLowerCase();
-      const e = Object.values(E).find((x) => `${x.web_name} (${tShort(x.team)})`.toLowerCase() === v) || Object.values(E).filter((x) => x.web_name.toLowerCase() === v).sort((a, b) => b.total_points - a.total_points)[0];
-      if (!e) { $("#noteMsg").textContent = "Pick a player from the list."; return; }
+      const e = E[+$("#noteP").value];
+      if (!e) { $("#noteMsg").textContent = "Pick a club, then a player."; return; }
       const u = $("#noteU").value;
       save({ ...NOTES, [e.id]: { tag: $("#noteT").value, text: $("#noteX").value.trim(), until: u ? +u : null, at: Date.now() } });
     });
