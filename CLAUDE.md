@@ -157,6 +157,14 @@ bench order, transfers or chip before the deadline?*
   from `/api/gwplayers`. It shows the current gameweek until every match is played
   (`matchesDefaultGw()`), then the next one with kick-off times, win odds and your players' xP and
   start chance. Arrows browse other gameweeks.
+- **Notes, version 2:** a note holds any number of overall calls (`tags`: trust, captain, target,
+  rotation, injury, avoid, hold) and "What you saw" categories (`cats`, each "+" or "-"). The
+  categories are minutes & selection, attacking role, penalties & set pieces, chance involvement,
+  fitness & availability, defensive role and match context; their effects are in `NOTE_CATS`, and some
+  only apply to certain positions. It also holds text, which `noteSignals` reads. `noteEffect(e)`
+  combines all three, capped at +20% and −55%, and also sets the start rate and the cap or floor on
+  the chance of playing. Notes can be edited (`NOTE_EDIT`). Old single-`tag` notes still work, via
+  `nTags`.
 - **Your notes (human touch):** `NOTES`, loaded by `loadNotes()` from `/api/notes` (KV). Writes need
   the `OWNER_KEY` Worker secret, which a device stores after opening `?owner=KEY` once.
   The tags change the model everywhere:

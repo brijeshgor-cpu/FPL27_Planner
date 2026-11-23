@@ -819,6 +819,24 @@ td.fx2-c { padding: 4px 3px; }
 .rc-fx { grid-column: 1 / -1; }
 .badge-c { display: inline-grid; place-items: center; width: 16px; height: 16px; border-radius: 50%; background: var(--s-me); color: #fff; font-size: .6rem; font-weight: 800; vertical-align: middle; } .badge-c.them { background: var(--s-them); }
 @media (max-width: 800px) { .rc-grid { grid-template-columns: minmax(0, 1fr); } }
+/* Notes form v2 */
+.nf-block { flex: 1 1 100%; } .nf-block > .k { display: block; font-size: .72rem; text-transform: uppercase; letter-spacing: .06em; color: var(--muted); font-weight: 600; margin: 4px 0 6px; }
+.nf-tags { display: flex; flex-wrap: wrap; gap: 6px; }
+.nf-tag { display: inline-flex; align-items: center; gap: 6px; border: 1px solid var(--line); border-radius: 999px; padding: 5px 10px; cursor: pointer; font-size: .82rem; font-weight: 600; }
+.note-form .nf-tag input { accent-color: var(--accent); margin: 0; flex: none; width: 16px; height: 16px; min-width: 0; }
+.nf-tag span { white-space: nowrap; } .nf-tag:has(input:checked) { border-color: var(--accent); background: color-mix(in srgb, var(--accent) 10%, var(--surface)); }
+.nf-cats { display: grid; gap: 6px; }
+.nf-cat { display: flex; justify-content: space-between; align-items: center; gap: 10px; padding: 6px 8px; border: 1px solid var(--line); border-radius: 8px; }
+.nf-cat > span:first-child { display: grid; min-width: 0; } .nf-cat small { color: var(--muted); font-size: .72rem; }
+.nf-cat .seg button { padding: 4px 10px; font-size: .78rem; min-height: 32px; }
+.nf-cat .seg button[data-v="-"][aria-pressed="true"] { background: var(--bad); color: #fff; } .nf-cat .seg button[data-v="+"][aria-pressed="true"] { background: var(--good); color: #fff; }
+.nf-cat .seg button[data-v=""][aria-pressed="true"] { background: var(--surface-2); color: var(--ink); }
+.nf-edit { flex: 1 1 100%; margin: 0; padding: 6px 10px; border-left: 3px solid var(--warn); background: var(--surface-2); border-radius: 6px; }
+.note-form.is-edit { outline: 2px solid var(--warn); outline-offset: 6px; border-radius: 8px; }
+.pill.ncat.pos { background: color-mix(in srgb, var(--good) 18%, transparent); color: var(--good); } .pill.ncat.neg { background: color-mix(in srgb, var(--bad) 18%, transparent); color: var(--bad); }
+.notes-list li { align-items: flex-start; } .nl-who { flex: 1 1 auto; } .nl-pills { display: flex; flex-wrap: wrap; gap: 4px; flex-basis: 100%; } .nl-acts { display: flex; gap: 6px; margin-left: auto; }
+.notes-list li.editing { border-color: var(--warn); }
+@media (max-width: 600px) { .nf-cat { flex-wrap: wrap; } .nf-cat .seg { width: 100%; } .nf-cat .seg button { flex: 1; } }
 </style>
 
 <header class="bar">
@@ -1830,7 +1848,7 @@ td.fx2-c { padding: 4px 3px; }
     const leftFT = ft - moves.filter((m) => !m.hit).length;
     pr.push({ tag: "Captain", cls: "acc", unc: engCap ? engCap.unc : `${esc(cap.e.web_name)}'s minutes and team news.`, t: `Captain ${esc(cap.e.web_name)} in GW${gwNext}, vice ${esc(vice.e.web_name)}`,
       d: `${esc(cap.e.web_name)} has the highest projection in your XI (${cap.p.toFixed(1)} pts${nextFx(cap.e.team) ? ", " + fxLabel(nextFx(cap.e.team).list[0]) : ""}). ${leadCap ? `${lName} captained ${esc(E[leadCap[0]]?.web_name)} last week. ` : ""}${capDiff && capDiff.e.id !== cap.e.id ? `If you want to gamble on the gap, ${esc(capDiff.e.web_name)} (${capDiff.p.toFixed(1)} pts) is a captain ${lName} doesn't own.` : leaderOwns.has(cap.e.id) ? `${lName} owns him too, so this is the safe pick: it won't lose you ground.` : `${lName} doesn't own him, so a big haul swings the gap directly.`}` });
-    const hold = mine.filter((m) => m.sev >= 2 && !moved.has(m.e.id) && !(noteOf(m.e.id) && noteOf(m.e.id).tag === "hold"));
+    const hold = mine.filter((m) => m.sev >= 2 && !moved.has(m.e.id) && !hasTag(m.e.id, "hold"));
     hold.forEach((m) => pr.push({ tag: "Hold", cls: "warn", t: `Hold ${esc(m.e.web_name)} for now`,
       d: `${m.rk.map((r) => r[1]).join("; ")}. But no fit replacement within £3m of his price projects clearly more over 5 gameweeks${leaderOwns.has(m.e.id) && (own[m.e.id] || 0) >= 0.5 ? `, and ${lName} and ${Math.round((own[m.e.id] || 0) * 100)}% of the league own him, so selling would be a gamble against the field` : ""}. Keep him, but don't captain him in these fixtures.` }));
     // Suspension watch: players one booking from a ban.
@@ -1841,7 +1859,7 @@ td.fx2-c { padding: 4px 3px; }
         d: banList.map((m) => { const b = banRisk(m.e); const cover = benchCover(m.e.element_type); return `<strong>${esc(m.e.web_name)}</strong> (${POSN(m.e)}, ${b.y} yellows) is booked in ${pct(b.p)} of his games, so the chance he misses a game in the next 4 gameweeks is ${pct(b.pBan)}. ${m.slot > 11 ? "He's on your bench, so a ban costs little." : cover.length ? `Bench cover: ${cover.join(", ")}.` : `You have no fit ${POSN(m.e)} on the bench to cover him${m.e.element_type >= 3 ? ", so a ban means playing a weaker formation" : ""}.`}`; }).join(" ") + ` Don't sell for this alone: the ban is only applied after the 5th card, and FPL marks him suspended, giving you a week to react. Don't add another player on ${banList[0] ? banRisk(banList[0].e).n - 1 : 4} yellows, and avoid captaining a player one card from a ban in a feisty fixture.` });
     }
     // Your notes: the human touch in this plan
-    { const act = Object.keys(NOTES).map(Number).filter((id) => E[id] && noteOf(id)); if (act.length) pr.push({ tag: "Your notes", cls: "warn", t: `${act.length} of your notes shape this plan`, d: act.map((id) => { const im = noteImpact(E[id]); return `<strong>${esc(E[id].web_name)}</strong>: ${NOTE_TAGS[noteOf(id).tag].l}${noteOf(id).text ? ` ("${esc(noteOf(id).text.slice(0, 100))}")` : ""}${im ? `, xP ${im.wo.toFixed(1)} → ${im.w.toFixed(1)}` : ""}`; }).join("; ") + ".", unc: "Your judgement: update or remove a note in the Current gameweek tab if things change." }); }
+    { const act = Object.keys(NOTES).map(Number).filter((id) => E[id] && noteOf(id)); if (act.length) pr.push({ tag: "Your notes", cls: "warn", t: `${act.length} of your notes shape this plan`, d: act.map((id) => { const im = noteImpact(E[id]); return `<strong>${esc(E[id].web_name)}</strong>: ${noteLabel(noteOf(id))}${noteOf(id).text ? ` ("${esc(noteOf(id).text.slice(0, 100))}")` : ""}${im ? `, xP ${im.wo.toFixed(1)} → ${im.w.toFixed(1)}` : ""}`; }).join("; ") + ".", unc: "Your judgement: update or remove a note in the Current gameweek tab if things change." }); }
     if (chipTxt) pr.push({ tag: "Chip", cls: "", t: "Free Hit timing", d: chipTxt + (leadChips.length ? ` ${lName} still has: ${leadChips.join(", ")}.` : "") });
     if (leftFT > 0) pr.push({ tag: "Transfers", cls: "", t: `Bank ${leftFT} free transfer${leftFT > 1 ? "s" : ""}`, d: `You'll have ${Math.min(5, leftFT + 1)} next week (5 is the cap). Use them for injuries or a double gameweek rather than sideways moves.` });
     const cover = missing.filter((x) => ["Cover him", "Double up"].includes(verdict(x)[1])).slice(0, 2);
@@ -1949,6 +1967,7 @@ td.fx2-c { padding: 4px 3px; }
     app.innerHTML = `<section class="view"><div class="panel-head"><h2>Current gameweek: GW${gwNext}</h2></div><p class="empty">Loading your GW${gwNext} team from FPL…</p></section>`;
     let mt = null;
     if (D.source === "live") mt = await fetch("api/my-team", { cache: "no-store" }).then((r) => (r.ok ? r.json() : null)).catch(() => null);
+    if (OFF === undefined) OFF = offFrom(mt); // your official team for the rest of the site
     try { await ensureFA(squadOf(myM).map((p) => p[0])); } catch (e) { /* season data used */ }
     if (view !== "gw") return;
     gwBuild(mt);
@@ -2115,8 +2134,8 @@ td.fx2-c { padding: 4px 3px; }
   // pAbsent: doesn't play at all (a legal auto-sub can cover). pCameo: comes off the bench (cover is lost).
   function minutesProfile(e) {
     const nt = noteOf(e.id);
-    const ntS = noteSignals(nt);
-    const a = e.status === "s" ? 0 : nt && nt.tag === "injury" ? Math.min(availability(e), 0.5) : Math.min(availability(e), ntS.aCap);
+    const ntE = noteEffect(e);
+    const a = e.status === "s" ? 0 : Math.min(ntE.aCap, Math.max(availability(e), e.status === "a" || e.status === "d" ? ntE.aFloor : 0));
     const gp = teamPlayed(e.team) || 1;
     const sStart = Math.min(1, e.starts / gp), s70 = Math.min(sStart, sStart * Math.min(1, e.minutes / Math.max(1, e.starts * 80)));
     const s60 = (sStart + s70) / 2, sApp = Math.min(1, sStart + 0.12);
@@ -2126,7 +2145,7 @@ td.fx2-c { padding: 4px 3px; }
     const cameo = h.filter((x) => x[1] > 0 && x[1] < 30).length, off = h.filter((x) => x[1] >= 50 && x[1] < 70).length, dnp = h.filter((x) => x[1] === 0).length;
     const hasFx = (teamFx[e.team][gwNext] || []).length > 0;
     const blend = (k, s) => (k + 2 * s) / (n + 2);
-    const rStart = blend(st, sStart) * (nt && nt.tag === "rotation" ? 0.75 : 1) * ntS.rot, rPlay = Math.max(rStart, blend(app, sApp));
+    const rStart = Math.min(1, blend(st, sStart) * ntE.start), rPlay = Math.max(rStart, blend(app, sApp));
     const pStart = hasFx ? a * rStart : 0, p70 = hasFx ? a * blend(f70, s70) : 0, p60 = hasFx ? a * blend(f60, s60) : 0;
     const pPlay = hasFx ? a * rPlay : 0, pCameo = Math.max(0, pPlay - pStart), pAbsent = hasFx ? 1 - pPlay : 1;
     const startMins = h.filter((x) => x[1] >= 50).map((x) => x[1]);
@@ -2173,7 +2192,7 @@ td.fx2-c { padding: 4px 3px; }
   // A player worth buying must be fit, an established starter, and not have dropped out of the side last time.
   function buySecure(e) {
     const mp = minutesProfile(e), lm = lastMatch(e);
-    const why = noteOf(e.id)?.tag === "avoid" ? "your note says avoid" : mp.a < 1 ? `flagged (${pct(mp.a)} to play${e.news ? ": " + esc(e.news) : ""})` : lm && lm.mins < 45 ? `only ${lm.mins}' in GW${lm.gw}${lm.mins ? "" : " (unused)"}, a possible rotation or role change` : mp.rStart < 0.7 ? `not a regular starter (${pct(mp.rStart)} of matches)` : "";
+    const why = hasTag(e.id, "avoid") ? "your note says avoid" : mp.a < 1 ? `flagged (${pct(mp.a)} to play${e.news ? ": " + esc(e.news) : ""})` : lm && lm.mins < 45 ? `only ${lm.mins}' in GW${lm.gw}${lm.mins ? "" : " (unused)"}, a possible rotation or role change` : mp.rStart < 0.7 ? `not a regular starter (${pct(mp.rStart)} of matches)` : "";
     return { ok: !why, why, mp, lm };
   }
   const minsLine = (s) => (s.lm ? `started ${s.mp.st} of his last ${s.mp.n}, ${s.lm.mins}' in GW${s.lm.gw}` : `starts ${pct(s.mp.rStart)} of matches`);
@@ -2311,7 +2330,7 @@ td.fx2-c { padding: 4px 3px; }
     }
 
     // 2. Captain and vice
-    const capBoost = (id) => (noteOf(id)?.tag === "captain" ? 1.15 : 1);
+    const capBoost = (id) => (hasTag(id, "captain") ? 1.15 : 1);
     const capC = xiIds.map((id) => ({ id, p: P(id), mp: MP(id), sc: scoreChance(E[id], TO), haul: haulChance(E[id]) })).filter((x) => x.mp.pStart >= 0.6).sort((a, b) => b.p * capBoost(b.id) - a.p * capBoost(a.id));
     if (capC.length >= 2) {
       // Within 0.5 xP the mini-league decides: chasing takes the lower captaincy EO, protecting the higher.
@@ -2433,14 +2452,14 @@ td.fx2-c { padding: 4px 3px; }
       const base5 = xi5(cur), sh = squadHealth(cur).n; let best = null;
       cur.forEach((id, slot) => {
         const e = E[id]; if (e.element_type === 1 && slot === 11 && availability(e) > 0) return; // backup keeper
-        if (noteOf(id)?.tag === "hold") { if (round === 0) noteHeld.add(id); return; }
+        if (hasTag(id, "hold")) { if (round === 0) noteHeld.add(id); return; }
         const budget = bank + sellFor(id), mo = momentum(e);
-        const tgt = Object.keys(NOTES).map(Number).filter((tid) => noteOf(tid)?.tag === "target" && E[tid] && E[tid].element_type === e.element_type && !cur.includes(tid) && E[tid].now_cost <= budget && ((tc[E[tid].team] || 0) - (E[tid].team === e.team ? 1 : 0)) < 3 && buySecure(E[tid]).ok).map((tid) => ({ e: E[tid] }));
+        const tgt = Object.keys(NOTES).map(Number).filter((tid) => hasTag(tid, "target") && E[tid] && E[tid].element_type === e.element_type && !cur.includes(tid) && E[tid].now_cost <= budget && ((tc[E[tid].team] || 0) - (E[tid].team === e.team ? 1 : 0)) < 3 && buySecure(E[tid]).ok).map((tid) => ({ e: E[tid] }));
         [...candidates(e.element_type, budget, new Set(cur), tc, e.team, TO, new Set()).slice(0, 6), ...tgt.filter((t) => !candidates(e.element_type, budget, new Set(cur), tc, e.team, TO, new Set()).slice(0, 6).some((c) => c.e.id === t.e.id))].forEach((cd) => {
           const nid = cur.map((x) => (x === id ? cd.e.id : x)), g = xi5(nid) - base5;
           // below 14 playable, restoring a reliable body is worth ~1 pt of cover
           const cover = sh < 14 && !minutesProfile(e).playable && minutesProfile(cd.e).playable ? 1 : 0;
-          const tb = noteOf(cd.e.id)?.tag === "target" ? 1.5 : 0; // your buy target gets a nudge
+          const tb = hasTag(cd.e.id, "target") ? 1.5 : 0; // your buy target gets a nudge
           const opt = { out: e, inn: cd.e, gain: g, cover, score: g + cover + tb, budget, nid, slot, mo };
           if (mo.hold) { if (round === 0 && (!held[e.id] || opt.score > held[e.id].score)) held[e.id] = opt; return; }
           if (!best || g + cover > best.score) best = opt;
@@ -2626,7 +2645,7 @@ td.fx2-c { padding: 4px 3px; }
     const decHTML = `<div class="decision"><div class="dec-h"><h3>Your GW${gwNext} decision</h3>${L.text ? `<span class="stance st-${L.stance}">${L.stance === "chase" ? "Chasing" : L.stance === "protect" ? "Protecting a lead" : "Balanced"}</span>` : ""}</div>
       <ol>${dec.map(([k, x]) => `<li><span class="dk">${k}</span> ${x.t}</li>`).join("")}${risksN ? `<li><span class="dk">Check</span> ${risksN} minutes or availability risk${risksN > 1 ? "s" : ""} below before the deadline</li>` : ""}</ol>
       ${L.text ? `<p class="note">${L.text}</p>` : ""}
-      ${(() => { const act = Object.keys(NOTES).map(Number).filter((id) => E[id] && noteOf(id)); return act.length ? `<p class="note note-applied"><b>Your notes in this plan:</b> ${act.map((id) => `${esc(E[id].web_name)} (${NOTE_TAGS[noteOf(id).tag].l}${noteSignals(noteOf(id)).read.length ? ", " + noteSignals(noteOf(id)).read.join(", ") : ""})`).join(" · ")}. <span class="lab lab-asm">Assumption</span></p>` : ""; })()}
+      ${(() => { const act = Object.keys(NOTES).map(Number).filter((id) => E[id] && noteOf(id)); return act.length ? `<p class="note note-applied"><b>Your notes in this plan:</b> ${act.map((id) => `${esc(E[id].web_name)} (${noteLabel(noteOf(id))}${noteSignals(noteOf(id)).read.length ? ", " + noteSignals(noteOf(id)).read.join(", ") : ""})`).join(" · ")}. <span class="lab lab-asm">Assumption</span></p>` : ""; })()}
       <p class="note src">Sources: squad, bank and free transfers from your FPL Pick Team (${B.live ? "live" : "rebuilt from public data"}); player stats from FPL (Opta), loaded ${new Date(D.generated_at).toLocaleTimeString("en-GB", { hour: "2-digit", minute: "2-digit" })}; bookmaker odds ${odT ? `refreshed ${odT}` : "not loaded: fixture difficulty used instead"}; news ${nwT ? `checked ${nwT}` : "not loaded"}. <span class="lab lab-fact">Fact</span> confirmed data, <span class="lab lab-proj">Projection</span> model estimate, <span class="lab lab-asm">Assumption</span> a judgement call.</p></div>`;
     const capSel = `<div class="capsel"><label>Captain <select id="gwCap">${xiIds.map((id) => `<option value="${id}" ${st.cap === id ? "selected" : ""}>${esc(E[id].web_name)} (${gp1(E[id]).toFixed(1)})</option>`).join("")}</select></label><label>Vice-captain <select id="gwVc">${xiIds.map((id) => `<option value="${id}" ${st.vc === id ? "selected" : ""}>${esc(E[id].web_name)} (${gp1(E[id]).toFixed(1)})</option>`).join("")}</select></label></div>`;
 
@@ -3736,7 +3755,7 @@ td.fx2-c { padding: 4px 3px; }
     box.innerHTML = `<p class="note pr-count">${sorted.length} player${sorted.length === 1 ? "" : "s"} · GW${PR.g0}${PR.g1 > PR.g0 ? `–${PR.g1}` : ""} · £${price(PR.p0)}m–£${price(PR.p1)}m</p>` + (show.length ? show.map((e) => {
       const code = T[e.team]?.code, tot = pred(e);
       return `<div class="pr-card ${mine.has(e.id) ? "mine" : ""}">
-        <div class="pr-who">${code != null ? `<img src="kit/${code}${e.element_type === 1 ? "_1" : ""}.png" alt="" width="44" height="44" loading="lazy" onerror="this.remove()">` : ""}<span><strong>${esc(e.web_name)}${mine.has(e.id) ? ' <span class="star" title="In your team">★</span>' : ""}${noteOf(e.id) ? ` <span class="pill ${NOTE_TAGS[noteOf(e.id).tag].cls}" title="${esc(noteTxt(e.id))}">✎ ${NOTE_TAGS[noteOf(e.id).tag].l}</span>` : ""}${availability(e) < 1 ? ` <span class="flag-i ${availability(e) === 0 ? "out" : ""}" title="${esc(e.news)}">!</span>` : ""}</strong><small>${esc(T[e.team]?.name)} · ${({ 1: "Goalkeeper", 2: "Defender", 3: "Midfielder", 4: "Forward" })[e.element_type]}</small></span></div>
+        <div class="pr-who">${code != null ? `<img src="kit/${code}${e.element_type === 1 ? "_1" : ""}.png" alt="" width="44" height="44" loading="lazy" onerror="this.remove()">` : ""}<span><strong>${esc(e.web_name)}${mine.has(e.id) ? ' <span class="star" title="In your team">★</span>' : ""}${noteOf(e.id) ? ` <span class="pill acc" title="${esc(noteTxt(e.id))}">✎ Note</span>` : ""}${availability(e) < 1 ? ` <span class="flag-i ${availability(e) === 0 ? "out" : ""}" title="${esc(e.news)}">!</span>` : ""}</strong><small>${esc(T[e.team]?.name)} · ${({ 1: "Goalkeeper", 2: "Defender", 3: "Midfielder", 4: "Forward" })[e.element_type]}</small></span></div>
         <div class="pr-stat"><span class="k">Price</span><strong>£${price(e.now_cost)}m</strong></div>
         <div class="pr-stat"><span class="k">Ownership</span><strong>${(+e.selected_by_percent || 0).toFixed(1)}%</strong></div>
         <div class="pr-stat" title="${(t10own[e.id] || []).length ? "Owned by " + esc((t10own[e.id] || []).join(", ")) : "None of the top 10 own him"}"><span class="k">Top 10 own</span><strong class="${(t10own[e.id] || []).length >= 5 ? "" : (t10own[e.id] || []).length === 0 ? "note" : ""}">${(t10own[e.id] || []).length}/${t10.length}</strong></div>
@@ -4396,7 +4415,7 @@ td.fx2-c { padding: 4px 3px; }
 
     // Your notes: what you told the model, and what it changed
     const actN = Object.keys(NOTES).map(Number).filter((id) => E[id] && noteOf(id));
-    if (actN.length) cards.push({ k: "watch", label: "Your notes", head: `${actN.length} note${actN.length > 1 ? "s" : ""} applied`, sub: actN.slice(0, 4).map((id) => { const im = noteImpact(E[id]); return `${esc(E[id].web_name)}: ${NOTE_TAGS[noteOf(id).tag].l}${im ? ` (xP ${im.wo.toFixed(1)} → ${im.w.toFixed(1)})` : ""}`; }).join(" · "), foot: "Your judgement is built into every projection and recommendation on the site" });
+    if (actN.length) cards.push({ k: "watch", label: "Your notes", head: `${actN.length} note${actN.length > 1 ? "s" : ""} applied`, sub: actN.slice(0, 4).map((id) => { const im = noteImpact(E[id]); return `${esc(E[id].web_name)}: ${noteLabel(noteOf(id))}${im ? ` (xP ${im.wo.toFixed(1)} → ${im.w.toFixed(1)})` : ""}`; }).join(" · "), foot: "Your judgement is built into every projection and recommendation on the site" });
 
     // Bottom line
     // The bottom line follows the GW plan (Current gameweek tab) when it's available, so the tabs agree.
@@ -4676,17 +4695,30 @@ td.fx2-c { padding: 4px 3px; }
   // ---- Your player notes: a human override the model takes into account ----
   // trust: +10% xP · rotation: start rate ×0.75 and xP ×0.8 · injury: chance of playing ≤50% and xP ×0.5
   // avoid: never suggested as a buy · hold: never suggested as a sale. Each note lasts until a gameweek you choose.
+  // Overall calls: tick any number of these on a note.
   const NOTE_TAGS = { trust: { l: "Trust him", f: 1.1, cls: "ok" }, captain: { l: "Captain pick", f: 1, cls: "ok" }, target: { l: "Buy target", f: 1, cls: "acc" }, rotation: { l: "Rotation risk", f: 0.8, cls: "sev2" }, injury: { l: "Injury doubt", f: 0.5, cls: "sev3" }, avoid: { l: "Avoid buying", f: 1, cls: "sev3" }, hold: { l: "Hold, don't sell", f: 1, cls: "acc" } };
-  // What the site reads from the words in your note (on top of the tag). Each signal is small and shown to you.
+  // What you saw: each category is marked Positive or Concern. Effects are deliberately modest.
+  // f: xP multiplier; start: start-rate multiplier; aCap: cap on chance of playing; aFloor: floor; types: positions it applies to.
+  const NOTE_CATS = {
+    minutes: { l: "Minutes & selection", d: "Starting chances, rotation risk, early substitutions", pos: { f: 1.03, start: 1.1 }, neg: { f: 0.9, start: 0.8 } },
+    attack: { l: "Attacking role", d: "Position in possession, runs into the box, dropping deep", pos: { f: 1.06 }, neg: { f: 0.94 }, types: [2, 3, 4] },
+    setpieces: { l: "Penalties & set pieces", d: "Who takes penalties, corners and free kicks", pos: { f: 1.05 }, neg: { f: 0.95 }, types: [2, 3, 4] },
+    chances: { l: "Chance involvement", d: "How he gets or creates chances, incl. unrewarded runs", pos: { f: 1.05 }, neg: { f: 0.95 }, types: [2, 3, 4] },
+    fitness: { l: "Fitness & availability", d: "Injuries, discomfort, limited movement, manager updates", pos: { f: 1, aFloor: 0.9 }, neg: { f: 0.85, aCap: 0.75 } },
+    defence: { l: "Defensive role", d: "Clearances, recoveries and other defensive-contribution actions", pos: { f: 1.04 }, neg: { f: 0.96 }, types: [1, 2, 3] },
+    context: { l: "Match context", d: "Red cards, scoreline, tactics or teammate absences that shaped what you saw", pos: { f: 1.03 }, neg: { f: 0.97 } },
+  };
+  // What the site reads from the words in your note. Each signal is small and shown to you.
   const NOTE_SIGNALS = [
     [/\b(on pens|penalt(y|ies)|spot[- ]?kicks?)\b/i, 1.05, "on penalties: +5%"],
     [/\b(set[- ]?pieces?|corners?|free[- ]?kicks?)\b/i, 1.03, "on set pieces: +3%"],
-    [/\b(new role|more advanced|playing (up front|as (a )?(striker|no\.? ?10|winger))|false 9|freed up)\b/i, 1.06, "more attacking role: +6%"],
-    [/\b(in form|on fire|flying|confiden(t|ce)|hot streak|due a goal|unlucky)\b/i, 1.04, "form or confidence: +4%"],
-    [/\b(knock|fitness (doubt|test)|niggle|doubt(ful)?|late test|ill(ness)?|tight hamstring)\b/i, 0.85, "fitness doubt: −15%", { aCap: 0.75 }],
-    [/\b(rested|rotat(e|ed|ion)|benched|dropped|lost (his )?place|not starting|sub(stitute)? role|cup game|europe|congest(ed|ion))\b/i, 0.9, "minutes risk: −10%", { rot: 0.85 }],
-    [/\b(out of form|poor form|struggling|off the pace|playing deeper|defensive role|tough (run|fixtures?))\b/i, 0.94, "form or role worry: −6%"],
+    [/\b(new role|more advanced|higher up|playing (up front|as (a )?(striker|no\.? ?10|winger))|false 9|freed up|in the box|box runs?|runs? in behind)\b/i, 1.06, "more attacking role: +6%"],
+    [/\b(in form|on fire|flying|confiden(t|ce)|hot streak|due a goal|unlucky|big chances?|should have scored|hit the (post|bar|woodwork))\b/i, 1.04, "form or chances: +4%"],
+    [/\b(knock|fitness (doubt|test)|niggle|doubt(ful)?|late test|ill(ness)?|tight hamstring|limp(ing|ed)?|discomfort|strapped|went off injured)\b/i, 0.85, "fitness doubt: −15%", { aCap: 0.75 }],
+    [/\b(rested|rotat(e|ed|ion)|benched|dropped|lost (his )?place|not starting|sub(stitute)? role|subbed (off )?early|taken off early|cup game|europe|congest(ed|ion))\b/i, 0.9, "minutes risk: −10%", { rot: 0.85 }],
+    [/\b(out of form|poor form|struggling|off the pace|playing deeper|drops? deep|defensive role|tough (run|fixtures?)|isolated|no service)\b/i, 0.94, "form or role worry: −6%"],
     [/\b(new manager|new coach)\b/i, 0.95, "new manager: −5%"],
+    [/\b(red card|sent off|down to (10|ten))\b/i, 1, "match context noted (a red card skews one game, so no change)"],
   ];
   function noteSignals(n) {
     if (!n || !n.text) return { f: 1, aCap: 1, rot: 1, read: [] };
@@ -4700,31 +4732,56 @@ td.fx2-c { padding: 4px 3px; }
     const get = (p) => (D.source === "live" ? fetch("api/" + p, { cache: "no-store" }).then((r) => (r.ok ? r.json() : null)).catch(() => null) : Promise.resolve(null));
     return (notesP = Promise.all([get("notes"), get("calib")]).then(([n, c]) => { NOTES = n || {}; CAL = c && c.f ? c : null; XS.clear(); NF.clear(); }));
   }
-  const noteOf = (id) => { const n = NOTES[id]; return n && (!n.until || n.until >= gwNext) && NOTE_TAGS[n.tag] ? n : null; };
-  const noteFactor = (e) => { const n = noteOf(e.id); return n ? NOTE_TAGS[n.tag].f * noteSignals(n).f : 1; };
+  // A note holds any number of overall calls (tags) and what-you-saw categories (cats: {key: "+" | "-"}).
+  // Older notes with a single `tag` still work.
+  const nTags = (n) => (n ? (Array.isArray(n.tags) ? n.tags : n.tag ? [n.tag] : []).filter((k) => NOTE_TAGS[k]) : []);
+  const nCats = (n) => (n && n.cats ? Object.entries(n.cats).filter(([k, v]) => NOTE_CATS[k] && (v === "+" || v === "-")) : []);
+  const noteOf = (id) => { const n = NOTES[id]; return n && (!n.until || n.until >= gwNext) && (nTags(n).length || nCats(n).length || n.text) ? n : null; };
+  const hasTag = (id, k) => nTags(noteOf(id)).includes(k);
+  // Combined effect of a note on a player: tags × categories × words.
+  function noteEffect(e) {
+    const n = noteOf(e.id); if (!n) return { f: 1, aCap: 1, aFloor: 0, start: 1 };
+    let f = 1, aCap = 1, aFloor = 0, start = 1;
+    nTags(n).forEach((k) => (f *= NOTE_TAGS[k].f));
+    if (nTags(n).includes("injury")) aCap = Math.min(aCap, 0.5);
+    if (nTags(n).includes("rotation")) start *= 0.75;
+    nCats(n).forEach(([k, v]) => { const c = NOTE_CATS[k], x = v === "+" ? c.pos : c.neg; if (c.types && !c.types.includes(e.element_type)) return; f *= x.f || 1; if (x.start) start *= x.start; if (x.aCap) aCap = Math.min(aCap, x.aCap); if (x.aFloor) aFloor = Math.max(aFloor, x.aFloor); });
+    const sg = noteSignals(n); f *= sg.f; aCap = Math.min(aCap, sg.aCap); start *= sg.rot;
+    // One note can move a projection by at most +20% (or −55%, so a serious injury worry still bites)
+    return { f: Math.max(0.45, Math.min(1.2, f)), aCap, aFloor, start };
+  }
+  const noteFactor = (e) => noteEffect(e).f;
   // Projection with and without your note, for showing its effect.
   const noteImpact = (e, n = 1) => { const f = noteFactor(e); if (f === 1) return null; const w = expertScore(e, n, gwTO()), wo = w / f; return { w, wo }; };
+  const noteLabel = (n) => [...nTags(n).map((k) => NOTE_TAGS[k].l), ...nCats(n).map(([k, v]) => `${NOTE_CATS[k].l} ${v === "+" ? "(positive)" : "(concern)"}`)].join(", ") || "Note";
+  const notePills = (n) => [...nTags(n).map((k) => `<span class="pill ${NOTE_TAGS[k].cls}">${NOTE_TAGS[k].l}</span>`), ...nCats(n).map(([k, v]) => `<span class="pill ncat ${v === "+" ? "pos" : "neg"}">${v === "+" ? "▲" : "▼"} ${NOTE_CATS[k].l}</span>`)].join(" ");
   // Every recommendation that involves a noted player says so, and what the note changed.
   function noteLine(ids) {
     const ns = [...new Set(ids.filter((id) => id && noteOf(id)))];
     if (!ns.length) return "";
-    return ns.map((id) => { const n = noteOf(id), im = noteImpact(E[id]), sg = noteSignals(n); return `<b>${esc(E[id].web_name)}</b>: ${NOTE_TAGS[n.tag].l}${n.text ? ` ("${esc(n.text.length > 120 ? n.text.slice(0, 117) + "…" : n.text)}")` : ""}${sg.read.length ? `; read as ${sg.read.join(", ")}` : ""}${im ? `; GW${gwNext} xP ${im.wo.toFixed(1)} → ${im.w.toFixed(1)}` : ""}`; }).join(" · ");
+    return ns.map((id) => { const n = noteOf(id), im = noteImpact(E[id]), sg = noteSignals(n); return `<b>${esc(E[id].web_name)}</b>: ${noteLabel(n)}${n.text ? ` ("${esc(n.text.length > 120 ? n.text.slice(0, 117) + "…" : n.text)}")` : ""}${sg.read.length ? `; read as ${sg.read.join(", ")}` : ""}${im ? `; GW${gwNext} xP ${im.wo.toFixed(1)} → ${im.w.toFixed(1)}` : ""}`; }).join(" · ");
   }
   const calFactor = (e) => (CAL && CAL.f && CAL.f[e.element_type] ? CAL.f[e.element_type] : 1);
-  const noteTxt = (id) => { const n = noteOf(id); return n ? `Your note: ${NOTE_TAGS[n.tag].l}${n.text ? ` ("${esc(n.text)}")` : ""}${n.until ? ` until GW${n.until}` : ""}` : ""; };
+  const noteTxt = (id) => { const n = noteOf(id); return n ? `Your note: ${noteLabel(n)}${n.text ? ` ("${esc(n.text)}")` : ""}${n.until ? ` until GW${n.until}` : ""}` : ""; };
+  let NOTE_EDIT = null; // id of the note being edited
   function notesPanelHTML() {
     const list = Object.entries(NOTES).filter(([id]) => E[id] && noteOf(+id)).sort((a, b) => (b[1].at || 0) - (a[1].at || 0));
     const can = !!ownerKey() && D.source === "live" && ownerOk !== false;
+    const ed = NOTE_EDIT && NOTES[NOTE_EDIT] ? NOTES[NOTE_EDIT] : null, edE = ed ? E[NOTE_EDIT] : null;
+    const tags = nTags(ed), cats = Object.fromEntries(nCats(ed));
+    const untilOpts = [[gwNext, "This gameweek"], [Math.min(38, gwNext + 2), "Next 3 gameweeks"], ["", "Until I remove it"]];
+    const curU = ed ? (ed.until == null ? "" : ed.until) : gwNext;
     return `<div class="panel-head"><h3>Your notes <span class="lab lab-asm">Assumption</span></h3><span class="note">Your judgement, which the model takes into account</span></div>
-      <p class="note">Add what the numbers can't see: a manager's hint, a hunch or a fitness worry. A note changes that player's projection everywhere on the site:
-      <strong>Trust him</strong> +10% · <strong>Captain pick</strong> favoured as captain when it's close · <strong>Buy target</strong> considered for every transfer in his position · <strong>Rotation risk</strong> −20% and a lower start chance · <strong>Injury doubt</strong> −50% · <strong>Avoid buying</strong> never suggested as a buy · <strong>Hold</strong> never suggested as a sale.
-      Your words count too: phrases like "on pens", "new role", "in form", "knock", "rested" or "new manager" nudge his projection, and the site shows what it read.</p>
-      ${list.length ? `<ul class="notes-list">${list.map(([id, n]) => `<li><span class="pill ${NOTE_TAGS[n.tag].cls}">${NOTE_TAGS[n.tag].l}</span> <strong>${esc(E[id].web_name)}</strong> <span class="note">${tShort(E[id].team)}${n.until ? ` · until GW${n.until}` : " · until removed"}</span>${n.text ? `<div class="d">${esc(n.text)}</div>` : ""}${(() => { const sg = noteSignals(n), im = noteImpact(E[id]); return sg.read.length || im ? `<div class="d nread">${sg.read.length ? `Read from your note: ${sg.read.join(", ")}. ` : ""}${im ? `GW${gwNext} xP ${im.wo.toFixed(1)} → ${im.w.toFixed(1)}.` : ""}${n.tag === "captain" ? " Favoured as captain when it's close." : n.tag === "target" ? " Considered for every transfer in his position." : n.tag === "hold" ? " Never suggested as a sale." : n.tag === "avoid" ? " Never suggested as a buy." : ""}</div>` : ""; })()}${can ? `<button class="btn sm" data-delnote="${id}">Remove</button>` : ""}</li>`).join("")}</ul>` : `<p class="empty">No notes yet.</p>`}
-      ${can ? `<div class="note-form"><select id="noteC" aria-label="Club"><option value="mine">Your squad</option>${[...D.teams].sort((x, y) => x.name.localeCompare(y.name)).map((t) => `<option value="${t.id}">${esc(t.name)}</option>`).join("")}</select>
-        <select id="noteP" aria-label="Player">${noteOpts("mine")}</select>
-        <select id="noteT">${Object.entries(NOTE_TAGS).map(([k, v]) => `<option value="${k}">${v.l}</option>`).join("")}</select>
-        <select id="noteU"><option value="${gwNext}">This gameweek</option><option value="${Math.min(38, gwNext + 2)}">Next 3 gameweeks</option><option value="">Until I remove it</option></select>
-        <textarea id="noteX" rows="3" placeholder="Your reasoning (optional): team news, a manager's comments, a hunch…" maxlength="1500"></textarea><div class="note-actions"><span class="note" id="noteCount">0 / 1500</span><button class="btn pri" id="noteAdd">Add note</button></div></div><p class="note" id="noteMsg"></p>`
+      <p class="note">Add what the numbers can't see. Tick any overall calls, mark what you saw as positive or a concern, and add your own words: all three change that player's projection everywhere on the site, and the site shows what it took from them. A single note can lift a projection by at most 20%.</p>
+      ${list.length ? `<ul class="notes-list">${list.map(([id, n]) => `<li class="${+id === NOTE_EDIT ? "editing" : ""}"><span class="nl-who"><strong>${esc(E[id].web_name)}</strong> <span class="note">${tShort(E[id].team)}${n.until ? ` · until GW${n.until}` : " · until removed"}</span></span><span class="nl-pills">${notePills(n)}</span>${n.text ? `<div class="d">${esc(n.text)}</div>` : ""}${(() => { const sg = noteSignals(n), im = noteImpact(E[id]); return sg.read.length || im ? `<div class="d nread">${sg.read.length ? `Read from your words: ${sg.read.join(", ")}. ` : ""}${im ? `GW${gwNext} xP ${im.wo.toFixed(1)} → ${im.w.toFixed(1)}.` : ""}${nTags(n).includes("captain") ? " Favoured as captain when it's close." : ""}${nTags(n).includes("target") ? " Considered for every transfer in his position." : ""}${nTags(n).includes("hold") ? " Never suggested as a sale." : ""}${nTags(n).includes("avoid") ? " Never suggested as a buy." : ""}</div>` : ""; })()}${can ? `<span class="nl-acts"><button class="btn sm" data-editnote="${id}">Edit</button><button class="btn sm" data-delnote="${id}">Remove</button></span>` : ""}</li>`).join("")}</ul>` : `<p class="empty">No notes yet.</p>`}
+      ${can ? `<div class="note-form ${ed ? "is-edit" : ""}" id="noteForm">
+        ${ed ? `<p class="nf-edit">Editing your note on <strong>${esc(edE.web_name)}</strong> (${tShort(edE.team)})</p><input type="hidden" id="noteP" value="${NOTE_EDIT}">` : `<select id="noteC" aria-label="Club"><option value="mine">Your squad</option>${[...D.teams].sort((x, y) => x.name.localeCompare(y.name)).map((t) => `<option value="${t.id}">${esc(t.name)}</option>`).join("")}</select>
+        <select id="noteP" aria-label="Player">${noteOpts("mine")}</select>`}
+        <div class="nf-block"><span class="k">Overall call (tick any)</span><div class="nf-tags">${Object.entries(NOTE_TAGS).map(([k, v]) => `<label class="nf-tag"><input type="checkbox" value="${k}" ${tags.includes(k) ? "checked" : ""}><span>${v.l}</span></label>`).join("")}</div></div>
+        <div class="nf-block"><span class="k">What you saw (optional)</span><div class="nf-cats">${Object.entries(NOTE_CATS).map(([k, c]) => `<div class="nf-cat"><span><strong>${c.l}</strong><small>${c.d}</small></span><span class="seg" role="group" aria-label="${c.l}">${[["-", "Concern"], ["", "–"], ["+", "Positive"]].map(([v, l]) => `<button type="button" data-cat="${k}" data-v="${v}" aria-pressed="${(cats[k] || "") === v}">${l}</button>`).join("")}</span></div>`).join("")}</div></div>
+        <select id="noteU" aria-label="How long">${untilOpts.map(([v, l]) => `<option value="${v}" ${String(v) === String(curU) ? "selected" : ""}>${l}</option>`).join("")}</select>
+        <textarea id="noteX" rows="3" placeholder="Your reasoning (optional): team news, a manager's comments, what you saw in the match…" maxlength="1500">${ed ? esc(ed.text || "") : ""}</textarea>
+        <div class="note-actions"><span class="note" id="noteCount">${ed ? (ed.text || "").length : 0} / 1500</span><span>${ed ? `<button class="btn" id="noteCancel">Cancel</button> ` : ""}<button class="btn pri" id="noteAdd">${ed ? "Save changes" : "Add note"}</button></span></div></div><p class="note" id="noteMsg"></p>`
         : D.source === "live" ? `<div class="note-unlock"><p class="note">${ownerKey() && ownerOk === false ? "<strong>This device's owner password doesn't match the one in Cloudflare.</strong> " : ""}Enter your owner password (the <code>OWNER_KEY</code> you set in Cloudflare) to add notes on this device. It's checked with the server and remembered on this device only.</p>
           <div class="note-form"><input type="password" id="ownerPw" placeholder="Owner password" autocomplete="current-password"><button class="btn pri" id="ownerGo">Unlock</button></div><p class="note" id="ownerMsg"></p></div>`
         : `<p class="note">Notes load on the live site.</p>`}`;
@@ -4747,13 +4804,20 @@ td.fx2-c { padding: 4px 3px; }
     });
     $("#noteX")?.addEventListener("input", () => { $("#noteCount").textContent = `${$("#noteX").value.length} / 1500`; });
     $("#noteC")?.addEventListener("change", (ev) => { $("#noteP").innerHTML = noteOpts(ev.target.value); });
-    const save = async (next) => { const m0 = $("#noteMsg"); if (m0) m0.textContent = "Saving…"; try { await ownerPost("notes", next); NOTES = next; XS.clear(); NF.clear(); GWE.buys = null; GWE.chipsAdv = null; GWE.fh = null; Object.keys(PRC).forEach((k) => delete PRC[k]); after(); } catch (e) { const m = $("#noteMsg"); if (m) { m.textContent = "Couldn't save: " + e.message + "."; m.classList.add("down"); } if (/match|not allowed/.test(e.message)) { ownerOk = false; setTimeout(after, 2500); } } };
-    box.querySelectorAll("[data-delnote]").forEach((b) => b.addEventListener("click", () => { const n = { ...NOTES }; delete n[b.dataset.delnote]; save(n); }));
+    box.querySelectorAll("[data-cat]").forEach((b) => b.addEventListener("click", () => { box.querySelectorAll(`[data-cat="${b.dataset.cat}"]`).forEach((x) => x.setAttribute("aria-pressed", String(x === b))); }));
+    const refresh = () => { XS.clear(); NF.clear(); GWE.buys = null; GWE.chipsAdv = null; GWE.fh = null; Object.keys(PRC).forEach((k) => delete PRC[k]); };
+    const save = async (next) => { const m0 = $("#noteMsg"); if (m0) { m0.textContent = "Saving…"; m0.classList.remove("down"); } try { await ownerPost("notes", next); NOTES = next; NOTE_EDIT = null; refresh(); after(); } catch (e) { const m = $("#noteMsg"); if (m) { m.textContent = "Couldn't save: " + e.message + "."; m.classList.add("down"); } if (/match|not allowed/.test(e.message)) { ownerOk = false; setTimeout(after, 2500); } } };
+    box.querySelectorAll("[data-delnote]").forEach((b) => b.addEventListener("click", () => { const n = { ...NOTES }; delete n[b.dataset.delnote]; if (NOTE_EDIT === +b.dataset.delnote) NOTE_EDIT = null; save(n); }));
+    box.querySelectorAll("[data-editnote]").forEach((b) => b.addEventListener("click", () => { NOTE_EDIT = +b.dataset.editnote; after(); setTimeout(() => $("#noteForm")?.scrollIntoView({ behavior: "smooth", block: "center" }), 50); }));
+    $("#noteCancel")?.addEventListener("click", () => { NOTE_EDIT = null; after(); });
     $("#noteAdd")?.addEventListener("click", () => {
       const e = E[+$("#noteP").value];
       if (!e) { $("#noteMsg").textContent = "Pick a club, then a player."; return; }
-      const u = $("#noteU").value;
-      save({ ...NOTES, [e.id]: { tag: $("#noteT").value, text: $("#noteX").value.trim(), until: u ? +u : null, at: Date.now() } });
+      const tags = [...box.querySelectorAll(".nf-tag input:checked")].map((x) => x.value);
+      const cats = {}; box.querySelectorAll('[data-cat][aria-pressed="true"]').forEach((x) => { if (x.dataset.v) cats[x.dataset.cat] = x.dataset.v; });
+      const text = $("#noteX").value.trim(), u = $("#noteU").value;
+      if (!tags.length && !Object.keys(cats).length && !text) { $("#noteMsg").textContent = "Tick a call, mark what you saw, or write something first."; return; }
+      save({ ...NOTES, [e.id]: { tags, cats, text, until: u ? +u : null, at: Date.now() } });
     });
   }
 
@@ -4843,7 +4907,7 @@ td.fx2-c { padding: 4px 3px; }
       const base = bestXI(cur, f).sum, tc = {}; cur.forEach((id) => (tc[E[id].team] = (tc[E[id].team] || 0) + 1));
       let best = null;
       cur.forEach((id, slot) => {
-        const e = E[id]; if (noteOf(id)?.tag === "hold") return; if (e.element_type === 1 && slot === 11 && availability(e) > 0) return;
+        const e = E[id]; if (hasTag(id, "hold")) return; if (e.element_type === 1 && slot === 11 && availability(e) > 0) return;
         const budget = bank + sellFor(id);
         pool[e.element_type].forEach((c) => {
           if (cur.includes(c.id) || c.now_cost > budget || ((tc[c.team] || 0) - (c.team === e.team ? 1 : 0)) >= 3) return;
