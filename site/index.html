@@ -648,6 +648,13 @@ details.why[open] { flex-basis: 100%; }
 .pc .meta.st-ok { color: var(--good); } .pc .meta.st-sev2 { color: var(--warn); font-weight: 700; } .pc .meta.st-sev3 { color: var(--bad); font-weight: 700; }
 .pc .meta .newtag { font-weight: 700; }
 @media (max-width: 900px) { .adv-grid { grid-template-columns: minmax(0, 1fr); } }
+.pc .fx3 { display: flex; gap: 1px; justify-content: center; width: 100%; }
+.pc .fx3 i { font-style: normal; flex: 1 1 0; min-width: 0; font-size: .56rem; font-weight: 700; padding: 1px 0; border-radius: 3px; overflow: hidden; white-space: nowrap; }
+.adv-sec:last-child { grid-column: 1 / -1; }
+@media (max-width: 600px) {
+  .pc .fx3 i { font-size: .5rem; letter-spacing: -.03em; text-overflow: clip; }
+  .pc .meta .newtag, .pc .meta .w-start { display: none; }
+}
 </style>
 
 <header class="bar">
@@ -1898,11 +1905,12 @@ details.why[open] { flex-basis: 100%; }
     const h = (FA.summ[e.id] || []).slice().sort((x, y) => y[0] - x[0]).slice(0, 5);
     const n = h.length, st = h.filter((x) => x[1] >= 50).length, f70 = h.filter((x) => x[1] >= 70).length;
     const cameo = h.filter((x) => x[1] > 0 && x[1] < 30).length, off = h.filter((x) => x[1] >= 50 && x[1] < 70).length, dnp = h.filter((x) => x[1] === 0).length;
-    const pStart = a * (st + 2 * sStart) / (n + 2), p70 = a * (f70 + 2 * s70) / (n + 2);
-    const label = pStart >= 0.85 ? "Nailed" : pStart >= 0.65 ? "Likely starter" : pStart >= 0.4 ? "Rotation risk" : "Unlikely to start";
+    const hasFx = (teamFx[e.team][gwNext] || []).length > 0;
+    const pStart = hasFx ? a * (st + 2 * sStart) / (n + 2) : 0, p70 = hasFx ? a * (f70 + 2 * s70) / (n + 2) : 0;
+    const label = !hasFx ? `No GW${gwNext} match` : pStart >= 0.85 ? "Nailed" : pStart >= 0.65 ? "Likely starter" : pStart >= 0.4 ? "Rotation risk" : "Unlikely to start";
     const gws = h.length ? `GW${h[h.length - 1][0]}–${h[0][0]}` : "";
     const pattern = n ? `Started ${st} of his last ${n} (${gws})${f70 < st ? `, ${st - f70 === 1 ? "once" : st - f70 + " times"} taken off before 70'` : ""}${cameo ? `, ${cameo} cameo${cameo > 1 ? "s" : ""} under 30'` : ""}${dnp ? `, ${dnp} unused` : ""}` : `${e.starts} starts in ${gp} team matches this season`;
-    return { pStart, p70, label, n, st, f70, cameo, off, dnp, pattern, mins: h.slice().reverse().map((x) => `GW${x[0]} ${x[1]}'`), a };
+    return { pStart, p70, hasFx, label, n, st, f70, cameo, off, dnp, pattern, mins: h.slice().reverse().map((x) => `GW${x[0]} ${x[1]}'`), a };
   }
   const confCls = (p) => (p >= 0.85 ? "ok" : p >= 0.65 ? "" : p >= 0.4 ? "sev2" : "sev3");
   const newsDate = (e) => (e.news_added ? new Date(e.news_added).toLocaleString("en-GB", { timeZone: "Europe/London", day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" }) : "");
@@ -1931,19 +1939,19 @@ details.why[open] { flex-basis: 100%; }
   }
 
   // Best legal XI from a 15-man squad: best keeper plus the best 10 outfielders within 3–5 DEF, 2–5 MID, 1–3 FWD.
-  function bestXI(ids) {
-    const gks = ids.filter((id) => E[id].element_type === 1).sort((a, b) => gp1(E[b]) - gp1(E[a]));
+  function bestXI(ids, f = gp1) {
+    const gks = ids.filter((id) => E[id].element_type === 1).sort((a, b) => f(E[b]) - f(E[a]));
     const out = ids.filter((id) => E[id].element_type > 1);
     let best = null;
     for (let i = 0; i < out.length; i++) for (let j = i + 1; j < out.length; j++) for (let k = j + 1; k < out.length; k++) {
       const xi = out.filter((_, x) => x !== i && x !== j && x !== k);
       const cnt = { 2: 0, 3: 0, 4: 0 }; xi.forEach((id) => cnt[E[id].element_type]++);
       if ([2, 3, 4].some((t) => cnt[t] < FORM_LIM[t][0] || cnt[t] > FORM_LIM[t][1])) continue;
-      const sum = xi.reduce((a, id) => a + gp1(E[id]), 0);
+      const sum = xi.reduce((a, id) => a + f(E[id]), 0);
       if (!best || sum > best.sum) best = { xi, sum, cnt };
     }
     const xi = [gks[0], ...best.xi];
-    return { ids: xi, sum: best.sum + gp1(E[gks[0]]), formation: `${best.cnt[2]}-${best.cnt[3]}-${best.cnt[4]}`, gkBench: gks[1], bench: out.filter((id) => !best.xi.includes(id)) };
+    return { ids: xi, sum: best.sum + f(E[gks[0]]), formation: `${best.cnt[2]}-${best.cnt[3]}-${best.cnt[4]}`, gkBench: gks[1], bench: out.filter((id) => !best.xi.includes(id)) };
   }
   // Who actually comes on if a starter doesn't play: first bench outfielder (in order) who plays and keeps a legal formation.
   function autoSub(st, outId, playsP = 0.5) {
@@ -2054,11 +2062,53 @@ details.why[open] { flex-basis: 100%; }
     if (outB.join() !== ideal.join() && P(ideal[0]) * MP(ideal[0]).pStart - P(outB[0]) * MP(outB[0]).pStart >= 0.5) {
       out.push({ sec: "bench", k: "warn", t: `Reorder your bench: ${ideal.map(nm).join(", ")}`, d: `${nm(ideal[0])} is the most valuable substitute (${P(ideal[0]).toFixed(1)} pts, ${pct(MP(ideal[0]).pStart)} to start) but is currently ${["first", "second", "third"][outB.indexOf(ideal[0])]} in line. FPL brings substitutes on in bench order.`, why: whyHTML(ideal.map((id) => E[id])), act: { a: "bench", ids: ideal, l: "Apply bench order" } });
     }
+    // 5. Transfers to consider: the best affordable upgrades by the 5-gameweek expert score, within your
+    //    free transfers and bank; a −4 hit only when the upgrade still gains 4+ pts over 5 gameweeks after it.
+    out.push(...gwBuys(st));
     if (!out.some((x) => x.sec === "risk")) out.push({ sec: "risk", k: "good", t: "No minutes or availability risks in your XI", d: "Every starter is fit, has a fixture and has been starting regularly." });
     if (!out.some((x) => x.sec === "bench")) out.push({ sec: "bench", k: "good", t: "Bench order is right", d: `If a starter misses out, ${(() => { const s = benchIds.slice(1).find((id) => MP(id).pStart >= 0.5); return s ? `${nm(s)} (${P(s).toFixed(1)} pts) is first in line` : "your bench covers the formation"; })()}.` });
     return out;
   }
+  function gwBuys(st) {
+    const B = GWE.base, c = gwCalc(st), key = st.ids.join() + "|" + c.bank + "|" + c.n;
+    if (GWE.buys && GWE.buys.key === key) return GWE.buys.out;
+    const TO = gwTO(), nm = (e) => esc(e.web_name), fmt1 = (v) => (v >= 0 ? "+" : "−") + Math.abs(v).toFixed(1);
+    const ftLeft = B.unlimited ? 15 : Math.max(0, B.ft - c.n);
+    const sellFor = (id) => (st.xf.some((t) => t.inn === id) ? E[id].now_cost : B.sell[id] ?? E[id].now_cost);
+    // Each option is valued by how much it raises your best XI's projected points (so a bench upgrade
+    // only counts if he'd get into the team), over 5 gameweeks; the best one is taken, then the next.
+    let bank = c.bank, cur = [...st.ids]; const tc = {}; cur.forEach((id) => (tc[E[id].team] = (tc[E[id].team] || 0) + 1));
+    const xi5 = (ids) => bestXI(ids, gp5).sum, xi1 = (ids) => bestXI(ids, gp1).sum;
+    const picks = [];
+    for (let round = 0; round <= Math.min(ftLeft, 4); round++) {
+      const base5 = xi5(cur); let best = null;
+      cur.forEach((id, slot) => {
+        const e = E[id]; if (e.element_type === 1 && slot === 11 && availability(e) > 0) return; // backup keeper
+        const budget = bank + sellFor(id);
+        candidates(e.element_type, budget, new Set(cur), tc, e.team, TO, new Set()).slice(0, 6).forEach((cd) => {
+          const nid = cur.map((x) => (x === id ? cd.e.id : x)), g = xi5(nid) - base5;
+          if (!best || g > best.gain) best = { out: e, inn: cd.e, gain: g, budget, nid, slot };
+        });
+      });
+      if (!best) break;
+      const free = round < ftLeft;
+      if (free ? best.gain < 3 : best.gain - 4 < 4) break;
+      picks.push({ ...best, g1: xi1(best.nid) - xi1(cur), free, bankAfter: best.budget - best.inn.now_cost });
+      bank = best.budget - best.inn.now_cost; tc[best.out.team]--; tc[best.inn.team] = (tc[best.inn.team] || 0) + 1; cur = best.nid;
+      if (!free) break;
+    }
+    const res = picks.map((x) => ({
+      sec: "buy", k: x.free ? "good" : "warn",
+      t: `${x.free ? "" : "Worth a −4: "}Sell ${nm(x.out)}, buy ${nm(x.inn)} (${tShort(x.inn.team)}, £${price(x.inn.now_cost)}m)`,
+      d: `Your best XI gains ${fmt1(x.gain)} pts over the next 5 gameweeks${x.free ? "" : ` (${fmt1(x.gain - 4)} after the hit)`} and ${fmt1(x.g1)} in GW${gwNext}${x.slot > 10 ? ` (${nm(x.out)} is on your bench now)` : ""}. ${x.free ? "Uses a free transfer" : "Costs 4 pts"}; leaves £${price(x.bankAfter)}m in the bank. Next 3: ${[0, 1, 2].map((k) => (teamFx[x.inn.team][gwNext + k] || []).map(fxLabel).join(" + ") || "blank").join(", ")}.`,
+      why: whyHTML([x.out, x.inn]), act: { a: "xfer", out: x.out.id, inn: x.inn.id, l: `Make this transfer` },
+    }));
+    if (!res.length) res.push({ sec: "buy", k: "good", t: ftLeft ? `No transfer clearly worth making: save it` : "No upgrade worth a −4 hit", d: ftLeft ? `No affordable signing would add 3+ pts to your best XI over the next 5 gameweeks (bank £${price(c.bank)}m). Rolling gives you ${Math.min(5, ftLeft + 1)} free transfer${ftLeft + 1 > 1 ? "s" : ""} next gameweek.` : `You've used your free transfers. No upgrade gains enough over 5 gameweeks to cover the 4-point cost.` });
+    GWE.buys = { key, out: res };
+    return res;
+  }
   function gwApply(act) {
+    if (act.a === "xfer") { gwTransfer(act.out, act.inn); return; }
     const st = GWE.st;
     if (act.a === "bestxi") {
       const bx = bestXI(st.ids);
@@ -2089,11 +2139,11 @@ details.why[open] { flex-basis: 100%; }
     const card = (id, slot) => {
       const e = E[id], f = nextFx(e.team, gwNext), fx = f && f.gw === gwNext ? f.list : [];
       const a = availability(e), isNew = !B.oldIds.has(id) || st.xf.some((t) => t.inn === id);
-      const ch = st.xf.some((t) => t.inn === id) ? "ch" : "";
+      const ch = isNew ? "ch" : "";
       const code = T[e.team]?.code;
       return `<button type="button" class="pc ed ${GWE.sel === id ? "on" : ""} ${ch} ${GWE.sel && GWE.sel !== id && slot ? "tgt" : ""}" data-el="${id}" aria-pressed="${GWE.sel === id}" aria-label="${esc(e.web_name)}, ${POSN(e)}, ${gp1(e).toFixed(1)} projected points">
         <span class="kit">${st.cap === id ? '<span class="badge">C</span>' : st.vc === id ? '<span class="badge vc">V</span>' : ""}${a < 1 ? `<span class="flag ${a === 0 ? "out" : ""}">!</span>` : ""}${code != null ? `<img src="kit/${code}${e.element_type === 1 ? "_1" : ""}.png" alt="" width="56" height="56" decoding="async" onerror="this.parentNode.classList.add('nokit');this.remove()">` : ""}</span>
-        <span class="plate"><span class="nm">${esc(e.web_name)}</span><span class="pts">${(gp1(e) * (st.cap === id ? (B.pending.includes("3xc") ? 3 : 2) : 1)).toFixed(1)}</span><span class="fx fdr${fx.length ? fx[0].fdr : 0}">${fx.length ? fxLabel(fx[0]) + (fx.length > 1 ? " +1" : "") : "No fixture"}</span>${(() => { const mp = minutesProfile(e); return `<span class="meta st-${confCls(mp.pStart) || "mid"}" title="${esc(mp.label)}: ${esc(mp.pattern)}">${isNew ? '<b class="newtag">New</b> · ' : ""}${pct(mp.pStart)} start</span>`; })()}</span>
+        <span class="plate"><span class="nm">${esc(e.web_name)}</span><span class="pts">${(gp1(e) * (st.cap === id ? (B.pending.includes("3xc") ? 3 : 2) : 1)).toFixed(1)}</span><span class="fx3" title="Next 3 gameweeks, coloured by FDR">${[0, 1, 2].map((k) => { const l = teamFx[e.team][gwNext + k] || []; return l.length ? `<i class="fdr${l[0].fdr}" title="GW${gwNext + k}: ${fxLabel(l[0])}${l.length > 1 ? " and " + fxLabel(l[1]) : ""}">${l[0].home ? tShort(l[0].opp).toUpperCase() : tShort(l[0].opp).toLowerCase()}${l.length > 1 ? "+" : ""}</i>` : `<i class="fdr0" title="GW${gwNext + k}: no fixture">–</i>`; }).join("")}</span>${(() => { const mp = minutesProfile(e); return `<span class="meta st-${confCls(mp.pStart) || "mid"}" title="Chance he starts the GW${gwNext} match. ${esc(mp.label)}: ${esc(mp.pattern)}">${isNew ? '<b class="newtag">New · </b>' : ""}${mp.hasFx ? `${pct(mp.pStart)}<span class="w-start"> start</span>` : "No match"}</span>`; })()}</span>
       </button>`;
     };
     const xiIds = st.ids.slice(0, 11), benchIds = st.ids.slice(11);
@@ -2108,7 +2158,7 @@ details.why[open] { flex-basis: 100%; }
     const adv = gwAdvice(st);
     if (c.paid) adv.unshift({ sec: "xi", k: "bad", t: `${c.paid} transfer${c.paid > 1 ? "s" : ""} over your free allowance: −${4 * c.paid} pts`, d: `Over 5 gameweeks the new players project ${fmt1(c.gain5)} pts, so ${net >= 0 ? `you're still ${fmt1(net)} ahead after the hit` : `you'd be ${fmt1(net)} worse off after the hit`}.` });
     GWE.adv = adv;
-    const SECS = [["xi", "Best XI this gameweek"], ["cap", "Captain and vice-captain"], ["risk", "Risks before the deadline"], ["bench", "Bench cover"]];
+    const SECS = [["xi", "Best XI this gameweek"], ["cap", "Captain and vice-captain"], ["risk", "Risks before the deadline"], ["bench", "Bench cover"], ["buy", `Players to buy (${B.unlimited ? "chip active" : `${Math.max(0, B.ft - c.n)} free transfer${B.ft - c.n === 1 ? "" : "s"}`}, £${price(c.bank)}m in the bank)`]];
     const advHTML = SECS.map(([k, l]) => `<div class="adv-sec"><h4>${l}</h4><ul class="insights">${adv.map((x, i) => [x, i]).filter(([x]) => x.sec === k).map(([x, i]) => `<li class="${x.k}"><div><div class="t">${x.t}</div><div class="d">${x.d}</div>${x.act || x.why ? `<div class="adv-acts">${x.act ? `<button class="btn sm pri" data-adv="${i}">${esc(x.act.l)}</button>` : ""}${x.why || ""}</div>` : ""}</div></li>`).join("")}</ul></div>`).join("");
     const capSel = `<div class="capsel"><label>Captain <select id="gwCap">${xiIds.map((id) => `<option value="${id}" ${st.cap === id ? "selected" : ""}>${esc(E[id].web_name)} (${gp1(E[id]).toFixed(1)})</option>`).join("")}</select></label><label>Vice-captain <select id="gwVc">${xiIds.map((id) => `<option value="${id}" ${st.vc === id ? "selected" : ""}>${esc(E[id].web_name)} (${gp1(E[id]).toFixed(1)})</option>`).join("")}</select></label></div>`;
 
@@ -2130,7 +2180,7 @@ details.why[open] { flex-basis: 100%; }
       ${GWE.msg ? `<p class="ed-msg" role="alert">${esc(GWE.msg)}</p>` : ""}
       ${xfList}
       <div class="ed-grid">
-        <div class="panel ed-team"><div class="panel-head"><h3>Your GW${gwNext} team</h3><span class="note">Projected points on each shirt (captain's doubled) and chance of starting</span></div>${capSel}${selBar}${pitch}</div>
+        <div class="panel ed-team"><div class="panel-head"><h3>Your GW${gwNext} team</h3><span class="note">Each shirt: GW${gwNext} projected points (captain's doubled), next 3 fixtures by FDR, and his chance of starting the GW${gwNext} match</span></div>${capSel}${selBar}${pitch}</div>
         <div class="panel ed-pick" id="gwPick"></div>
       </div>
       <div class="panel adv"><div class="panel-head"><h3>Recommendations for GW${gwNext}</h3><span class="note">For the team as edited. Only what could change your XI, captain or bench order before the deadline.</span></div><div class="adv-grid">${advHTML}</div>
