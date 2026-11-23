@@ -3,6 +3,18 @@
 The site is a single page (`site/index.html`) served by a Cloudflare Worker (`worker/src/index.js`).
 `SETUP.md` covers hosting, secrets and deploys. Team FC27 (entry 1965328) is in mini-league "Bring It On!" (111899).
 
+## The mission
+The site exists to help FC27 **win the "Bring It On!" mini-league and climb the overall rankings**. The
+owner's standing request:
+- **Keep improving.** Look for better metrics, a stronger model and better decisions, and suggest
+  them proactively.
+- **Fix what's wrong.** If any data or insight on the site is incorrect or inconsistent, correct it
+  without waiting to be asked, and say what was wrong.
+- **Add a human touch.** Stats don't capture everything: form and confidence, a fixture the numbers
+  undervalue, manager behaviour, the mini-league situation. When judgement overrides the numbers,
+  say so, label it an Assumption, and give the reasoning. The owner's feedback rules below are
+  examples of this; add new ones as they come up.
+
 ## The analyst model: apply this to every insight and recommendation
 
 The owner's standing brief. Every new feature, insight or recommendation must follow it.
