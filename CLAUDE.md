@@ -77,6 +77,18 @@ The owner's standing brief. Every new feature, insight or recommendation must fo
   - Look for a genuine route to a haul.
   - Say how much expected value the risk gives up and what outcome makes it worthwhile.
 
+### Owner's rules (added from feedback; apply them everywhere)
+- **Momentum and fixture hold.** Don't sell a player this gameweek if he returned in his last match
+  (a goal, an assist, 8+ pts, or a clean sheet with 6+ pts for a defender or keeper, in 45+ minutes)
+  *and* his next fixture is easy (FDR 2 or lower, or his team is 75%+ to score, or 35%+ to keep a clean
+  sheet for defenders and keepers). Show it as "Keep X this week". Give his return, the fixture, the
+  5-gameweek gain you're passing up and the cost of waiting (e.g. a price rise), and revisit next week.
+  In the code this is `momentum(e)`, used in `gwBuys()`.
+- **Last-match check for buys.** Never suggest buying a player who played under 45 minutes in his
+  last match (`buySecure`). Name anyone skipped and say why.
+- **Template sales.** When suggesting selling a player most of the league owns, say what it risks
+  for the mini-league. When a downgrade frees money, say where it should go next.
+
 ### Output format for recommendations
 Every recommendation item should carry:
 - **a decision:** the headline action, such as "Start X over Y" or "Captain X, vice Y";

@@ -1247,7 +1247,7 @@ details.why[open] { flex-basis: 100%; }
     const need = [...new Set(ids)].filter((id) => !(id in FA.summ));
     if (D.source !== "live" || !need.length) return;
     await pool(need, 8, async (id) => {
-      try { const j = await api(`element-summary/${id}/`); FA.summ[id] = j.history.map((h) => [h.round, h.minutes, h.total_points]); const hp = j.history_past || []; FA.past[id] = hp.length ? hp[hp.length - 1].minutes : null; }
+      try { const j = await api(`element-summary/${id}/`); FA.summ[id] = j.history.map((h) => [h.round, h.minutes, h.total_points, h.goals_scored || 0, h.assists || 0, h.clean_sheets || 0]); const hp = j.history_past || []; FA.past[id] = hp.length ? hp[hp.length - 1].minutes : null; }
       catch (e) { FA.summ[id] = null; }
     });
     XS.clear();
@@ -1676,6 +1676,8 @@ details.why[open] { flex-basis: 100%; }
     });
     if (!moves.length) pr.push({ tag: "Transfer", cls: "", t: "No transfer is clearly worth making this week", d: `Nobody in your squad is injured or losing minutes badly, and no replacement projects at least 5 pts more over 5 gameweeks within your £${price(bank)}m budget. Roll the transfer.`, unc: "An injury in team news before the deadline could make a transfer worthwhile." });
     starts.forEach((r) => pr.push({ tag: "Line-up", cls: "acc", unc: r.startUnc || `${esc(r.e.web_name)}'s and ${esc(r.startOver.e.web_name)}'s team news.`, t: `Start ${esc(r.e.web_name)} over ${esc(r.startOver.e.web_name)}`, d: `${esc(r.e.web_name)} projects ${r.p1.toFixed(1)} pts next gameweek against ${esc(r.startOver.e.web_name)}'s ${r.startOver.p1.toFixed(1)}${r.sc ? ` and has a ${pct(r.sc.p)} chance of scoring` : ""}${num0(r.st.total_points) ? `, after ${r.st.total_points} pts on your bench in GW${gwCur}` : ""}.` }));
+    // momentum holds from the GW plan: in form with an easy fixture, so kept this week
+    (plan && plan.eng ? plan.eng.adv.filter((x) => x.sec === "buy" && x.hold) : []).forEach((x) => pr.push({ tag: "Hold", cls: "warn", t: x.t, d: x.d, unc: x.unc }));
     const leftFT = ft - moves.filter((m) => !m.hit).length;
     pr.push({ tag: "Captain", cls: "acc", unc: engCap ? engCap.unc : `${esc(cap.e.web_name)}'s minutes and team news.`, t: `Captain ${esc(cap.e.web_name)} in GW${gwNext}, vice ${esc(vice.e.web_name)}`,
       d: `${esc(cap.e.web_name)} has the highest projection in your XI (${cap.p.toFixed(1)} pts${nextFx(cap.e.team) ? ", " + fxLabel(nextFx(cap.e.team).list[0]) : ""}). ${leadCap ? `${lName} captained ${esc(E[leadCap[0]]?.web_name)} last week. ` : ""}${capDiff && capDiff.e.id !== cap.e.id ? `If you want to gamble on the gap, ${esc(capDiff.e.web_name)} (${capDiff.p.toFixed(1)} pts) is a captain ${lName} doesn't own.` : leaderOwns.has(cap.e.id) ? `${lName} owns him too, so this is the safe pick: it won't lose you ground.` : `${lName} doesn't own him, so a big haul swings the gap directly.`}` });
@@ -1983,6 +1985,20 @@ details.why[open] { flex-basis: 100%; }
     return { pStart, p60, p70, pPlay, pCameo, pAbsent, xMinsIfStart, playable, rStart, hasFx, label, n, st, f70, cameo, off, dnp, pattern, mins: h.slice().reverse().map((x) => `GW${x[0]} ${x[1]}'`), a };
   }
   const confCls = (p) => (p >= 0.85 ? "ok" : p >= 0.65 ? "" : p >= 0.4 ? "sev2" : "sev3");
+  // Momentum and fixture: a player who returned in his last match and has an easy next fixture is kept
+  // this gameweek rather than sold; the sale is revisited after the gameweek (the owner's rule).
+  function momentum(e) {
+    const h = FA.summ[e.id]; if (!h || !h.length) return { hold: false };
+    const r = Math.max(...h.map((x) => x[0])), last = h.filter((x) => x[0] === r);
+    const sum = (k) => last.reduce((a, x) => a + (x[k] || 0), 0);
+    const mins = sum(1), pts = sum(2), g = sum(3), a = sum(4), cs = sum(5);
+    const f = (teamFx[e.team][gwNext] || [])[0], o = teamOdds()[e.team];
+    const easy = !!f && (f.fdr <= 2 || (!!o && (e.element_type >= 3 ? o.score >= 0.75 : o.cs >= 0.35)));
+    const hot = mins >= 45 && (g + a >= 1 || pts >= 8 || (e.element_type <= 2 && cs >= 1 && pts >= 6));
+    const ret = [g ? `${g} goal${g > 1 ? "s" : ""}` : "", a ? `${a} assist${a > 1 ? "s" : ""}` : "", e.element_type <= 2 && cs ? "a clean sheet" : ""].filter(Boolean).join(" and ") || `${pts} pts`;
+    const fxT = f ? `${fxLabel(f)}${o ? `, ${tShort(e.team)} ${e.element_type >= 3 ? pct(o.score) + " to score" : pct(o.cs) + " clean sheet"}` : ` (FDR ${f.fdr})`}` : "";
+    return { hold: hot && easy, hot, easy, gw: r, pts, ret, fxT };
+  }
   // Last match: spots a sudden change in role or minutes (a cameo, a benching) that an average hides.
   const lastMatch = (e) => { const h = FA.summ[e.id]; if (!h || !h.length) return null; const r = Math.max(...h.map((x) => x[0])); return { gw: r, mins: h.filter((x) => x[0] === r).reduce((a, x) => a + x[1], 0) }; };
   // A player worth buying must be fit, an established starter, and not have dropped out of the side last time.
@@ -2239,17 +2255,19 @@ details.why[open] { flex-basis: 100%; }
     const sh0 = squadHealth(st.ids).n;
     let bank = c.bank, cur = [...st.ids]; const tc = {}; cur.forEach((id) => (tc[E[id].team] = (tc[E[id].team] || 0) + 1));
     const xi5 = (ids) => bestXI(ids, gp5).sum, xi1 = (ids) => bestXI(ids, gp1).sum;
-    const picks = [];
+    const picks = [], held = {};
     for (let round = 0; round <= Math.min(ftLeft, 4); round++) {
       const base5 = xi5(cur), sh = squadHealth(cur).n; let best = null;
       cur.forEach((id, slot) => {
         const e = E[id]; if (e.element_type === 1 && slot === 11 && availability(e) > 0) return; // backup keeper
-        const budget = bank + sellFor(id);
+        const budget = bank + sellFor(id), mo = momentum(e);
         candidates(e.element_type, budget, new Set(cur), tc, e.team, TO, new Set()).slice(0, 6).forEach((cd) => {
           const nid = cur.map((x) => (x === id ? cd.e.id : x)), g = xi5(nid) - base5;
           // below 14 playable, restoring a reliable body is worth ~1 pt of cover
           const cover = sh < 14 && !minutesProfile(e).playable && minutesProfile(cd.e).playable ? 1 : 0;
-          if (!best || g + cover > best.score) best = { out: e, inn: cd.e, gain: g, cover, score: g + cover, budget, nid, slot };
+          const opt = { out: e, inn: cd.e, gain: g, cover, score: g + cover, budget, nid, slot, mo };
+          if (mo.hold) { if (round === 0 && (!held[e.id] || opt.score > held[e.id].score)) held[e.id] = opt; return; }
+          if (!best || g + cover > best.score) best = opt;
         });
       });
       if (!best) break;
@@ -2266,15 +2284,27 @@ details.why[open] { flex-basis: 100%; }
         : pmO.cls === "down" ? `${nm(x.out)}'s price is falling (${pmO.txt.charAt(0).toLowerCase() + pmO.txt.slice(1)}): sell before it drops.`
         : hoursLeft > 30 ? "No price change expected: you can wait for the press conferences before committing." : "Deadline is close: no reason to wait.";
       const sh1 = squadHealth(x.nid).n;
+      // League risk: selling a template player (most of the league owns him) loses ground if he hauls.
+      const lo = own[x.out.id] || 0, L = leagueCtx();
+      const tmpl = lo >= 0.6 ? ` Risk: ${Math.round(lo * 100)}% of your league own ${nm(x.out)}, so if he hauls you lose ground on almost everyone; ${L.stance === "chase" ? "as you're chasing, that's a calculated risk worth taking for the xP gain" : L.stance === "protect" ? "as you're protecting a lead, think twice" : "only worth it because the xP gain is clear"}.` : "";
+      const freed = x.out.now_cost - x.inn.now_cost >= 25 ? ` It frees £${price(x.sellP - x.inn.now_cost)}m: plan where it goes next week rather than leaving it in the bank.` : "";
       return {
         sec: "buy", k: x.free ? "good" : "warn", lab: "Projection",
         t: `${x.free ? "" : "Worth a −4: "}Sell ${nm(x.out)}, buy ${nm(x.inn)} (${tShort(x.inn.team)}, £${price(x.inn.now_cost)}m)`,
-        d: `Your best XI gains ${fmt1(x.gain)} xP over the next 5 gameweeks${x.free ? "" : ` (${fmt1(x.gain - 4)} after the hit)`} and ${fmt1(x.g1)} in GW${gwNext}${x.slot > 10 ? ` (${nm(x.out)} is on your bench now)` : ""}.${i === 0 && x.free ? ` That beats rolling, which is worth about ${rollValue.toFixed(1)} pts of flexibility.` : ""} ${nm(x.out)} sells for £${price(x.sellP)}m (now £${price(x.out.now_cost)}m); leaves £${price(x.bankAfter)}m in the bank.${sh1 !== sh0 ? ` Playable squad ${sh0} → ${sh1} of 15.` : ""} ${timing}`,
+        d: `Your best XI gains ${fmt1(x.gain)} xP over the next 5 gameweeks${x.free ? "" : ` (${fmt1(x.gain - 4)} after the hit)`} and ${fmt1(x.g1)} in GW${gwNext}${x.slot > 10 ? ` (${nm(x.out)} is on your bench now)` : ""}.${i === 0 && x.free ? ` That beats rolling, which is worth about ${rollValue.toFixed(1)} pts of flexibility.` : ""} ${nm(x.out)} sells for £${price(x.sellP)}m (now £${price(x.out.now_cost)}m); leaves £${price(x.bankAfter)}m in the bank.${sh1 !== sh0 ? ` Playable squad ${sh0} → ${sh1} of 15.` : ""}${tmpl}${freed} ${timing}`,
         unc: `${nm(x.inn)}: ${pct(minutesProfile(x.inn).pStart)} to start in GW${gwNext}, next 3 ${[0, 1, 2].map((k) => (teamFx[x.inn.team][gwNext + k] || []).map(fxLabel).join(" + ") || "blank").join(", ")}. The 5-gameweek gain is a projection; fixtures after GW${gwNext} use FDR, not odds.`,
         why: whyHTML([x.out, x.inn]), act: { a: "xfer", out: x.out.id, inn: x.inn.id, gain: x.gain, hit: !x.free, bankAfter: x.bankAfter, l: `Make this transfer` },
       };
     });
-    if (!res.length) res.push({ sec: "buy", k: "good", lab: "Assumption", t: ftLeft ? `Roll your transfer` : "No upgrade worth a −4 hit", d: ftLeft ? `No affordable signing adds more than ${Math.max(3, rollValue + 1.5).toFixed(1)} xP to your best XI over 5 gameweeks (bank £${price(c.bank)}m), which is less than the value of rolling. You'll have ${Math.min(5, ftLeft + 1)} free transfer${ftLeft + 1 > 1 ? "s" : ""} next gameweek.` : `You've used your free transfers. No upgrade gains enough over 5 gameweeks to cover the 4-point cost.`, unc: "An injury in team news could make a transfer worthwhile: check before the deadline." });
+    // Players kept this week on momentum and fixture, even though the 5-gameweek model would sell them.
+    Object.values(held).filter((h) => h.score >= Math.max(3, rollValue + 1.5)).sort((a, b) => b.score - a.score).forEach((h) => {
+      const pmI = priceMove(h.inn);
+      res.push({ sec: "buy", k: "info", lab: "Assumption", hold: h.out.id, t: `Keep ${nm(h.out)} this week`,
+        d: `He returned in GW${h.mo.gw} (${h.mo.ret}) and has an easy next fixture: ${h.mo.fxT}. Selling him for ${nm(h.inn)} projects ${fmt1(h.gain)} pts over 5 gameweeks, but the move will still be there after GW${gwNext}, so ride the form this week and revisit then.${pmI.cls === "up" ? ` Cost of waiting: ${nm(h.inn)}'s price is rising (${pmI.txt.charAt(0).toLowerCase() + pmI.txt.slice(1)}), so he may cost £0.1m more.` : ""}`,
+        unc: `GW${gwNext} xP: ${nm(h.out)} ${gp1(h.out).toFixed(1)} vs ${nm(h.inn)} ${gp1(h.inn).toFixed(1)}. If ${nm(h.out)} blanks or his minutes drop, make the switch next week.`,
+        why: whyHTML([h.out, h.inn]) });
+    });
+    if (!res.some((x) => x.act)) res.push({ sec: "buy", k: "good", lab: "Assumption", t: ftLeft ? `Roll your transfer` : "No upgrade worth a −4 hit", d: ftLeft ? `No affordable signing adds more than ${Math.max(3, rollValue + 1.5).toFixed(1)} xP to your best XI over 5 gameweeks (bank £${price(c.bank)}m), which is less than the value of rolling. You'll have ${Math.min(5, ftLeft + 1)} free transfer${ftLeft + 1 > 1 ? "s" : ""} next gameweek.` : `You've used your free transfers. No upgrade gains enough over 5 gameweeks to cover the 4-point cost.`, unc: "An injury in team news could make a transfer worthwhile: check before the deadline." });
     GWE.buys = { key, out: res };
     return res;
   }
