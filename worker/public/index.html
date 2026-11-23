@@ -857,6 +857,16 @@ td.fx2-c { padding: 4px 3px; }
 @media (max-width: 700px) { .st-row { flex-wrap: wrap; } .st-row select { flex: 1 1 100%; } .lr-sum { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
 /* Player predictions: compare */
 .pr-mode button { min-width: 130px; }
+.tc-tbl td:first-child { white-space: normal; }
+.tc-tbl .tc-sec td { font-weight: 600; color: var(--muted); font-size: 12px; text-transform: uppercase; letter-spacing: .04em; padding-top: 12px; }
+.tc-tbl td.win { font-weight: 700; color: var(--good); }
+.tc-side { display: grid; gap: 14px; min-width: 0; } .tc-side .cmp-card, .tc-grid > .cmp-card { margin-top: 0; }
+.tc-grid { margin-top: 14px; }
+#fxAll[hidden], .panel[hidden] { display: none !important; }
+.tc-form { display: inline-flex; gap: 3px; margin-left: 6px; vertical-align: middle; }
+.tc-f { display: inline-grid; place-items: center; width: 20px; height: 20px; border-radius: 4px; font-size: 11px; font-weight: 700; color: #fff; }
+.tc-f.W { background: var(--good); } .tc-f.D { background: var(--muted); } .tc-f.L { background: var(--bad); }
+.tc-keys { margin: 6px 0; padding-left: 18px; } .tc-keys li { margin: 4px 0; }
 .pc-wrap { display: grid; gap: 14px; } .pc-wrap .cmp-card { margin-top: 0; }
 .pc-picks { display: grid; grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr); gap: 12px; align-items: end; }
 .pc-pick { display: grid; gap: 6px; min-width: 0; } .pc-pick .k { font-size: .78rem; color: var(--muted); font-weight: 600; } .pc-pick select { width: 100%; }
@@ -5460,7 +5470,7 @@ td.fx2-c { padding: 4px 3px; }
   // Overall uses FPL's official FDR (×2, on a 1–10 scale) unless "Team strength" is on. Team strength is
   // built from this season's data (team xG and goals for attack; xG and goals conceded for defence),
   // with bookmaker odds for the next gameweek. Cells are always coloured by FPL's FDR.
-  const FXS = { sort: "overall", order: "best", team: "all", g0: null, g1: null, str: false };
+  const FXS = { sort: "overall", order: "best", team: "all", g0: null, g1: null, str: false, mode: "all" };
   let TSTR = null;
   function teamStrength() {
     if (TSTR && TSTR.gw === gwNext && TSTR.odds === FA.odds) return TSTR;
@@ -5508,7 +5518,9 @@ td.fx2-c { padding: 4px 3px; }
     const sel = (id, opts, v) => `<select id="${id}">${opts.map(([k, l]) => `<option value="${k}" ${String(k) === String(v) ? "selected" : ""}>${l}</option>`).join("")}</select>`;
     $("#app").innerHTML = `
     <section class="view">
-      <div class="panel-head"><h2>Fixtures</h2><span class="note">Rank every team's upcoming run by fixture difficulty, expected goals or clean sheet probability.</span></div>
+      <div class="panel-head"><h2>Fixtures</h2><div class="seg pr-mode" role="group" aria-label="View"><button data-fxmode="all" aria-pressed="${FXS.mode !== "compare"}">All teams</button><button data-fxmode="compare" aria-pressed="${FXS.mode === "compare"}">Compare two teams</button></div></div>
+      <p class="note">${FXS.mode === "compare" ? "Pick two teams in the Rotation table to see who plays the easier fixture each week, then compare their season data and next-gameweek odds." : "Rank every team's upcoming run by fixture difficulty, expected goals or clean sheet probability."}</p>
+      <div id="fxAll" ${FXS.mode === "compare" ? "hidden" : ""}>
       <div class="panel fx-filters">
         <label><span class="k">Sort by</span>${sel("fxSort", [["overall", "Overall"], ["attack", "Attack"], ["defence", "Defence"], ["goals", "Goals"], ["cs", "Clean sheets"]], FXS.sort)}</label>
         <label><span class="k">Order</span>${sel("fxOrder", [["best", "Best runs first"], ["worst", "Worst runs first"]], FXS.order)}</label>
@@ -5519,10 +5531,13 @@ td.fx2-c { padding: 4px 3px; }
       </div>
       <div class="panel" id="fxTable"></div>
       <div class="panel" id="fxMine"></div>
-      <div class="panel" id="rotation">${rotationHTML()}</div>
+      </div>
+      <div class="panel" id="rotation" ${FXS.mode === "compare" ? "" : "hidden"}>${rotationHTML()}</div>
+      <div class="panel" id="teamCompare" ${FXS.mode === "compare" ? "" : "hidden"}></div>
       ${freshness()}
     </section>`;
-    wireRotation();
+    wireRotation(); drawTeamCompare();
+    $("#app").querySelectorAll("[data-fxmode]").forEach((b) => b.addEventListener("click", () => { FXS.mode = b.dataset.fxmode; renderFixtures(); }));
     const redraw = () => drawFxTable();
     $("#fxSort").addEventListener("change", (e) => { FXS.sort = e.target.value; redraw(); });
     $("#fxOrder").addEventListener("change", (e) => { FXS.order = e.target.value; redraw(); });
@@ -5615,12 +5630,79 @@ td.fx2-c { padding: 4px 3px; }
   }
   function wireRotation() {
     const box = $("#rotation"); if (!box) return;
-    const redraw = () => { box.innerHTML = rotationHTML(); wireRotation(); };
+    const redraw = () => { box.innerHTML = rotationHTML(); wireRotation(); drawTeamCompare(); };
     const setPair = (a, b) => { store.set("rotPair", [a, b]); redraw(); };
     $("#rotA").addEventListener("change", (e) => setPair(Number(e.target.value), Number($("#rotB").value)));
     $("#rotB").addEventListener("change", (e) => setPair(Number($("#rotA").value), Number(e.target.value)));
     $("#rotN").addEventListener("change", (e) => { store.set("rotN", Number(e.target.value)); redraw(); });
     box.querySelectorAll("[data-pair]").forEach((btn) => btn.addEventListener("click", () => { const [x, y] = btn.dataset.pair.split(",").map(Number); setPair(x, y); }));
+  }
+
+  // ---------- Fixtures: compare two teams (uses the Rotation pair) ----------
+  // Season profile of a team from FPL's Opta data and results.
+  function teamProfile(t) {
+    const res = D.fixtures.filter((f) => f[7] && f[9] != null && (f[2] === t || f[3] === t)).sort((a, b) => Date.parse(a[6]) - Date.parse(b[6]));
+    const r = { g: 0, w: 0, d: 0, l: 0, gf: 0, ga: 0, cs: 0, home: { g: 0, gf: 0, ga: 0 }, away: { g: 0, gf: 0, ga: 0 }, form: [] };
+    res.forEach((f) => { const h = f[2] === t, gf = h ? f[9] : f[10], ga = h ? f[10] : f[9], v = h ? r.home : r.away; r.g++; r.gf += gf; r.ga += ga; v.g++; v.gf += gf; v.ga += ga; if (ga === 0) r.cs++; const o = gf > ga ? "W" : gf < ga ? "L" : "D"; r[o.toLowerCase()]++; r.form.push({ o, s: `${gf}–${ga}`, opp: h ? f[3] : f[2], home: h }); });
+    const pl = Object.values(E).filter((e) => e.team === t);
+    const sum = (k) => pl.reduce((s, e) => s + (+e[k] || 0), 0);
+    r.xg = sum("expected_goals"); r.xa = sum("expected_assists"); r.goals = sum("goals_scored");
+    r.xga = pl.filter((e) => e.element_type === 1).reduce((s, e) => s + (+e.expected_goals_conceded || 0), 0);
+    r.dc = sum("defensive_contribution"); r.bonus = sum("bonus");
+    const g = Math.max(1, r.g);
+    r.pg = { gf: r.gf / g, ga: r.ga / g, xg: r.xg / g, xa: r.xa / g, xga: r.xga / g, dc: r.dc / g, pts: (3 * r.w + r.d) / g };
+    r.top = pl.filter((e) => e.minutes >= 270 && e.element_type >= 2).sort((a, b) => (+b.expected_goal_involvements_per_90 || 0) - (+a.expected_goal_involvements_per_90 || 0)).slice(0, 3);
+    r.def = pl.filter((e) => e.minutes >= 270 && e.element_type === 2).sort((a, b) => (+b.defensive_contribution_per_90 || 0) - (+a.defensive_contribution_per_90 || 0))[0];
+    r.gk = pl.filter((e) => e.element_type === 1).sort((a, b) => b.minutes - a.minutes)[0];
+    r.pens = pl.find((e) => e.penalties_order === 1); r.corners = pl.find((e) => e.corners_and_indirect_freekicks_order === 1); r.fk = pl.find((e) => e.direct_freekicks_order === 1);
+    r.odds = teamOdds()[t] || null;
+    let s = 0, n = 0; for (let k = 0; k < 5 && gwNext + k <= 38; k++) (teamFx[t][gwNext + k] || []).forEach((f) => { s += f.fdr; n++; }); r.fdr5 = n ? s / n : 5;
+    return r;
+  }
+  function teamCompareHTML(a, b) {
+    const A = teamProfile(a), B = teamProfile(b), TA = T[a], TB = T[b], nm = (t) => esc(T[t].name);
+    const f2 = (v) => (+v).toFixed(2), f1 = (v) => (+v).toFixed(1);
+    // [label, A value, B value, format, lower is better]
+    const sec = (title, rows) => `<tr class="tc-sec"><td colspan="3">${title}</td></tr>` + rows.map(([l, va, vb, f, low, nohl]) => { const w = va === vb || nohl ? "" : (va > vb) !== !!low ? "a" : "b"; return `<tr><td>${l}</td><td class="n ${w === "a" ? "win" : ""}">${f(va)}</td><td class="n ${w === "b" ? "win" : ""}">${f(vb)}</td></tr>`; }).join("");
+    const formChips = (r) => r.form.slice(-5).map((x) => `<span class="tc-f ${x.o}" title="${x.home ? "v" : "@"} ${esc(T[x.opp].short)} ${x.s}">${x.o}</span>`).join("");
+    const keyP = (r) => [...r.top.map((e) => `<li><strong>${esc(e.web_name)}</strong> <span class="note">${POSN(e)} · xGI ${(+e.expected_goal_involvements_per_90 || 0).toFixed(2)}/90 · £${price(e.now_cost)}m · ${Math.round((own[e.id] || 0) * 100)}% league</span></li>`), r.def ? `<li><strong>${esc(r.def.web_name)}</strong> <span class="note">DEF · defcon ${(+r.def.defensive_contribution_per_90 || 0).toFixed(1)}/90 · £${price(r.def.now_cost)}m</span></li>` : "", r.gk ? `<li><strong>${esc(r.gk.web_name)}</strong> <span class="note">GK · saves ${(+r.gk.saves_per_90 || 0).toFixed(1)}/90 · £${price(r.gk.now_cost)}m</span></li>` : ""].join("");
+    const sp = (r) => [r.pens ? `Pens: ${esc(r.pens.web_name)}` : "", r.corners ? `Corners: ${esc(r.corners.web_name)}` : "", r.fk ? `Free kicks: ${esc(r.fk.web_name)}` : ""].filter(Boolean).join(" · ") || "Not listed";
+    // insights: the analyst read of the two sides
+    const ins = [];
+    const att = A.pg.xg - B.pg.xg, def = A.pg.xga - B.pg.xga, fin = (r) => r.gf - r.xg;
+    { const aS = A.pg.xg + (A.odds ? A.odds.lam : A.pg.xg) - (B.pg.xg + (B.odds ? B.odds.lam : B.pg.xg)), dS = (B.pg.xga - A.pg.xga) + (A.odds && B.odds ? (A.odds.cs - B.odds.cs) * 2 : 0) + (B.fdr5 - A.fdr5) * 0.2;
+      ins.push({ k: "good", t: `Decision: attackers from ${nm(aS >= 0 ? a : b)}, defenders and keeper from ${nm(dS >= 0 ? a : b)}`, d: `Built from season xG and xG conceded per game, the GW${gwNext} odds and the next-5 FDR. ${Math.abs(aS) < 0.15 && Math.abs(dS) < 0.15 ? "Both calls are close, so let fixtures week by week decide." : ""}` }); }
+    if (Math.abs(att) >= 0.2) ins.push({ k: "", t: `Attack edge: ${nm(att > 0 ? a : b)}`, d: `${f2(Math.max(A.pg.xg, B.pg.xg))} xG a game against ${f2(Math.min(A.pg.xg, B.pg.xg))}. Their attackers have the better underlying chances.` });
+    if (Math.abs(def) >= 0.2) ins.push({ k: "", t: `Defence edge: ${nm(def < 0 ? a : b)}`, d: `${f2(Math.min(A.pg.xga, B.pg.xga))} xG conceded a game against ${f2(Math.max(A.pg.xga, B.pg.xga))}: the safer source of clean sheets.` });
+    [[a, A], [b, B]].forEach(([t, r]) => { const d = fin(r); if (Math.abs(d) >= 3) ins.push({ k: d > 0 ? "warn" : "good", t: `${nm(t)} are ${d > 0 ? "overperforming" : "underperforming"} their xG`, d: `${r.gf} goals from ${f1(r.xg)} xG (${d > 0 ? "+" : ""}${f1(d)}). ${d > 0 ? "Expect fewer goals if their chances don't improve." : "Goals should come if the chances keep coming."}` }); });
+    if (Math.abs(A.fdr5 - B.fdr5) >= 0.4) ins.push({ k: "", t: `Easier next 5: ${nm(A.fdr5 < B.fdr5 ? a : b)}`, d: `Average FDR ${f1(Math.min(A.fdr5, B.fdr5))} against ${f1(Math.max(A.fdr5, B.fdr5))}. Use the rotation table above to pick the better team each week.` });
+    if (A.odds && B.odds) ins.push({ k: "", t: `GW${gwNext} odds`, d: `${nm(a)}: ${pct(A.odds.win)} to win, ${pct(A.odds.score)} to score, ${pct(A.odds.cs)} clean sheet. ${nm(b)}: ${pct(B.odds.win)} to win, ${pct(B.odds.score)} to score, ${pct(B.odds.cs)} clean sheet.` });
+    const bestA = [...A.top, ...B.top].filter((e) => buySecure(e).ok).sort((x, y) => gp5(y) - gp5(x))[0];
+    if (bestA) ins.push({ k: "good", t: `Best asset across both: ${esc(bestA.web_name)} (${tShort(bestA.team)})`, d: `${gp5(bestA).toFixed(1)} projected pts over the next 5 gameweeks, ${Math.round((own[bestA.id] || 0) * 100)}% of your league own him.` });
+    return `<div class="panel-head"><h2>${nm(a)} vs ${nm(b)}</h2><span class="note">Season data from FPL (Opta) and results · change the two teams in the Rotation table above</span></div>
+      <ul class="insights tc-ins">${ins.map((i) => `<li class="${i.k}"><div><div class="t">${i.t} <span class="lab lab-proj">Projection</span></div><div class="d">${i.d}</div></div></li>`).join("")}</ul>
+      <div class="grid-2 tc-grid">
+        <div class="cmp-card"><h3>Head-to-head (season)</h3><div class="tbl-wrap"><table class="cmp-tot tc-tbl"><thead><tr><th></th><th class="n"><span class="sw-me"></span> ${esc(TA.short)}</th><th class="n"><span class="sw-them"></span> ${esc(TB.short)}</th></tr></thead><tbody>
+          ${sec("Results", [["Played", A.g, B.g, String], ["Won–drawn–lost", A.w * 3 + A.d + A.g / 1000, B.w * 3 + B.d + B.g / 1000, (v) => (v === A.w * 3 + A.d + A.g / 1000 ? `${A.w}–${A.d}–${A.l}` : `${B.w}–${B.d}–${B.l}`)], ["Points per game", A.pg.pts, B.pg.pts, f2]])}
+          ${sec("Attack", [["Goals per game", A.pg.gf, B.pg.gf, f2], ["xG per game", A.pg.xg, B.pg.xg, f2], ["xA per game", A.pg.xa, B.pg.xa, f2], ["Goals minus xG", A.gf - A.xg, B.gf - B.xg, (v) => (v >= 0 ? "+" : "") + f1(v), false, true]])}
+          ${sec("Defence", [["Conceded per game", A.pg.ga, B.pg.ga, f2, true], ["xG conceded per game", A.pg.xga, B.pg.xga, f2, true], ["Clean sheets", A.cs, B.cs, String], ["Defensive actions per game (team)", A.pg.dc, B.pg.dc, f1]])}
+          <tr class="tc-sec"><td colspan="3">Home and away (scored – conceded per game)</td></tr>
+          ${[["Home", A.home, B.home], ["Away", A.away, B.away]].map(([l, x, y]) => { const v = (r) => r.g ? `${f1(r.gf / r.g)} – ${f1(r.ga / r.g)}` : "–", d = (r) => r.g ? (r.gf - r.ga) / r.g : -9; return `<tr><td>${l}</td><td class="n ${d(x) > d(y) ? "win" : ""}">${v(x)}</td><td class="n ${d(y) > d(x) ? "win" : ""}">${v(y)}</td></tr>`; }).join("")}
+          ${sec("Next 5 gameweeks", [["Average FDR", A.fdr5, B.fdr5, f1, true], ...(A.odds && B.odds ? [[`GW${gwNext} chance to score`, A.odds.score, B.odds.score, pct], [`GW${gwNext} clean sheet chance`, A.odds.cs, B.odds.cs, pct]] : [])])}
+        </tbody></table></div></div>
+        <div class="tc-side">
+          ${[[a, A, "sw-me"], [b, B, "sw-them"]].map(([t, r, sw]) => `<div class="cmp-card"><h3><span class="${sw}"></span> ${nm(t)} <span class="tc-form">${formChips(r)}</span></h3>
+            <p class="note">Last 5 (oldest first): ${r.form.slice(-5).map((x) => `${x.home ? "v" : "@"} ${esc(T[x.opp].short)} ${x.s}`).join(", ") || "–"}</p>
+            <ul class="tc-keys">${keyP(r)}</ul><p class="note">${sp(r)}</p></div>`).join("")}
+        </div>
+      </div>
+      <p class="note">Team xG and xA are the sum of the players' FPL (Opta) numbers; xG conceded is the keepers' combined total. Shots, possession and other match-level Opta stats aren't in FPL's free data. <span class="lab lab-fact">Fact</span> results and season data, <span class="lab lab-proj">Projection</span> the reads.</p>`;
+  }
+  function drawTeamCompare() {
+    const box = $("#teamCompare"); if (!box) return;
+    const a = +($("#rotA")?.value || 0), b = +($("#rotB")?.value || 0);
+    if (!a || !b || a === b) { box.innerHTML = `<p class="note">Pick two different teams in the Rotation table above.</p>`; return; }
+    box.innerHTML = teamCompareHTML(a, b);
   }
 
   // ---------- bookmaker odds ----------

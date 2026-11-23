@@ -161,6 +161,14 @@ bench order, transfers or chip before the deadline?*
   and defence from 60% xG conceded and 40% goals conceded. `fixtureGoals()` uses the bookmaker odds
   for the next gameweek. Cells are always coloured by FPL's FDR. The Rotation section
   (`rotationHTML()`) is the owner's and stays as it is.
+- **Fixtures: All teams / Compare two teams:** `FXS.mode` toggles a seg `[data-fxmode]`. "All teams" shows
+  the filters and table (`#fxAll`); "Compare two teams" shows the Rotation section, which picks the pair
+  (`rotPair`), and `drawTeamCompare()` / `teamCompareHTML(a, b)` below it. `teamProfile(t)` builds
+  results, W-D-L, form, home and away, team xG and xA (player sums), xG conceded (keepers), clean sheets,
+  defensive actions, key players, set-piece takers, the next GW's odds and the next-5 FDR. Insights
+  include a Decision (which team to take attackers and defenders from), xG over- or underperformance,
+  the easier run and the best asset that passes `buySecure`. `wireRotation()`'s redraw also redraws
+  the comparison.
 - **Matches tab:** `renderMatches()`. It shows every fixture of a gameweek from FPL's `fixtures/` data:
   the score, scorers, assists, own goals, penalties, red cards and bonus. A "Your players" panel per
   fixture gives that gameweek's squad, from `myPicksFor(gw)`, with minutes, points and Opta stats
