@@ -106,7 +106,7 @@ bench order, transfers or chip before the deadline?*
 - **Your official team:** `loadOfficial()` sets `OFF` from FPL's Pick Team (`/api/my-team`, which needs
   the FPL_LOGIN secret). `OFF` holds the GW squad, bank, free transfers left and FPL's own sale and
   purchase prices. The Transfer planner (`baseSquad()`, `sellPrice()`, `boughtPrice()`), the
-  Overview's free-transfers box and the GW12 engine all read it, so every tab starts from the real
+  Overview's free-transfers box, Insights, Fixtures and the GW12 engine all read it, so every tab starts from the real
   team. `squadOf(myM)` is last gameweek's team: use it only for last gameweek's results.
 - **Current gameweek tab:** `gwAdvice()` for the recommendations, `gwBuys()` for transfers,
   `gwChips()` for chips, `bestXI()`, `autoSub()` and `squadHealth()`.

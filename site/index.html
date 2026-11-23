@@ -1860,7 +1860,10 @@ details.why[open] { flex-basis: 100%; }
     if (!GWE.mtP) GWE.mtP = fetch("api/my-team", { cache: "no-store" }).then((r) => (r.ok ? r.json() : null)).catch(() => null);
     const mt = await GWE.mtP;
     if (!mt || !(mt.ok || mt.last)) return null;
+    // odds, news and minutes must be in before any projection is cached
+    try { await ensureFA((OFF ? OFF.picks : squadOf(myM)).map((p) => p[0])); } catch (e) { /* season data used */ }
     if (!GWE.base) gwBuild(mt);
+    GWE.TO = null;
     try { await fetchSumm(GWE.base.ids); } catch (e) { /* season minutes used */ }
     const B = GWE.base;
     return { base: B, adv: gwAdvice({ ids: [...B.ids], cap: B.cap, vc: B.vc, xf: [] }) };
@@ -3525,6 +3528,11 @@ details.why[open] { flex-basis: 100%; }
   const gwPoints = (id, gw) => { if (gw === gwCur) return E[id]?.event_points ?? null; const h = FA.summ[id]; if (!h) return null; return h.filter((x) => x[0] === gw).reduce((a, x) => a + (x[2] || 0), 0); };
 
   async function renderInsights() {
+    if (OFF === undefined) {
+      $("#app").innerHTML = `<section class="view"><p class="empty">Loading your GW${gwNext} team from FPL…</p></section>`;
+      loadOfficial().then(() => gwEngine().catch(() => null)).then((eng) => { GWE.eng = eng; if (view === "insights") renderInsights(); });
+      return;
+    }
     $("#app").innerHTML = `<section class="view"><div class="panel-head"><h2>Insights</h2></div><p class="empty">Loading each gameweek's captains, top scorers and your league's squads… The first load of a past gameweek takes a few seconds; after that it's instant.</p></section>`;
     const cur = D.events.find((e) => e.id === gwCur);
     const evs = D.events.filter((e) => e.id <= gwCur && (e.finished || e.id === gwCur || e.data_checked)).sort((a, b) => b.id - a.id);
@@ -3631,7 +3639,7 @@ details.why[open] { flex-basis: 100%; }
     try { await ensureFA(pre); } catch (e) { /* season minutes used */ }
     if (!document.body.contains(box)) return;
     const TO = teamOdds();
-    const mine = new Set(squadOf(myM).map((p) => p[0]));
+    const mine = new Set(baseSquad().map((p) => p[0]));
     const lgOwn = {}; members.forEach((x) => squadOf(x.m).forEach((p) => (lgOwn[p[0]] = (lgOwn[p[0]] || 0) + 1)));
     const rows = pre.map((id) => E[id]).filter((e) => sevOf(risks(e, TO)) < 3).map((e) => { const c = scoreChance(e, TO); return c && { e, c, pts: 2 * expertScore(e, 1, TO) }; }).filter(Boolean);
     const sort = store.get("capSort", "pts") === "p" ? "p" : "pts";
@@ -3774,7 +3782,7 @@ details.why[open] { flex-basis: 100%; }
       const h = x.m.history.find((r) => r[0] === g);
       per.push({ x, i, o, fh, wc, cost: h ? h[4] : 0 });
     });
-    const mine = new Set(squadOf(myM).map((p) => p[0]));
+    const mine = new Set(baseSquad().map((p) => p[0]));
     const list = (m, cls) => Object.entries(m).sort((a, b) => b[1].length - a[1].length).slice(0, 8).map(([el, xs]) => `<li><span><strong>${esc(E[el]?.web_name)}</strong>${mine.has(+el) ? ' <span class="pill acc">Yours</span>' : ""} <small class="note">${POSN(E[el])} · ${tShort(E[el].team)} · £${price(E[el].now_cost)}m</small></span><span class="${cls}">${xs.length} · ${xs.map((x) => esc(firstName(x))).join(", ")}</span></li>`).join("") || '<li class="empty">None</li>';
     INS.t10moves = { ins, outs };
     box.innerHTML = `
@@ -3806,7 +3814,7 @@ details.why[open] { flex-basis: 100%; }
   }
   function renderTeamForm() {
     const box = $("#teamForm"); if (!box) return;
-    const F = teamForm(), mineTeams = new Set(squadOf(myM).map((p) => E[p[0]].team));
+    const F = teamForm(), mineTeams = new Set(baseSquad().map((p) => E[p[0]].team));
     const arrow = (d, good) => (Math.abs(d) < 0.15 ? '<span class="note">→</span>' : (d > 0) === good ? `<span class="up">▲ ${Math.abs(d).toFixed(2)}</span>` : `<span class="down">▼ ${Math.abs(d).toFixed(2)}</span>`);
     const rows = D.teams.map((t) => ({ t, ...F[t.id] })).sort((a, b) => (b.f - b.a) - (a.f - a.a));
     box.innerHTML = `
@@ -3823,7 +3831,7 @@ details.why[open] { flex-basis: 100%; }
     const gws = []; for (let g = gwNext; g < gwNext + 5 && g <= 38; g++) gws.push(g);
     const cs = (t, g, i) => (teamFx[t][g] || []).map((f, k) => { if (i === 0 && k === 0 && TO[t]) return TO[t].cs; const lam = (0.5 * F[t].a + 0.5 * F[f.opp].f) * (f.home ? 0.9 : 1.1); return Math.exp(-Math.max(0.2, lam)); });
     const rows = D.teams.map((t) => { const v = gws.map((g, i) => cs(t.id, g, i)); const flat = v.flat(); return { t, v, avg: flat.length ? flat.reduce((a, b) => a + b, 0) / gws.length : 0 }; }).sort((a, b) => b.avg - a.avg);
-    const mineTeams = {}; squadOf(myM).forEach((p) => { const e = E[p[0]]; if (e.element_type <= 2) mineTeams[e.team] = (mineTeams[e.team] || 0) + 1; });
+    const mineTeams = {}; baseSquad().forEach((p) => { const e = E[p[0]]; if (e.element_type <= 2) mineTeams[e.team] = (mineTeams[e.team] || 0) + 1; });
     const cell = (t, g, arr) => { const l = teamFx[t][g] || []; if (!l.length) return '<td class="cs-cell"><span class="note">Blank</span></td>'; return `<td class="cs-cell">${arr.map((p, k) => `<span class="cs-chip" style="--p:${p.toFixed(3)}" title="${esc(T[t].name)} v ${esc(T[l[k].opp].name)}: ${pct(p)} clean sheet chance">${pct(p)} <small>${esc(tShort(l[k].opp))}${l[k].home ? "" : " (A)"}</small></span>`).join("")}</td>`; };
     box.innerHTML = `
       <div class="panel-head"><h3>Clean sheet chances, next 5 gameweeks</h3><span class="note">Every club, best defensive run first</span></div>
@@ -3835,7 +3843,7 @@ details.why[open] { flex-basis: 100%; }
   // 5. Penalty and set-piece takers, with changes since this browser last looked
   function renderSetPieces() {
     const box = $("#setPieces"); if (!box) return;
-    const mine = new Set(squadOf(myM).map((p) => p[0]));
+    const mine = new Set(baseSquad().map((p) => p[0]));
     const by = (t, key, n) => Object.values(E).filter((e) => e.team === t && e[key] === n);
     const fmtP = (arr) => arr.length ? arr.map((e) => `${esc(e.web_name)}${mine.has(e.id) ? ' <span class="pill acc">Yours</span>' : ""} <small class="note">£${price(e.now_cost)}m</small>`).join(", ") : '<span class="note">–</span>';
     const snap = {}; D.teams.forEach((t) => (snap[t.id] = [by(t.id, "penalties_order", 1).map((e) => e.id), by(t.id, "corners_and_indirect_freekicks_order", 1).map((e) => e.id), by(t.id, "direct_freekicks_order", 1).map((e) => e.id)]));
@@ -3853,7 +3861,7 @@ details.why[open] { flex-basis: 100%; }
   // 7. Price risers and fallers across all players (FPL's own progress and projections)
   function renderPriceWatch() {
     const box = $("#priceWatch"); if (!box) return;
-    const mine = new Set(squadOf(myM).map((p) => p[0])), top = top10Rivals();
+    const mine = new Set(baseSquad().map((p) => p[0])), top = top10Rivals();
     const own10 = {}; top.forEach((x) => squadOf(x.m).forEach((p) => (own10[p[0]] = (own10[p[0]] || 0) + 1)));
     const all = Object.values(E).map((e) => ({ e, pm: priceMove(e) }));
     const risers = all.filter((x) => x.pm.cls === "up").sort((a, b) => b.pm.pct - a.pm.pct).slice(0, 10);
@@ -3885,11 +3893,11 @@ details.why[open] { flex-basis: 100%; }
       return { games: games.length, starts, early, avgM, last3, idx };
     };
     const top = top10Rivals(), own10 = {}; top.forEach((x) => squadOf(x.m).forEach((p) => (own10[p[0]] = (own10[p[0]] || 0) + 1)));
-    const mineIds = squadOf(myM).map((p) => p[0]);
+    const mineIds = baseSquad().map((p) => p[0]);
     const tmpl = Object.keys(own10).map(Number).filter((id) => !mineIds.includes(id) && own10[id] >= 3 && E[id]?.element_type > 1);
     const rows = [...mineIds.map((id) => ({ id, mine: true })), ...tmpl.map((id) => ({ id, mine: false }))].map((r) => ({ ...r, e: E[r.id], s: sec(E[r.id]) })).filter((r) => r.s && r.e.element_type > 1).sort((a, b) => a.s.idx - b.s.idx);
     const pill = (i) => (i >= 80 ? '<span class="pill ok">Secure</span>' : i >= 60 ? '<span class="pill sev2">Watch</span>' : '<span class="pill sev3">Risk</span>');
-    INS.minSec = rows.filter((r) => r.mine && r.s.idx < 60 && squadOf(myM).find((p) => p[0] === r.id)[1] <= 11);
+    INS.minSec = rows.filter((r) => r.mine && r.s.idx < 60 && baseSquad().find((p) => p[0] === r.id)[1] <= 11);
     box.innerHTML = `
       <div class="panel-head"><h3>Minutes security</h3><span class="note">Your outfield players and those owned by 3+ of the top 10, riskiest first</span></div>
       <div class="tbl-wrap"><table class="cards-sm ms-tbl"><thead><tr><th>Player</th><th>Security</th><th class="n">Index</th><th class="n">Starts</th><th class="n">Subbed off early</th><th class="n">Avg mins</th><th class="n">Last 3</th></tr></thead>
@@ -3905,7 +3913,7 @@ details.why[open] { flex-basis: 100%; }
     const box = $("#insSummary"); if (!box) return;
     INS.swap = null;
     const TO = teamOdds();
-    const mineIds = squadOf(myM).map((p) => p[0]), mine = new Set(mineIds);
+    const mineIds = baseSquad().map((p) => p[0]), mine = new Set(mineIds);
     const lgOwn = {}; members.forEach((x) => squadOf(x.m).forEach((p) => (lgOwn[p[0]] = (lgOwn[p[0]] || 0) + 1)));
     const N = members.length;
     const fx = (e) => { const l = teamFx[e.team][gwNext] || []; return l.length ? l.map((f) => `${f.home ? "v" : "@"} ${tShort(f.opp)}`).join(", ") : "blank"; };
@@ -3916,6 +3924,12 @@ details.why[open] { flex-basis: 100%; }
     const cap = (INS.cap || []).slice().sort((a, b) => b.pts - a.pts);
     if (cap.length) {
       const c = cap[0], diff = cap.find((r) => r !== c && (lgOwn[r.e.id] || 0) <= 3 && r.pts >= c.pts * 0.8);
+      const ec = GWE.eng && GWE.eng.adv.find((x) => x.sec === "cap" && x.capId);
+      if (ec) {
+        const e = E[ec.capId], v = E[ec.vcId];
+        cards.push({ k: "cap", label: "Captain (your GW plan)", head: e.web_name, mine: true, sub: `${gp1(e).toFixed(1)} xP · ${pct((scoreChance(e, TO) || {}).p || 0)} to score · ${fx(e)} · vice ${esc(v.web_name)}`,
+          foot: `${ec.t.includes("close call") ? "Close call; see the Current gameweek tab for why. " : ""}${!mine.has(c.e.id) ? `Top projected captain overall: <strong>${esc(c.e.web_name)}</strong> (${c.pts.toFixed(1)} pts), not in your squad` : `Owned by ${lgOwn[e.id] || 0} of ${N} in your league`}` });
+      } else
       cards.push({ k: "cap", label: "Captain", head: c.e.web_name, mine: mine.has(c.e.id),
         sub: `${c.pts.toFixed(1)} projected captain pts · ${pct(c.c.p)} to score · ${fx(c.e)}`,
         foot: diff ? `Differential: <strong>${esc(diff.e.web_name)}</strong> (${diff.pts.toFixed(1)} pts, ${lgOwn[diff.e.id] || 0} of ${N} own)` : `Owned by ${lgOwn[c.e.id] || 0} of ${N} in your league` });
@@ -3927,17 +3941,22 @@ details.why[open] { flex-basis: 100%; }
       const bv = INS.value.best.find((d) => !mine.has(d.e.id));
       if (bv) cards.push({ k: "buy", label: "Best value buy", head: bv.e.web_name, sub: `£${bv.x.toFixed(1)}m · ${bv.y.toFixed(1)} pts over 4 GWs · +${bv.res.toFixed(1)} above the value line`, foot: `${POSN(bv.e)} · ${tShort(bv.e.team)} · ${lgOwn[bv.e.id] || 0} of ${N} own` });
       const fit = (d) => INS.value.icpt + INS.value.slope * d;
-      const starters = squadOf(myM).filter((p) => p[1] <= 11).map((p) => E[p[0]]);
+      const starters = baseSquad().filter((p) => p[1] <= 11).map((p) => E[p[0]]);
       const myVal = starters.filter((e) => e.element_type >= 2 && e.minutes >= 300).map((e) => { const y = expertScore(e, 4, TO); return { e, y, res: y - fit(e.now_cost / 10) }; }).sort((a, b) => a.res - b.res);
       const w = myVal[0];
       if (w && w.res < -2) {
-        const budget = (myM.picks?.bank ?? lastHist(myM)[8]) + sellPrice(w.e.id);
+        const budget = (OFF && OFF.bank != null ? OFF.bank : myM.picks?.bank ?? lastHist(myM)[8]) + sellPrice(w.e.id);
         const tc = {}; mineIds.forEach((id) => (tc[E[id].team] = (tc[E[id].team] || 0) + 1));
         const rep = Object.values(E).filter((e) => e.element_type === w.e.element_type && !mine.has(e.id) && e.now_cost <= budget && okFit(e) && e.minutes >= 300 && ((tc[e.team] || 0) - (e.team === w.e.team ? 1 : 0)) < 3)
           .map((e) => ({ e, y: expertScore(e, 4, TO) })).sort((a, b) => b.y - a.y)[0];
         INS.swap = rep && rep.y > w.y + 3 ? { out: w.e, inn: rep.e, gain: rep.y - w.y } : null;
+        // One decision across the site: defer to the GW transfer plan (best-XI gain, free transfers, bank).
+        const planBuys = GWE.eng ? GWE.eng.adv.filter((x) => x.act && x.act.a === "xfer") : null;
+        const planFor = planBuys && planBuys.find((x) => x.act.out === w.e.id);
+        const planTxt = !planBuys ? "" : planFor ? ` <strong>Your GW${gwNext} plan sells him for ${esc(E[planFor.act.inn].web_name)}</strong>.` : planBuys.length ? ` Your GW${gwNext} plan spends your free transfers elsewhere first: ${planBuys.map((x) => `${esc(E[x.act.out].web_name)} → ${esc(E[x.act.inn].web_name)}`).join(", ")} (they add more to your best XI).` : ` Your GW${gwNext} plan rolls the transfer.`;
+        if (planBuys) INS.swap = planFor ? { out: w.e, inn: E[planFor.act.inn], gain: planFor.act.gain } : null;
         cards.push({ k: "sell", label: "Weakest value in your XI", head: w.e.web_name, mine: true, sub: `£${price(w.e.now_cost)}m for ${w.y.toFixed(1)} pts over 4 GWs · ${w.res.toFixed(1)} below the value line`,
-          foot: INS.swap ? `Upgrade: <strong>${esc(rep.e.web_name)}</strong> (£${price(rep.e.now_cost)}m, +${INS.swap.gain.toFixed(1)} pts) fits your £${price(budget)}m budget` : `Sells for £${price(sellPrice(w.e.id))}m; no clearly better ${POSN(w.e)} fits your budget` });
+          foot: planBuys ? `Sells for £${price(sellPrice(w.e.id))}m.${planTxt}` : INS.swap ? `Upgrade: <strong>${esc(rep.e.web_name)}</strong> (£${price(rep.e.now_cost)}m, +${INS.swap.gain.toFixed(1)} pts) fits your £${price(budget)}m budget` : `Sells for £${price(sellPrice(w.e.id))}m; no clearly better ${POSN(w.e)} fits your budget` });
       }
     }
     // 3. Due a goal / hot streak
@@ -3977,8 +3996,11 @@ details.why[open] { flex-basis: 100%; }
     }
 
     // Bottom line
-    const c0 = cap[0], vb = INS.value && INS.value.best.find((d) => !mine.has(d.e.id)), sw = INS.swap;
-    const bottom = [c0 ? `Captain <strong>${esc(c0.e.web_name)}</strong>` : "", sw ? `upgrade <strong>${esc(sw.out.web_name)}</strong> to <strong>${esc(sw.inn.web_name)}</strong> (+${sw.gain.toFixed(1)} pts over 4 GWs)` : vb ? `the best value buy is <strong>${esc(vb.e.web_name)}</strong>` : "", due && gap(due) <= -1 ? `and keep an eye on <strong>${esc(due.web_name)}</strong>, who is due a goal` : ""].filter(Boolean).join(", ");
+    // The bottom line follows the GW plan (Current gameweek tab) when it's available, so the tabs agree.
+    const engCap = GWE.eng && GWE.eng.adv.find((x) => x.sec === "cap" && x.capId), engBuy = GWE.eng && GWE.eng.adv.find((x) => x.act && x.act.a === "xfer");
+    const c0 = engCap ? { e: E[engCap.capId] } : cap[0], vb = INS.value && INS.value.best.find((d) => !mine.has(d.e.id));
+    const sw = engBuy ? { out: E[engBuy.act.out], inn: E[engBuy.act.inn], gain: engBuy.act.gain, span: "5 GWs, best-XI gain" } : GWE.eng ? null : INS.swap;
+    const bottom = [c0 ? `Captain <strong>${esc(c0.e.web_name)}</strong>` : "", sw ? `upgrade <strong>${esc(sw.out.web_name)}</strong> to <strong>${esc(sw.inn.web_name)}</strong> (+${sw.gain.toFixed(1)} pts over ${sw.span || "4 GWs"})` : GWE.eng && GWE.eng.adv.some((x) => x.sec === "buy") ? "roll your free transfer" : vb ? `the best value buy is <strong>${esc(vb.e.web_name)}</strong>` : "", due && gap(due) <= -1 ? `and keep an eye on <strong>${esc(due.web_name)}</strong>, who is due a goal` : ""].filter(Boolean).join(", ");
 
     // What's changed since the last snapshot this browser saw
     const lead = [...members].sort((a, b) => a.rank - b.rank).find((x) => x.entry !== me), meRow = members.find((x) => x.entry === me);
@@ -4025,7 +4047,7 @@ details.why[open] { flex-basis: 100%; }
     const byPts = [...all].sort((a, b) => b.y - a.y);
     const pts = byPts.slice(0, 18);
     [...all].sort((a, b) => b.x - a.x).forEach((d) => { if (pts.length < 24 && !pts.includes(d)) pts.push(d); });
-    const mine = new Set(squadOf(myM).map((p) => p[0]));
+    const mine = new Set(baseSquad().map((p) => p[0]));
     const med = (v) => { const a = [...v].sort((p, q) => p - q), m = a.length >> 1; return a.length % 2 ? a[m] : (a[m - 1] + a[m]) / 2; };
     const mx = med(pts.map((d) => d.x)), my = med(pts.map((d) => d.y));
     const n = pts.length, sx = pts.reduce((a, d) => a + d.x, 0), sy = pts.reduce((a, d) => a + d.y, 0);
@@ -4086,7 +4108,7 @@ details.why[open] { flex-basis: 100%; }
   // Top 20 by season expected goal involvements (Opta xG + xA, as published by FPL).
   function xgiTopHTML() {
     const pos = store.get("xgiPos", 0);
-    const mine = new Set(squadOf(myM).map((p) => p[0]));
+    const mine = new Set(baseSquad().map((p) => p[0]));
     const list = Object.values(E).filter((e) => !pos || e.element_type === pos)
       .sort((a, b) => (+b.expected_goal_involvements) - (+a.expected_goal_involvements) || b.minutes - a.minutes).slice(0, 20);
     const ownedCount = list.filter((e) => mine.has(e.id)).length;
@@ -4117,7 +4139,7 @@ details.why[open] { flex-basis: 100%; }
   // Defenders: best defences first (xGA per 90 in 0.1 bands), then defensive contributions, then xGI.
   function defTopHTML() {
     const n = store.get("defN", 20) === 40 ? 40 : 20;
-    const mine = new Set(squadOf(myM).map((p) => p[0]));
+    const mine = new Set(baseSquad().map((p) => p[0]));
     const meRank = members.find((x) => x.entry === me).rank;
     const rivals = [...members].sort((a, b) => a.rank - b.rank).filter((x) => x.entry !== me).slice(0, meRank <= 10 ? 9 : 10);
     const ownersOf = (id) => rivals.filter((x) => squadOf(x.m).some((p) => p[0] === id));
@@ -4152,7 +4174,7 @@ details.why[open] { flex-basis: 100%; }
   }
   // Goals vs expected goals: midfielders and forwards with 450+ minutes, split into over- and under-performers.
   function goalsVsXgHTML() {
-    const mine = new Set(squadOf(myM).map((p) => p[0]));
+    const mine = new Set(baseSquad().map((p) => p[0]));
     const lgOwn = {}; members.forEach((x) => squadOf(x.m).forEach((p) => (lgOwn[p[0]] = (lgOwn[p[0]] || 0) + 1)));
     const N = members.length;
     const gap = (e) => e.goals_scored - (+e.expected_goals || 0);
@@ -4182,7 +4204,7 @@ details.why[open] { flex-basis: 100%; }
   }
   // Top 20 by season BPS (the Bonus Points System score that decides the 1-3 bonus points each match).
   function bpsTopHTML() {
-    const mine = new Set(squadOf(myM).map((p) => p[0]));
+    const mine = new Set(baseSquad().map((p) => p[0]));
     const owners = {}; members.forEach((x) => squadOf(x.m).forEach((p) => (owners[p[0]] = owners[p[0]] || []).push(x)));
     const N = members.length;
     const list = Object.values(E).sort((a, b) => (b.bps || 0) - (a.bps || 0) || b.total_points - a.total_points).slice(0, 20);
@@ -4230,11 +4252,16 @@ details.why[open] { flex-basis: 100%; }
   const avgBadge = (a) => `<span class="fdrc fdr${Math.min(5, Math.max(1, Math.round(a)))}" title="Average FDR">${a.toFixed(1)}</span>`;
 
   function renderFixtures() {
+    if (OFF === undefined) {
+      $("#app").innerHTML = `<section class="view"><p class="empty">Loading your GW${gwNext} team from FPL…</p></section>`;
+      loadOfficial().then(() => { if (view === "fixtures") renderFixtures(); });
+      return;
+    }
     let n = store.get("fxN", 5); if (n !== 3 && n !== 5) n = 5;
     const gws = []; for (let g = gwNext; g < gwNext + n && g <= 38; g++) gws.push(g);
-    const mineTeams = {}; squadOf(myM).forEach((p) => { const t = E[p[0]]?.team; mineTeams[t] = (mineTeams[t] || 0) + 1; });
+    const mineTeams = {}; baseSquad().forEach((p) => { const t = E[p[0]]?.team; mineTeams[t] = (mineTeams[t] || 0) + 1; });
     const rows = D.teams.map((t) => ({ t, a: windowFdr(t.id, n) })).sort((x, y) => x.a - y.a || x.t.name.localeCompare(y.t.name));
-    const squad = squadOf(myM).map((p) => ({ e: E[p[0]], slot: p[1] })).filter((x) => x.e)
+    const squad = baseSquad().map((p) => ({ e: E[p[0]], slot: p[1] })).filter((x) => x.e)
       .sort((a, b) => a.e.element_type - b.e.element_type || windowFdr(a.e.team, n) - windowFdr(b.e.team, n));
     const head = `<th>GW${gws.join("</th><th>GW")}</th>`;
     $("#app").innerHTML = `
@@ -4272,7 +4299,7 @@ details.why[open] { flex-basis: 100%; }
     let n = store.get("rotN", 5); if (!(n >= 1 && n <= 5)) n = 5;
     const gws = []; for (let g = gwNext; g < gwNext + n && g <= 38; g++) gws.push(g);
     const ids = D.teams.map((t) => t.id);
-    const mineTeams = new Set(squadOf(myM).map((p) => E[p[0]]?.team));
+    const mineTeams = new Set(baseSquad().map((p) => E[p[0]]?.team));
     let [a, b] = store.get("rotPair", [null, null]);
     const pairs = []; ids.forEach((x, i) => ids.slice(i + 1).forEach((y) => pairs.push({ a: x, b: y, s: pairScore(x, y, gws) })));
     pairs.sort((p, q) => p.s - q.s || (windowFdr(p.a, n) + windowFdr(p.b, n)) - (windowFdr(q.a, n) + windowFdr(q.b, n)));
@@ -4356,7 +4383,7 @@ details.why[open] { flex-basis: 100%; }
   function drawOdds(j) {
     const fx = D.fixtures.filter((f) => f[1] === gwNext).sort((a, b) => String(a[6]).localeCompare(String(b[6])));
     const ev = j.events.map((e) => ({ ...e, h: oddsTeamId(e.home), a: oddsTeamId(e.away) }));
-    const mineTeams = {}; squadOf(myM).forEach((p) => { const t = E[p[0]]?.team; mineTeams[t] = (mineTeams[t] || 0) + 1; });
+    const mineTeams = {}; baseSquad().forEach((p) => { const t = E[p[0]]?.team; mineTeams[t] = (mineTeams[t] || 0) + 1; });
     const rows = fx.map((f) => {
       const o = ev.find((e) => e.h === f[2] && e.a === f[3]);
       if (!o) return { f, o: null };
