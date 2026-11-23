@@ -157,6 +157,16 @@ bench order, transfers or chip before the deadline?*
   from `/api/gwplayers`. It shows the current gameweek until every match is played
   (`matchesDefaultGw()`), then the next one with kick-off times, win odds and your players' xP and
   start chance. Arrows browse other gameweeks.
+- **Train the model tab:** `renderTrain()` (`#train`). It holds Your notes and the advice scorecard
+  ("How the advice did"). The note types are 15 `NOTE_CATS` in three groups:
+  - Player: performance, tactical role, attacking threat, creativity, set-piece duties, defensive
+    contributions, performance sustainability, emerging trend;
+  - Selection & fitness: minutes security, rotation risk, injury and fitness, manager comments;
+  - Team & match: opposition weakness, team performance, match context.
+
+  The old names `attack` and `chances` map to tactical and threat through `CAT_ALIAS`. The overall
+  calls are trust, captain, target, avoid and hold; rotation and injury are legacy tags that still
+  work and become note types when a note is edited.
 - **Notes, version 2:** a note holds any number of overall calls (`tags`: trust, captain, target,
   rotation, injury, avoid, hold) and "What you saw" categories (`cats`, each "+" or "-"). The
   categories are minutes & selection, attacking role, penalties & set pieces, chance involvement,
@@ -184,7 +194,7 @@ bench order, transfers or chip before the deadline?*
   - "rested" or rotation: −10% and start rate ×0.85;
   - form or role worry −6%; new manager −5%.
 
-  `noteFactor` and `calFactor` are applied in `expertScore`. The panel is on the Current gameweek tab.
+  `noteFactor` and `calFactor` are applied in `expertScore`. The panel is in the Train the model tab.
   Show notes wherever they act: `noteLine()` adds "Your note applied" (with xP before and after) to
   every recommendation involving a noted player. The GW decision box, the Overview priorities and
   Key insights list the active notes.

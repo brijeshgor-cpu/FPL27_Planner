@@ -837,6 +837,9 @@ td.fx2-c { padding: 4px 3px; }
 .notes-list li { align-items: flex-start; } .nl-who { flex: 1 1 auto; } .nl-pills { display: flex; flex-wrap: wrap; gap: 4px; flex-basis: 100%; } .nl-acts { display: flex; gap: 6px; margin-left: auto; }
 .notes-list li.editing { border-color: var(--warn); }
 @media (max-width: 600px) { .nf-cat { flex-wrap: wrap; } .nf-cat .seg { width: 100%; } .nf-cat .seg button { flex: 1; } }
+.nf-grp { font-size: .7rem; text-transform: uppercase; letter-spacing: .06em; color: var(--accent); font-weight: 700; margin: 8px 0 0; }
+.nf-cats { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 6px; } .nf-grp { grid-column: 1 / -1; }
+@media (max-width: 800px) { .nf-cats { grid-template-columns: minmax(0, 1fr); } }
 </style>
 
 <header class="bar">
@@ -847,6 +850,7 @@ td.fx2-c { padding: 4px 3px; }
   <nav class="wrap tabs" aria-label="Views">
     <a href="#overview" data-v="overview">Overview</a>
     <a href="#gw" data-v="gw" id="gwTab">Current gameweek</a>
+    <a href="#train" data-v="train">Train the model</a>
     <a href="#analysis" data-v="analysis">Mini League analysis</a>
     <a href="#league" data-v="league">Standings</a>
     <a href="#planner" data-v="planner">Transfer planner</a>
@@ -1086,9 +1090,9 @@ td.fx2-c { padding: 4px 3px; }
   // ---------- routing ----------
   function route() {
     const v = (location.hash || "#overview").slice(1);
-    view = ["overview", "gw", "analysis", "league", "planner", "predict", "insights", "fixtures", "matches", "odds"].includes(v) ? v : "overview";
+    view = ["overview", "gw", "train", "analysis", "league", "planner", "predict", "insights", "fixtures", "matches", "odds"].includes(v) ? v : "overview";
     document.querySelectorAll(".tabs a").forEach((a) => { if (a.dataset.v === view) a.setAttribute("aria-current", "page"); else a.removeAttribute("aria-current"); });
-    ({ overview: renderOverview, gw: renderGw, analysis: renderAnalysis, league: renderLeague, planner: renderPlanner, predict: renderPredict, insights: renderInsights, fixtures: renderFixtures, matches: renderMatches, odds: renderOdds })[view]();
+    ({ overview: renderOverview, gw: renderGw, train: renderTrain, analysis: renderAnalysis, league: renderLeague, planner: renderPlanner, predict: renderPredict, insights: renderInsights, fixtures: renderFixtures, matches: renderMatches, odds: renderOdds })[view]();
   }
 
   function tick() {
@@ -2672,7 +2676,7 @@ td.fx2-c { padding: 4px 3px; }
       </div>
       <div class="panel adv"><div class="panel-head"><h3>Recommendations for GW${gwNext}</h3><span class="note">For the team as edited. Only what could change your XI, captain, bench, transfers or chips before the deadline.</span></div>${decHTML}<div class="adv-grid">${advHTML}</div>
         <p class="note">${Object.keys(NOTES).some((id) => noteOf(+id)) ? "Your notes are applied to these recommendations. " : ""}xP is minutes-adjusted expected points (appearance, goals, assists, clean sheets, penalties, bonus and defensive contributions under this season's rules). Minutes come from each player's last 5 matches (a start counts at 50+ minutes), blended with his season rate and FPL's chance of playing. Penalty-box touches, shots, chances created and manager comments aren't in FPL's free data, so they aren't used. Tap Why? for the stats and odds behind a call.</p></div>
-      <div class="panel" id="notesPanel">${notesPanelHTML()}</div>
+      <p class="note">${Object.keys(NOTES).some((id) => noteOf(+id)) ? `${Object.keys(NOTES).filter((id) => noteOf(+id)).length} of your notes are applied to this plan. ` : ""}Add your own judgement on players in <a href="#train">Train the model</a>.</p>
       <p class="note">Changes here are a sandbox saved in this browser only: make them on the FPL site to make them real. Projected points use the site's expert score (xG, xA, clean sheet odds, defensive contributions, bonus, fixtures and bookmaker odds, minutes, injuries and news). Sale prices follow FPL's rule that you keep half of any rise.</p>
       ${freshness()}
     </section>`;
@@ -2686,7 +2690,6 @@ td.fx2-c { padding: 4px 3px; }
     }));
     app.querySelector('[data-act="cap"]')?.addEventListener("click", () => { if (st.vc === GWE.sel) st.vc = st.cap; st.cap = GWE.sel; GWE.sel = null; gwSave(); drawGw(); });
     app.querySelector('[data-act="vc"]')?.addEventListener("click", () => { if (st.cap === GWE.sel) st.cap = st.vc; st.vc = GWE.sel; GWE.sel = null; gwSave(); drawGw(); });
-    wireNotes($("#notesPanel"), () => drawGw());
     app.querySelectorAll("[data-adv]").forEach((b) => b.addEventListener("click", () => { const x = GWE.adv[Number(b.dataset.adv)]; if (x && x.act) { gwApply(x.act); drawGw(); } }));
     $("#gwCap")?.addEventListener("change", (ev) => { const v = Number(ev.target.value); if (st.vc === v) st.vc = st.cap; st.cap = v; gwSave(); drawGw(); });
     $("#gwVc")?.addEventListener("change", (ev) => { const v = Number(ev.target.value); if (st.cap === v) st.cap = st.vc; st.vc = v; gwSave(); drawGw(); });
@@ -4696,18 +4699,30 @@ td.fx2-c { padding: 4px 3px; }
   // trust: +10% xP · rotation: start rate ×0.75 and xP ×0.8 · injury: chance of playing ≤50% and xP ×0.5
   // avoid: never suggested as a buy · hold: never suggested as a sale. Each note lasts until a gameweek you choose.
   // Overall calls: tick any number of these on a note.
-  const NOTE_TAGS = { trust: { l: "Trust him", f: 1.1, cls: "ok" }, captain: { l: "Captain pick", f: 1, cls: "ok" }, target: { l: "Buy target", f: 1, cls: "acc" }, rotation: { l: "Rotation risk", f: 0.8, cls: "sev2" }, injury: { l: "Injury doubt", f: 0.5, cls: "sev3" }, avoid: { l: "Avoid buying", f: 1, cls: "sev3" }, hold: { l: "Hold, don't sell", f: 1, cls: "acc" } };
+  const NOTE_TAGS = { trust: { l: "Trust him", f: 1.1, cls: "ok" }, captain: { l: "Captain pick", f: 1, cls: "ok" }, target: { l: "Buy target", f: 1, cls: "acc" }, rotation: { l: "Rotation risk", f: 0.8, cls: "sev2", legacy: true }, injury: { l: "Injury doubt", f: 0.5, cls: "sev3", legacy: true }, avoid: { l: "Avoid buying", f: 1, cls: "sev3" }, hold: { l: "Hold, don't sell", f: 1, cls: "acc" } };
   // What you saw: each category is marked Positive or Concern. Effects are deliberately modest.
   // f: xP multiplier; start: start-rate multiplier; aCap: cap on chance of playing; aFloor: floor; types: positions it applies to.
+  // Note types ("what you saw"), each marked Positive or Concern. Effects are deliberately modest.
+  // f: xP multiplier; start: start-rate multiplier; aCap / aFloor: chance of playing; types: positions it applies to.
   const NOTE_CATS = {
-    minutes: { l: "Minutes & selection", d: "Starting chances, rotation risk, early substitutions", pos: { f: 1.03, start: 1.1 }, neg: { f: 0.9, start: 0.8 } },
-    attack: { l: "Attacking role", d: "Position in possession, runs into the box, dropping deep", pos: { f: 1.06 }, neg: { f: 0.94 }, types: [2, 3, 4] },
-    setpieces: { l: "Penalties & set pieces", d: "Who takes penalties, corners and free kicks", pos: { f: 1.05 }, neg: { f: 0.95 }, types: [2, 3, 4] },
-    chances: { l: "Chance involvement", d: "How he gets or creates chances, incl. unrewarded runs", pos: { f: 1.05 }, neg: { f: 0.95 }, types: [2, 3, 4] },
-    fitness: { l: "Fitness & availability", d: "Injuries, discomfort, limited movement, manager updates", pos: { f: 1, aFloor: 0.9 }, neg: { f: 0.85, aCap: 0.75 } },
-    defence: { l: "Defensive role", d: "Clearances, recoveries and other defensive-contribution actions", pos: { f: 1.04 }, neg: { f: 0.96 }, types: [1, 2, 3] },
-    context: { l: "Match context", d: "Red cards, scoreline, tactics or teammate absences that shaped what you saw", pos: { f: 1.03 }, neg: { f: 0.97 } },
+    performance: { g: "Player", l: "Performance", d: "Beyond the statistical output", pos: { f: 1.04 }, neg: { f: 0.96 } },
+    tactical: { g: "Player", l: "Tactical role", d: "Position and attacking responsibilities, runs into the box, dropping deep", pos: { f: 1.05 }, neg: { f: 0.95 }, types: [2, 3, 4] },
+    threat: { g: "Player", l: "Attacking threat", d: "Movement, positioning and quality of chances, incl. unrewarded runs", pos: { f: 1.05 }, neg: { f: 0.95 }, types: [2, 3, 4] },
+    creativity: { g: "Player", l: "Creativity", d: "Chance creation and passing threat", pos: { f: 1.04 }, neg: { f: 0.96 }, types: [2, 3, 4] },
+    setpieces: { g: "Player", l: "Set-piece duties", d: "Penalties, corners and free kicks", pos: { f: 1.05 }, neg: { f: 0.95 }, types: [2, 3, 4] },
+    defence: { g: "Player", l: "Defensive contributions", d: "Clearances, recoveries and other actions that earn defensive points", pos: { f: 1.04 }, neg: { f: 0.96 }, types: [1, 2, 3] },
+    sustain: { g: "Player", l: "Performance sustainability", d: "Positive: underperforming and due. Concern: overperforming and may cool", pos: { f: 1.04 }, neg: { f: 0.96 } },
+    trend: { g: "Player", l: "Emerging trend", d: "Changes not yet reflected in the projections", pos: { f: 1.05 }, neg: { f: 0.95 } },
+    minutes: { g: "Selection & fitness", l: "Minutes security", d: "Likelihood of starting and playing 70+ minutes", pos: { f: 1.03, start: 1.1 }, neg: { f: 0.9, start: 0.8 } },
+    rotation: { g: "Selection & fitness", l: "Rotation risk", d: "Competition for places, congestion and fatigue. Positive: low risk", pos: { f: 1.02, start: 1.05 }, neg: { f: 0.9, start: 0.8 } },
+    fitness: { g: "Selection & fitness", l: "Injury and fitness", d: "Physical condition, limitations, visible discomfort", pos: { f: 1, aFloor: 0.9 }, neg: { f: 0.85, aCap: 0.75 } },
+    manager: { g: "Selection & fitness", l: "Manager comments", d: "Selection and tactical intentions", pos: { f: 1.02, start: 1.05 }, neg: { f: 0.92, start: 0.85 } },
+    opposition: { g: "Team & match", l: "Opposition weakness", d: "Tactical opportunities to exploit. Concern: a tough opponent", pos: { f: 1.04 }, neg: { f: 0.96 } },
+    team: { g: "Team & match", l: "Team performance", d: "Improving or declining collective performance", pos: { f: 1.03 }, neg: { f: 0.97 } },
+    context: { g: "Team & match", l: "Match context", d: "Red cards, scoreline, tactics or teammate absences that shaped what you saw", pos: { f: 1.03 }, neg: { f: 0.97 } },
   };
+  // Older type names still work
+  const CAT_ALIAS = { attack: "tactical", chances: "threat" };
   // What the site reads from the words in your note. Each signal is small and shown to you.
   const NOTE_SIGNALS = [
     [/\b(on pens|penalt(y|ies)|spot[- ]?kicks?)\b/i, 1.05, "on penalties: +5%"],
@@ -4735,7 +4750,7 @@ td.fx2-c { padding: 4px 3px; }
   // A note holds any number of overall calls (tags) and what-you-saw categories (cats: {key: "+" | "-"}).
   // Older notes with a single `tag` still work.
   const nTags = (n) => (n ? (Array.isArray(n.tags) ? n.tags : n.tag ? [n.tag] : []).filter((k) => NOTE_TAGS[k]) : []);
-  const nCats = (n) => (n && n.cats ? Object.entries(n.cats).filter(([k, v]) => NOTE_CATS[k] && (v === "+" || v === "-")) : []);
+  const nCats = (n) => (n && n.cats ? Object.entries(n.cats).map(([k, v]) => [CAT_ALIAS[k] || k, v]).filter(([k, v]) => NOTE_CATS[k] && (v === "+" || v === "-")) : []);
   const noteOf = (id) => { const n = NOTES[id]; return n && (!n.until || n.until >= gwNext) && (nTags(n).length || nCats(n).length || n.text) ? n : null; };
   const hasTag = (id, k) => nTags(noteOf(id)).includes(k);
   // Combined effect of a note on a player: tags × categories × words.
@@ -4768,7 +4783,9 @@ td.fx2-c { padding: 4px 3px; }
     const list = Object.entries(NOTES).filter(([id]) => E[id] && noteOf(+id)).sort((a, b) => (b[1].at || 0) - (a[1].at || 0));
     const can = !!ownerKey() && D.source === "live" && ownerOk !== false;
     const ed = NOTE_EDIT && NOTES[NOTE_EDIT] ? NOTES[NOTE_EDIT] : null, edE = ed ? E[NOTE_EDIT] : null;
-    const tags = nTags(ed), cats = Object.fromEntries(nCats(ed));
+    const tags = nTags(ed).filter((k) => !NOTE_TAGS[k].legacy), cats = Object.fromEntries(nCats(ed));
+    if (nTags(ed).includes("rotation") && !cats.rotation) cats.rotation = "-";
+    if (nTags(ed).includes("injury") && !cats.fitness) cats.fitness = "-";
     const untilOpts = [[gwNext, "This gameweek"], [Math.min(38, gwNext + 2), "Next 3 gameweeks"], ["", "Until I remove it"]];
     const curU = ed ? (ed.until == null ? "" : ed.until) : gwNext;
     return `<div class="panel-head"><h3>Your notes <span class="lab lab-asm">Assumption</span></h3><span class="note">Your judgement, which the model takes into account</span></div>
@@ -4777,8 +4794,8 @@ td.fx2-c { padding: 4px 3px; }
       ${can ? `<div class="note-form ${ed ? "is-edit" : ""}" id="noteForm">
         ${ed ? `<p class="nf-edit">Editing your note on <strong>${esc(edE.web_name)}</strong> (${tShort(edE.team)})</p><input type="hidden" id="noteP" value="${NOTE_EDIT}">` : `<select id="noteC" aria-label="Club"><option value="mine">Your squad</option>${[...D.teams].sort((x, y) => x.name.localeCompare(y.name)).map((t) => `<option value="${t.id}">${esc(t.name)}</option>`).join("")}</select>
         <select id="noteP" aria-label="Player">${noteOpts("mine")}</select>`}
-        <div class="nf-block"><span class="k">Overall call (tick any)</span><div class="nf-tags">${Object.entries(NOTE_TAGS).map(([k, v]) => `<label class="nf-tag"><input type="checkbox" value="${k}" ${tags.includes(k) ? "checked" : ""}><span>${v.l}</span></label>`).join("")}</div></div>
-        <div class="nf-block"><span class="k">What you saw (optional)</span><div class="nf-cats">${Object.entries(NOTE_CATS).map(([k, c]) => `<div class="nf-cat"><span><strong>${c.l}</strong><small>${c.d}</small></span><span class="seg" role="group" aria-label="${c.l}">${[["-", "Concern"], ["", "–"], ["+", "Positive"]].map(([v, l]) => `<button type="button" data-cat="${k}" data-v="${v}" aria-pressed="${(cats[k] || "") === v}">${l}</button>`).join("")}</span></div>`).join("")}</div></div>
+        <div class="nf-block"><span class="k">Overall call (tick any)</span><div class="nf-tags">${Object.entries(NOTE_TAGS).filter(([, v]) => !v.legacy).map(([k, v]) => `<label class="nf-tag"><input type="checkbox" value="${k}" ${tags.includes(k) ? "checked" : ""}><span>${v.l}</span></label>`).join("")}</div></div>
+        <div class="nf-block"><span class="k">What you saw (optional)</span><div class="nf-cats">${["Player", "Selection & fitness", "Team & match"].map((grp) => `<div class="nf-grp">${grp}</div>` + Object.entries(NOTE_CATS).filter(([, c]) => c.g === grp).map(([k, c]) => `<div class="nf-cat"><span><strong>${c.l}</strong><small>${c.d}</small></span><span class="seg" role="group" aria-label="${c.l}">${[["-", "Concern"], ["", "–"], ["+", "Positive"]].map(([v, l]) => `<button type="button" data-cat="${k}" data-v="${v}" aria-pressed="${(cats[k] || "") === v}">${l}</button>`).join("")}</span></div>`).join("")).join("")}</div></div>
         <select id="noteU" aria-label="How long">${untilOpts.map(([v, l]) => `<option value="${v}" ${String(v) === String(curU) ? "selected" : ""}>${l}</option>`).join("")}</select>
         <textarea id="noteX" rows="3" placeholder="Your reasoning (optional): team news, a manager's comments, what you saw in the match…" maxlength="1500">${ed ? esc(ed.text || "") : ""}</textarea>
         <div class="note-actions"><span class="note" id="noteCount">${ed ? (ed.text || "").length : 0} / 1500</span><span>${ed ? `<button class="btn" id="noteCancel">Cancel</button> ` : ""}<button class="btn pri" id="noteAdd">${ed ? "Save changes" : "Add note"}</button></span></div></div><p class="note" id="noteMsg"></p>`
@@ -4819,6 +4836,24 @@ td.fx2-c { padding: 4px 3px; }
       if (!tags.length && !Object.keys(cats).length && !text) { $("#noteMsg").textContent = "Tick a call, mark what you saw, or write something first."; return; }
       save({ ...NOTES, [e.id]: { tags, cats, text, until: u ? +u : null, at: Date.now() } });
     });
+  }
+
+  // ---------- Train the model: your notes, and how the advice has done ----------
+  async function renderTrain() {
+    const app = $("#app");
+    app.innerHTML = `<section class="view"><div class="panel-head"><h2>Train the model</h2></div><p class="empty">Loading your notes…</p></section>`;
+    try { await loadOfficial(); await ensureFA(baseSquad().map((p) => p[0])); } catch (e) { /* season data used */ }
+    if (view !== "train") return;
+    app.innerHTML = `<section class="view">
+      <div class="panel-head"><h2>Train the model</h2><span class="note">Your judgement and the results teach the model</span></div>
+      <p class="lede">The numbers miss things you can see: a change of role, a manager's hint, a player who's sharper than his stats. Notes here change that player's projection everywhere on the site, and every recommendation they affect says so. Results train it too: the site scores its advice after each gameweek and corrects its own bias.</p>
+      <div class="panel" id="notesPanel">${notesPanelHTML()}</div>
+      <div class="panel" id="adviceScore"><p class="empty">Checking how the advice did…</p></div>
+      ${freshness()}
+    </section>`;
+    const redraw = () => { const b = $("#notesPanel"); if (!b) return; b.innerHTML = notesPanelHTML(); wireNotes(b, redraw); };
+    wireNotes($("#notesPanel"), redraw);
+    renderAdviceScore().catch(() => {});
   }
 
   // ---- Advice tracking: record the plan before the deadline, score it afterwards ----
