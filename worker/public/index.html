@@ -807,6 +807,8 @@ td.fx2-c { padding: 4px 3px; }
 .rc-col ul { list-style: none; margin: 0; padding: 0; display: grid; gap: 6px; }
 .rc-col li { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 2px 8px; align-items: center; padding: 6px 8px; border-radius: 8px; background: var(--surface); border: 1px solid var(--line); }
 .rc-col li.rc-bench { opacity: .6; }
+.rc-col li.rc-star { border-color: var(--warn); box-shadow: inset 3px 0 0 var(--warn); opacity: 1; }
+.rc-st { color: var(--warn); } .rc-gw { color: var(--ink); font-weight: 600; }
 .rc-nm { display: grid; min-width: 0; } .rc-nm strong { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; } .rc-nm small { color: var(--muted); font-size: .72rem; }
 .rc-x { display: grid; justify-items: end; line-height: 1.1; } .rc-x small { color: var(--muted); font-size: .62rem; }
 .rc-fx { grid-column: 1 / -1; }
@@ -3236,8 +3238,12 @@ td.fx2-c { padding: 4px 3px; }
     const onlyMe = byPos([...mine].filter((e) => !theirs.has(e))), onlyThem = byPos([...theirs].filter((e) => !mine.has(e))), both = byPos([...mine].filter((e) => theirs.has(e)));
     const capOf = (pk) => (pk.find((p) => p[3]) || [])[0], startOf = (pk, id) => { const p = pk.find((x) => x[0] === id); return p && p[1] <= 11; };
     const myCap = capOf(myPk), thCap = capOf(thPk);
-    const li = (id, side) => { const e = E[id]; const st = side === "me" ? startOf(myPk, id) : side === "them" ? startOf(thPk, id) : startOf(myPk, id) || startOf(thPk, id);
-      return `<li class="${st ? "" : "rc-bench"}"><span class="rc-nm"><strong>${esc(e.web_name)}${(side !== "them" && id === myCap) ? ' <span class="badge-c" title="Your captain">C</span>' : ""}${(side !== "me" && id === thCap) ? ` <span class="badge-c them" title="${esc(r.player_name)}'s captain">C</span>` : ""}</strong><small>${pos(id)} · ${tShort(e.team)}${st ? "" : " · bench"}</small></span><span class="rc-x"><b>${P(id).toFixed(1)}</b><small>xP</small></span><span class="rc-fx">${fxStrip(e.team, gwNext, 3)}</span></li>`; };
+    // Last gameweek's points: a star marks the top scorer in each column (ties share it)
+    const gp = (id) => E[id]?.event_points ?? 0;
+    const topOf = (ids) => { const m = Math.max(0, ...ids.map(gp)); return m > 0 ? new Set(ids.filter((id) => gp(id) === m)) : new Set(); };
+    const stars = { me: topOf(onlyMe), them: topOf(onlyThem), both: topOf(both) };
+    const li = (id, side) => { const e = E[id]; const star = stars[side].has(id); const st = side === "me" ? startOf(myPk, id) : side === "them" ? startOf(thPk, id) : startOf(myPk, id) || startOf(thPk, id);
+      return `<li class="${st ? "" : "rc-bench"} ${star ? "rc-star" : ""}"><span class="rc-nm"><strong>${star ? `<span class="rc-st" title="Top scorer in this column in GW${gwCur}">★</span> ` : ""}${esc(e.web_name)}${(side !== "them" && id === myCap) ? ' <span class="badge-c" title="Your captain">C</span>' : ""}${(side !== "me" && id === thCap) ? ` <span class="badge-c them" title="${esc(r.player_name)}'s captain">C</span>` : ""}</strong><small>${pos(id)} · ${tShort(e.team)}${st ? "" : " · bench"} · <span class="rc-gw">GW${gwCur}: ${gp(id)} pts</span></small></span><span class="rc-x"><b>${P(id).toFixed(1)}</b><small>GW${gwNext} xP</small></span><span class="rc-fx">${fxStrip(e.team, gwNext, 3)}</span></li>`; };
     const sumXI = (ids, pk) => ids.filter((id) => startOf(pk, id)).reduce((a, id) => a + P(id), 0);
     const meXp = sumXI(onlyMe, myPk), thXp = sumXI(onlyThem, thPk), meRow = members.find((x) => x.entry === me), gap = r.total - meRow.total;
     const opts = [...members].sort((a, b) => a.rank - b.rank).filter((x) => x.entry !== me).map((x) => `<option value="${x.entry}" ${x.entry === rival ? "selected" : ""}>${x.rank}. ${esc(x.player_name)}</option>`).join("");
@@ -3250,7 +3256,7 @@ td.fx2-c { padding: 4px 3px; }
         <div class="rc-col them"><h3><i></i>Only ${esc(firstName(r))} owns (${onlyThem.length})</h3><ul>${onlyThem.map((id) => li(id, "them")).join("") || '<li class="empty">None</li>'}</ul></div>
         <div class="rc-col both"><h3><i></i>You both own (${both.length})</h3><ul>${both.map((id) => li(id, "both")).join("") || '<li class="empty">None</li>'}</ul></div>
       </div>
-      <p class="note">Players you both own cancel out, so the gap only moves through the first two columns and the captains. Faded rows are on the bench. <span class="lab lab-proj">Projection</span></p>`;
+      <p class="note">Players you both own cancel out, so the gap only moves through the first two columns and the captains. ★ marks the top scorer in each column in GW${gwCur}${D.events.find((e) => e.id === gwCur)?.finished ? "" : " (live, so it can change)"}. Faded rows are on the bench. <span class="lab lab-proj">Projection</span></p>`;
     $("#rivalSel").addEventListener("change", (ev) => { store.set("rival", Number(ev.target.value)); renderLeague(); setTimeout(() => $("#cmp")?.scrollIntoView({ block: "start" }), 50); });
   }
 
