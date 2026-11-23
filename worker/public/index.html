@@ -701,7 +701,7 @@ details.why[open] { flex-basis: 100%; }
 .dual-track input::-moz-range-thumb { pointer-events: auto; width: 16px; height: 16px; border-radius: 50%; background: var(--surface); border: 3px solid var(--accent); cursor: pointer; }
 .dual-track input::-webkit-slider-runnable-track { background: none; }
 .pr-count { margin: 4px 0 8px; }
-.pr-card { display: grid; grid-template-columns: minmax(170px, 1.4fr) repeat(3, 76px) 92px minmax(0, 3fr); gap: 10px; align-items: center; padding: 10px 12px; border: 1px solid var(--line); border-radius: var(--r); background: var(--surface); margin-bottom: 8px; }
+.pr-card { display: grid; grid-template-columns: minmax(160px, 1.3fr) repeat(4, 70px) 88px minmax(0, 3fr); gap: 10px; align-items: center; padding: 10px 12px; border: 1px solid var(--line); border-radius: var(--r); background: var(--surface); margin-bottom: 8px; }
 .pr-card.mine { border-color: var(--accent); }
 .pr-who { display: flex; align-items: center; gap: 8px; min-width: 0; }
 .pr-who img { width: 44px; height: 44px; object-fit: contain; flex: none; }
@@ -720,8 +720,8 @@ details.why[open] { flex-basis: 100%; }
 .pr-key { display: flex; align-items: center; gap: 4px; margin: 4px 0; flex-wrap: wrap; }
 .pr-key > span[class^="fdr"] { display: inline-block; min-width: 26px; text-align: center; font-size: .72rem; font-weight: 700; border-radius: 4px; padding: 2px 0; }
 .pr-t.x-bl { border: 1px dashed var(--line); color: var(--muted); }
-@media (max-width: 1000px) { .pr-card { grid-template-columns: minmax(150px, 1fr) repeat(4, minmax(60px, auto)); } .pr-gws { grid-column: 1 / -1; } }
-@media (max-width: 600px) { .pr-card { grid-template-columns: repeat(4, minmax(0, 1fr)); } .pr-who { grid-column: 1 / -1; } .pr-stat .k { font-size: .62rem; } .pr-gws { grid-template-columns: repeat(var(--n), minmax(56px, 1fr)); } .pr-sort { flex: 1 1 100%; } }
+@media (max-width: 1000px) { .pr-card { grid-template-columns: minmax(150px, 1fr) repeat(5, minmax(56px, auto)); } .pr-gws { grid-column: 1 / -1; } }
+@media (max-width: 600px) { .pr-card { grid-template-columns: repeat(5, minmax(0, 1fr)); } .pr-who { grid-column: 1 / -1; } .pr-stat .k { font-size: .62rem; } .pr-gws { grid-template-columns: repeat(var(--n), minmax(56px, 1fr)); } .pr-sort { flex: 1 1 100%; } }
 </style>
 
 <header class="bar">
@@ -3557,12 +3557,12 @@ details.why[open] { flex-basis: 100%; }
             <div class="dual"><span class="pill acc" id="prG0">GW${PR.g0}</span><div class="dual-track"><input type="range" id="prGa" min="${gwNext}" max="${maxG}" step="1" value="${PR.g0}" aria-label="First gameweek"><input type="range" id="prGb" min="${gwNext}" max="${maxG}" step="1" value="${PR.g1}" aria-label="Last gameweek"></div><span class="pill acc" id="prG1">GW${PR.g1}</span></div></div>
           <div class="pr-slider"><div class="pr-sh"><span class="k">Price</span></div>
             <div class="dual"><span class="pill acc" id="prP0">£${price(PR.p0)}m</span><div class="dual-track"><input type="range" id="prPa" min="${pMin}" max="${pMax}" step="1" value="${PR.p0}" aria-label="Minimum price"><input type="range" id="prPb" min="${pMin}" max="${pMax}" step="1" value="${PR.p1}" aria-label="Maximum price"></div><span class="pill acc" id="prP1">£${price(PR.p1)}m</span></div></div>
-          <label class="pr-sort"><span class="k">Sort by</span><select id="prSort">${[["pred", "Predicted points"], ["pps", "Points per start"], ["ownD", "Ownership (high to low)"], ["ownA", "Ownership (low to high)"], ["priceD", "Price (high to low)"], ["priceA", "Price (low to high)"], ["value", "Predicted points per £m"]].map(([v, l]) => `<option value="${v}" ${v === PR.sort ? "selected" : ""}>${l}</option>`).join("")}</select></label>
+          <label class="pr-sort"><span class="k">Sort by</span><select id="prSort">${[["pred", "Predicted points"], ["pps", "Points per start"], ["ownD", "Ownership (high to low)"], ["ownA", "Ownership (low to high)"], ["t10D", "Top-10 ownership (high to low)"], ["t10A", "Top-10 ownership (low to high)"], ["priceD", "Price (high to low)"], ["priceA", "Price (low to high)"], ["value", "Predicted points per £m"]].map(([v, l]) => `<option value="${v}" ${v === PR.sort ? "selected" : ""}>${l}</option>`).join("")}</select></label>
         </div>
       </div>
       <div class="fdr-key pr-key"><span class="note">Fixture difficulty:</span>${[1, 2, 3, 4, 5].map((d) => `<span class="fdr${d}">${d}</span>`).join("")}<span class="note">easiest → hardest</span></div>
       <div id="prList"></div>
-      <p class="note">Predicted points are the site's minutes-adjusted expected points (xP): appearance, goals, assists, clean sheets, penalties, bonus and defensive contributions under this season's rules, using bookmaker odds for GW${gwNext} and fixture difficulty after that, with injuries, bans, rotation and news. Each tile shows xP, the opponent and expected minutes, coloured by FPL's fixture difficulty (FDR): dark green easiest, through grey, to dark red hardest. Pts / start is this season's points per start. Ownership is FPL's overall ownership; ★ marks your players. <span class="lab lab-proj">Projection</span></p>
+      <p class="note">Predicted points are the site's minutes-adjusted expected points (xP): appearance, goals, assists, clean sheets, penalties, bonus and defensive contributions under this season's rules, using bookmaker odds for GW${gwNext} and fixture difficulty after that, with injuries, bans, rotation and news. Each tile shows xP, the opponent and expected minutes, coloured by FPL's fixture difficulty (FDR): dark green easiest, through grey, to dark red hardest. Pts / start is this season's points per start. Ownership is FPL's overall ownership; Top 10 own is how many of the 10 highest-ranked managers in ${esc(D.league.name)} (excluding you) have him in their current squad (tap or hover to see who); ★ marks your players. <span class="lab lab-proj">Projection</span></p>
       ${freshness()}
     </section>`;
     const redraw = () => { PR.shown = 30; drawPredList(); };
@@ -3584,13 +3584,16 @@ details.why[open] { flex-basis: 100%; }
   function drawPredList() {
     const box = $("#prList"); if (!box) return;
     const q = PR.q.trim().toLowerCase(), mine = new Set(baseSquad().map((p) => p[0]));
+    // Top-10 ownership in your mini-league (current squads; the 10 highest-ranked managers other than you)
+    const t10 = top10Rivals(), t10own = {};
+    t10.forEach((x) => squadOf(x.m).forEach((p) => (t10own[p[0]] = t10own[p[0]] || []).push(String(x.player_name || "").split(" ")[0])));
     const ks = []; for (let g = PR.g0; g <= PR.g1; g++) ks.push(g - gwNext);
     const list = Object.values(E).filter((e) => (!PR.pos || e.element_type === PR.pos) && e.now_cost >= PR.p0 && e.now_cost <= PR.p1
       && (!q || `${e.web_name} ${e.first_name} ${e.second_name} ${T[e.team]?.name} ${T[e.team]?.short}`.toLowerCase().includes(q))
       && (e.minutes > 0 || q || e.status === "a" && e.chance_of_playing_next_round !== 0 && e.now_cost >= 50));
     const pred = (e) => ks.reduce((a, k) => a + predPer(e, k), 0);
     const pps = (e) => (e.starts ? e.total_points / e.starts : 0);
-    const key = { pred: (e) => -pred(e), pps: (e) => -pps(e), ownD: (e) => -(+e.selected_by_percent || 0), ownA: (e) => +e.selected_by_percent || 0, priceD: (e) => -e.now_cost, priceA: (e) => e.now_cost, value: (e) => -pred(e) / (e.now_cost / 10) }[PR.sort];
+    const key = { pred: (e) => -pred(e), pps: (e) => -pps(e), ownD: (e) => -(+e.selected_by_percent || 0), t10D: (e) => -((t10own[e.id] || []).length), t10A: (e) => (t10own[e.id] || []).length, ownA: (e) => +e.selected_by_percent || 0, priceD: (e) => -e.now_cost, priceA: (e) => e.now_cost, value: (e) => -pred(e) / (e.now_cost / 10) }[PR.sort];
     const sorted = list.map((e) => ({ e, k: key(e) })).sort((a, b) => a.k - b.k || b.e.total_points - a.e.total_points).map((x) => x.e);
     const show = sorted.slice(0, PR.shown);
     box.innerHTML = `<p class="note pr-count">${sorted.length} player${sorted.length === 1 ? "" : "s"} · GW${PR.g0}${PR.g1 > PR.g0 ? `–${PR.g1}` : ""} · £${price(PR.p0)}m–£${price(PR.p1)}m</p>` + (show.length ? show.map((e) => {
@@ -3599,6 +3602,7 @@ details.why[open] { flex-basis: 100%; }
         <div class="pr-who">${code != null ? `<img src="kit/${code}${e.element_type === 1 ? "_1" : ""}.png" alt="" width="44" height="44" loading="lazy" onerror="this.remove()">` : ""}<span><strong>${esc(e.web_name)}${mine.has(e.id) ? ' <span class="star" title="In your team">★</span>' : ""}${availability(e) < 1 ? ` <span class="flag-i ${availability(e) === 0 ? "out" : ""}" title="${esc(e.news)}">!</span>` : ""}</strong><small>${esc(T[e.team]?.name)} · ${({ 1: "Goalkeeper", 2: "Defender", 3: "Midfielder", 4: "Forward" })[e.element_type]}</small></span></div>
         <div class="pr-stat"><span class="k">Price</span><strong>£${price(e.now_cost)}m</strong></div>
         <div class="pr-stat"><span class="k">Ownership</span><strong>${(+e.selected_by_percent || 0).toFixed(1)}%</strong></div>
+        <div class="pr-stat" title="${(t10own[e.id] || []).length ? "Owned by " + esc((t10own[e.id] || []).join(", ")) : "None of the top 10 own him"}"><span class="k">Top 10 own</span><strong class="${(t10own[e.id] || []).length >= 5 ? "" : (t10own[e.id] || []).length === 0 ? "note" : ""}">${(t10own[e.id] || []).length}/${t10.length}</strong></div>
         <div class="pr-stat"><span class="k">Pts / start</span><strong>${pps(e).toFixed(1)}</strong></div>
         <div class="pr-stat pr-tot"><span class="k">Predicted</span><strong>${tot.toFixed(1)}</strong></div>
         <div class="pr-gws" style="--n:${ks.length}">${ks.map((k) => { const g = gwNext + k, fx = teamFx[e.team][g] || [], v = predPer(e, k); return `<div class="pr-gw"><span class="pr-gl">GW ${g}</span>${fx.length ? `<span class="pr-t fdr${Math.max(...fx.map((f) => f.fdr))}" title="GW${g}: ${fx.map((f) => `${fxLabel(f)}, FDR ${f.fdr}`).join("; ")}"><b>${v.toFixed(1)}</b><small>${fx.map((f) => `${tShort(f.opp).toUpperCase()}(${f.home ? "H" : "A"})`).join(" ")}</small><small>${predMins(e, k)}'</small></span>` : `<span class="pr-t x-bl"><b>0.0</b><small>Blank</small></span>`}</div>`; }).join("")}</div>
