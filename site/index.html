@@ -669,6 +669,16 @@ details.why[open] { flex-basis: 100%; }
 .stance.st-chase { color: var(--bad); } .stance.st-protect { color: var(--good); }
 .decision .src { font-size: .74rem; }
 .adv-sec:last-child { grid-column: auto; }
+.lt-h { margin: 16px 0 4px; font-size: 1rem; }
+.lt-sum { margin: 0 0 8px; font-size: .88rem; }
+.lt-tbl td, .lt-tbl th { font-size: .82rem; }
+#lgTrend, .grid-2 > .panel { min-width: 0; }
+.lt-tbl { width: 100%; min-width: 0 !important; }
+.lt-tbl td:first-child { white-space: nowrap; }
+#lgTrend .lt-tbl td, #lgTrend .lt-tbl th { white-space: normal; }
+#lgTrend .lt-tbl td:first-child { white-space: nowrap; }
+@media (max-width: 600px) { #lgTrend .lt-tbl td, #lgTrend .lt-tbl th { font-size: .74rem; padding: 6px 5px; } #lgTrend .lt-tbl .pill { font-size: .6rem; padding: 0 5px; } }
+.lt-tbl tr.lt-diff td { background: var(--surface-2); }
 </style>
 
 <header class="bar">
@@ -967,6 +977,7 @@ details.why[open] { flex-basis: 100%; }
         <div class="panel">
           <div class="panel-head"><h2>What the league tells you</h2><span class="note">You vs the top 10 · updates every gameweek</span></div>
           <ul class="insights">${insights().map((i) => `<li class="${i.k}"><div><div class="t">${i.t}</div><div class="d">${i.d}</div></div></li>`).join("")}</ul>
+          <div id="lgTrend"><p class="note">Loading each gameweek's top scorers and captains…</p></div>
         </div>
       </div>
       <div class="panel" id="gwStats"><div class="panel-head"><h2>Current gameweek team stats <span class="note">GW${gwCur}</span></h2></div><p class="empty">Loading your players' match stats…</p></div>
@@ -974,6 +985,7 @@ details.why[open] { flex-basis: 100%; }
     </section>`;
     renderFuture();
     renderGwStats();
+    renderLeagueTrend();
     // swap the free-transfer estimate for FPL's own figure once your Pick Team has loaded
     loadOfficial().then((o) => { const k = $("#kpiFt"); if (!o || !k || view !== "overview") return; k.innerHTML = `<span class="k">Free transfers</span><span class="v">${o.unlimited ? "∞" : o.ft}</span><span class="s">GW${gwNext}, from FPL${o.made ? ` (${o.made} already used)` : ""} · £${price(o.bank)}m in the bank · ${cl.filter((c) => !c.used).map((c) => CHIP_LABEL[c.name] || c.name).join(" ") || "no chips"} left</span>`; });
   }
@@ -2531,6 +2543,28 @@ details.why[open] { flex-basis: 100%; }
     return `<div class="pitch">${rows}</div><div class="bench"><div class="bench-lbl">Bench</div><div class="row">${bench.map(card).join("")}</div></div>`;
   }
 
+  // ---- League trend: who scored the most each gameweek, who owned him, and what the league captained ----
+  async function renderLeagueTrend() {
+    const box = $("#lgTrend"); if (!box) return;
+    let H; try { H = await leagueHistory(); } catch (e) { H = null; }
+    if (!document.body.contains(box)) return;
+    const rows = H ? H.rows.filter((r) => r.n) : [];
+    if (!rows.length) { box.innerHTML = `<p class="note">Gameweek history loads on the live site.</p>`; return; }
+    const done = rows.filter((r) => !r.inProgress), nm = (id) => esc(E[id]?.web_name || "?");
+    const diffs = done.filter((r) => r.owners.length <= 3), capP = done.filter((r) => r.lgCapPts != null);
+    const capAvg = capP.length ? capP.reduce((a, r) => a + r.lgCapPts, 0) / capP.length : 0, blanks = capP.filter((r) => r.lgCapPts <= 2);
+    const L = leagueCtx();
+    const take = diffs.length / Math.max(1, done.length) >= 0.5
+      ? (L.stance === "chase" ? "Differentials have decided most gameweeks, and you're chasing: when two options are within about 0.5 xP, take the one fewer of the league own." : L.stance === "protect" ? "Differentials have decided most gameweeks, but you're protecting a lead: cover the template and only take differentials that cost almost nothing." : "Differentials have decided most gameweeks: worth taking when the xP cost is small.")
+      : "The template has decided most gameweeks: owning the big names matters more than differentials.";
+    box.innerHTML = `<h3 class="lt-h">League trend <span class="lab lab-fact">Fact</span></h3>
+      <p class="lt-sum"><strong>${diffs.length} of ${done.length}</strong> gameweek top scorers were owned by 3 or fewer in ${esc(D.league.name)}. The league's most-captained player averaged <strong>${capAvg.toFixed(1)} pts</strong>${blanks.length ? `, with ${blanks.length} blank${blanks.length > 1 ? "s" : ""} (${blanks.map((r) => `${nm(r.lgCapId)} GW${r.gw}`).join(", ")})` : ""}.</p>
+      <div class="tbl-wrap"><table class="lt-tbl"><thead><tr><th>GW</th><th>Top scorer · league owners</th><th>League's top captain · owners</th></tr></thead><tbody>
+      ${rows.map((r) => `<tr class="${r.owners.length <= 3 && !r.inProgress ? "lt-diff" : ""}"><td>GW${r.gw}${r.inProgress ? ' <span class="pill">Live</span>' : ""}</td><td><strong>${nm(r.top)}</strong> ${r.topPts ?? "–"} pts${r.inProgress ? " so far" : ""} <span class="note">· ${r.owners.length}/${r.n}</span>${r.owners.length <= 3 && !r.inProgress ? ' <span class="pill">Differential</span>' : ""}${r.meOwn ? ' <span class="pill ok">You</span>' : ""}</td><td>${r.lgCapId ? `<strong>${nm(r.lgCapId)}</strong> ${r.lgCapPts ?? "–"} pts${r.inProgress ? " so far" : ""} <span class="note">· ${r.lgCapN}/${r.n}</span>` : "–"}</td></tr>`).join("")}
+      </tbody></table></div>
+      <p class="unc"><b>What it means:</b> ${take} <span class="lab lab-asm">Assumption</span></p>`;
+  }
+
   // ---- What the league tells you: your team against the top 10 of the mini-league ----
   // Rebuilt from live data on every load, so after each gameweek points appear, change or drop out on
   // their own. Every comparison uses the other managers in the top 10 (9 when you are in it).
@@ -3543,6 +3577,43 @@ details.why[open] { flex-basis: 100%; }
   }
   const gwPoints = (id, gw) => { if (gw === gwCur) return E[id]?.event_points ?? null; const h = FA.summ[id]; if (!h) return null; return h.filter((x) => x[0] === gw).reduce((a, x) => a + (x[2] || 0), 0); };
 
+  // Each gameweek's top scorer, his league owners and the league's captains (shared by Insights and the Overview).
+  function leagueHistory() {
+    if (INS.histP) return INS.histP;
+    return (INS.histP = (async () => {
+      const cur = D.events.find((e) => e.id === gwCur);
+      const evs = D.events.filter((e) => e.id <= gwCur && (e.finished || e.id === gwCur || e.data_checked)).sort((a, b) => b.id - a.id);
+      let offline = false;
+      await fetchSumm([...new Set(evs.map((e) => e.most_captained).filter(Boolean))]).catch(() => {});
+      const picks = {};
+      // The gameweek in progress uses the squads already loaded; finished ones come from the stored copy.
+      const live = { gw: gwCur, managers: members.map((x) => ({ entry: x.entry, name: x.player_name, team: x.entry_name, chip: x.m.picks?.chip, picks: squadOf(x.m).map((p) => [p[0], p[2]]) })) };
+      await pool(evs.map((e) => e.id), 4, async (gw) => {
+        if (gw === gwCur && cur && !cur.finished) { picks[gw] = live; return; }
+        try { picks[gw] = await leaguePicksFor(gw); } catch (e) { offline = true; if (gw === gwCur) picks[gw] = live; }
+      });
+      const rows = evs.map((ev) => {
+        const gw = ev.id, inProgress = gw === gwCur && cur && !cur.finished;
+        let top = ev.top_element, topPts = ev.top_points;
+        if (inProgress || !top) { const best = Object.values(E).reduce((b, e) => (!b || e.event_points > b.event_points ? e : b), null); if (gw === gwCur && best) { top = best.id; topPts = best.event_points; } }
+        const cap = ev.most_captained, capPts = cap ? gwPoints(cap, gw) : null;
+        const P = picks[gw];
+        const ms = P ? P.managers.filter((m) => m.picks && m.picks.length) : [];
+        const owners = ms.filter((m) => m.picks.some((x) => x[0] === top));
+        const captainers = ms.filter((m) => m.picks.some((x) => x[0] === top && x[1] >= 2));
+        const meP = ms.find((m) => m.entry === me);
+        const meOwn = meP && meP.picks.find((x) => x[0] === top);
+        const lgCap = {}; ms.forEach((m) => { const c = m.picks.find((x) => x[1] >= 2); if (c) lgCap[c[0]] = (lgCap[c[0]] || 0) + 1; });
+        const lgTopCap = Object.entries(lgCap).sort((a, b) => b[1] - a[1])[0];
+        return { gw, inProgress, cap, capPts, top, topPts, owners, captainers, n: ms.length, meOwn, lgTopCap, P };
+      });
+
+      // the league's most-captained player each gameweek, with his score
+      await fetchSumm([...new Set(rows.map((r) => (r.lgTopCap ? +r.lgTopCap[0] : 0)).filter(Boolean))]).catch(() => {});
+      rows.forEach((r) => { if (r.lgTopCap) { r.lgCapId = +r.lgTopCap[0]; r.lgCapN = r.lgTopCap[1]; r.lgCapPts = gwPoints(r.lgCapId, r.gw); } });
+      return { rows, picks, offline, cur };
+    })());
+  }
   async function renderInsights() {
     if (OFF === undefined) {
       $("#app").innerHTML = `<section class="view"><p class="empty">Loading your GW${gwNext} team from FPL…</p></section>`;
@@ -3550,33 +3621,9 @@ details.why[open] { flex-basis: 100%; }
       return;
     }
     $("#app").innerHTML = `<section class="view"><div class="panel-head"><h2>Insights</h2></div><p class="empty">Loading each gameweek's captains, top scorers and your league's squads… The first load of a past gameweek takes a few seconds; after that it's instant.</p></section>`;
-    const cur = D.events.find((e) => e.id === gwCur);
-    const evs = D.events.filter((e) => e.id <= gwCur && (e.finished || e.id === gwCur || e.data_checked)).sort((a, b) => b.id - a.id);
-    let offline = false;
-    await fetchSumm([...new Set(evs.map((e) => e.most_captained).filter(Boolean))]).catch(() => {});
-    const picks = {};
-    // The gameweek in progress uses the squads already loaded; finished ones come from the stored copy.
-    const live = { gw: gwCur, managers: members.map((x) => ({ entry: x.entry, name: x.player_name, team: x.entry_name, chip: x.m.picks?.chip, picks: squadOf(x.m).map((p) => [p[0], p[2]]) })) };
-    await pool(evs.map((e) => e.id), 4, async (gw) => {
-      if (gw === gwCur && cur && !cur.finished) { picks[gw] = live; return; }
-      try { picks[gw] = await leaguePicksFor(gw); } catch (e) { offline = true; if (gw === gwCur) picks[gw] = live; }
-    });
+    const H = await leagueHistory();
     if (view !== "insights") return;
-    const rows = evs.map((ev) => {
-      const gw = ev.id, inProgress = gw === gwCur && cur && !cur.finished;
-      let top = ev.top_element, topPts = ev.top_points;
-      if (inProgress || !top) { const best = Object.values(E).reduce((b, e) => (!b || e.event_points > b.event_points ? e : b), null); if (gw === gwCur && best) { top = best.id; topPts = best.event_points; } }
-      const cap = ev.most_captained, capPts = cap ? gwPoints(cap, gw) : null;
-      const P = picks[gw];
-      const ms = P ? P.managers.filter((m) => m.picks && m.picks.length) : [];
-      const owners = ms.filter((m) => m.picks.some((x) => x[0] === top));
-      const captainers = ms.filter((m) => m.picks.some((x) => x[0] === top && x[1] >= 2));
-      const meP = ms.find((m) => m.entry === me);
-      const meOwn = meP && meP.picks.find((x) => x[0] === top);
-      const lgCap = {}; ms.forEach((m) => { const c = m.picks.find((x) => x[1] >= 2); if (c) lgCap[c[0]] = (lgCap[c[0]] || 0) + 1; });
-      const lgTopCap = Object.entries(lgCap).sort((a, b) => b[1] - a[1])[0];
-      return { gw, inProgress, cap, capPts, top, topPts, owners, captainers, n: ms.length, meOwn, lgTopCap, P };
-    });
+    const { rows, picks, offline, cur } = H;
     const done = rows.filter((r) => !r.inProgress);
     const avg = (xs) => (xs.length ? xs.reduce((a, b) => a + b, 0) / xs.length : 0);
     INS.rows = rows; INS.picks = picks;
@@ -4014,14 +4061,6 @@ details.why[open] { flex-basis: 100%; }
     if (INS.luck) cards.push({ k: INS.luck.me >= 0 ? "watch" : "goal", label: "Luck tracker", head: `${INS.luck.me >= 0 ? "+" : "−"}${Math.abs(INS.luck.me).toFixed(0)} pts vs expected`, sub: `Top-10 average ${INS.luck.t10 >= 0 ? "+" : "−"}${Math.abs(INS.luck.t10).toFixed(0)}`, foot: INS.luck.me >= 15 ? "Running hot: expect some regression" : INS.luck.me <= -15 ? "Running cold: returns should catch up" : "Points match what your picks deserved" });
     if (INS.t10moves) { const tb = Object.entries(INS.t10moves.ins).sort((a, b) => b[1].length - a[1].length)[0]; if (tb && tb[1].length >= 2) cards.push({ k: mine.has(+tb[0]) ? "cap" : "diff", label: "Top 10's most-bought", head: E[tb[0]].web_name, mine: mine.has(+tb[0]), sub: `Bought by ${tb[1].length} of the top 10 for GW${gwCur}: ${tb[1].map((x) => esc(firstName(x))).join(", ")}`, foot: mine.has(+tb[0]) ? "You already own him" : "Today's transfers become tomorrow's template" }); }
     if (INS.minSec && INS.minSec.length) cards.push({ k: "sell", label: "Minutes risk in your XI", head: INS.minSec.map((r) => r.e.web_name).join(", "), sub: INS.minSec.map((r) => `${esc(r.e.web_name)}: started ${r.s.starts} of ${r.s.games}, index ${r.s.idx}`).join(" · "), foot: "Players who don't start don't score" });
-
-    // 6. League trend from gameweek history
-    const done = (INS.rows || []).filter((r) => !r.inProgress && r.n);
-    if (done.length) {
-      const diffWins = done.filter((r) => r.owners.length <= 3).length;
-      const capPts = done.filter((r) => r.capPts != null).map((r) => r.capPts);
-      cards.push({ k: "diff", label: "League trend", head: `${diffWins} of ${done.length} top scorers were differentials`, sub: `The gameweek's top scorer was owned by 3 or fewer in ${esc(D.league.name)} in ${diffWins} of ${done.length} gameweeks`, foot: capPts.length ? `Most-captained player averaged ${(capPts.reduce((a, b) => a + b, 0) / capPts.length).toFixed(1)} pts; ${capPts.filter((v) => v <= 3).length} blanks` : "" });
-    }
 
     // Bottom line
     // The bottom line follows the GW plan (Current gameweek tab) when it's available, so the tabs agree.
