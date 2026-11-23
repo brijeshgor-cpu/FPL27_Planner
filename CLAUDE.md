@@ -86,6 +86,11 @@ The owner's standing brief. Every new feature, insight or recommendation must fo
   In the code this is `momentum(e)`, used in `gwBuys()`.
 - **Last-match check for buys.** Never suggest buying a player who played under 45 minutes in his
   last match (`buySecure`). Name anyone skipped and say why.
+- **Sell case.** Every sell suggestion shows `sellCase(e)`: recent blanks, the next 3 fixtures with FDR,
+  and the gameweek's odds. For attackers that's team win and scoring chances against the opponent's
+  clean sheet chance; for defenders and keepers, team win and clean sheet chances against the
+  opponent's scoring chance. Cold form plus a tough run plus poor odds justifies selling even a
+  template player.
 - **Template sales.** When suggesting selling a player most of the league owns, say what it risks
   for the mini-league. When a downgrade frees money, say where it should go next.
 
