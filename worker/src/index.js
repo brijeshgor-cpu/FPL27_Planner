@@ -332,7 +332,7 @@ async function authed(env, path, tok) {
 
 async function myTeam(env, fromCron) {
   const cached = await env.ODDS.get(TEAM_KEY, "json");
-  if (!fromCron && cached && Date.now() - cached.fetched < 60000) return cached;
+  if (!fromCron && cached && Date.now() - cached.fetched < 30000) return cached;
   let tok = await accessToken(env);
   const me = await authed(env, "me/", tok);
   if (!me.ok) throw new Error("me_" + me.status);

@@ -1731,6 +1731,13 @@ tr.benchrow td { background: var(--surface-2); }
     if (D.source === "live") mt = await fetch("api/my-team", { cache: "no-store" }).then((r) => (r.ok ? r.json() : null)).catch(() => null);
     try { await ensureFA(squadOf(myM).map((p) => p[0])); } catch (e) { /* season data used */ }
     if (view !== "gw") return;
+    gwBuild(mt);
+    GWE.sel = null; GWE.msg = "";
+    drawGw();
+    gwPoll();
+  }
+  // Builds the official team (GWE.base) from FPL's Pick Team, or from public data without a login.
+  function gwBuild(mt) {
     const live = mt && mt.ok ? mt : mt && mt.last ? mt.last : null;
     const stale = !!(mt && !mt.ok && mt.last);
     const old = squadOf(myM);
@@ -1761,13 +1768,38 @@ tr.benchrow td { background: var(--surface-2); }
       ft: baseFt, made: tr ? tr.made : pairs.length, cost: tr ? Math.max(0, (tr.made || 0) - (tr.limit || 0)) * (tr.cost || 4) : 0, unlimited: unlimited || !!(tr && tr.status === "unlimited"), pending, live: !!live, stale, mt, src, pairs, oldIds,
       value: tr && tr.value != null ? tr.value : picks.reduce((a, p) => a + E[p[0]].now_cost, 0),
     };
-    base.sig = base.ids.join(",") + "|" + base.cap + "|" + base.vc;
+    base.sig = base.ids.join(",") + "|" + base.cap + "|" + base.vc + "|" + base.made + "|" + base.bank;
     GWE.base = base; GWE.TO = null;
+    if (GWE.st && GWE.st.sig === base.sig) return;
     const saved = store.get("gwEdit:" + gwNext, null);
     GWE.st = saved && saved.sig === base.sig && saved.ids.every((id) => E[id]) ? saved : { sig: base.sig, ids: [...base.ids], cap: base.cap, vc: base.vc, xf: [] };
-    GWE.sel = null; GWE.msg = "";
-    drawGw();
   }
+  // While the tab is open (and visible), check FPL for changes to your team every 45 seconds,
+  // and straight away when you come back to the tab.
+  let gwTimer = null, gwBusy = false;
+  async function gwCheck() {
+    if (view !== "gw") { clearInterval(gwTimer); gwTimer = null; return; }
+    if (document.hidden || gwBusy || !GWE.base) return;
+    gwBusy = true;
+    try {
+      const mt = await fetch("api/my-team", { cache: "no-store" }).then((r) => (r.ok ? r.json() : null)).catch(() => null);
+      if (!mt || view !== "gw") return;
+      const prev = GWE.base, st = GWE.st;
+      const edited = st && (st.xf.length || st.ids.join() !== prev.ids.join() || st.cap !== prev.cap || st.vc !== prev.vc);
+      gwBuild(mt);
+      if (GWE.base.sig !== prev.sig) {
+        GWE.sel = null;
+        GWE.msg = `Your team changed on FPL, so this page has updated (${new Date().toLocaleTimeString("en-GB", { hour: "2-digit", minute: "2-digit" })})${edited ? ". Your what-if changes were cleared" : ""}.`;
+        drawGw();
+      } else { const f = $("#app .fresh"); if (f) f.textContent = GWE.base.src + ". Checking FPL for changes every minute."; }
+    } finally { gwBusy = false; }
+  }
+  function gwPoll() {
+    clearInterval(gwTimer); gwTimer = null;
+    if (D.source !== "live") return;
+    gwTimer = setInterval(gwCheck, 45000);
+  }
+  document.addEventListener("visibilitychange", () => { if (!document.hidden && view === "gw" && gwTimer) gwCheck(); });
 
   // ---- editor model ----
   const gwTO = () => GWE.TO || (GWE.TO = teamOdds());
@@ -1884,7 +1916,7 @@ tr.benchrow td { background: var(--surface-2); }
 
     app.innerHTML = `<section class="view">
       <div class="panel-head"><h2>Current gameweek: GW${gwNext}</h2><span class="note">Deadline ${ev ? new Date(ev.deadline).toLocaleString("en-GB", { timeZone: "Europe/London", weekday: "short", day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" }) : ""} UK</span></div>
-      <p class="fresh">${B.src}.</p>
+      <p class="fresh">${B.src}.${D.source === "live" ? " Checking FPL for changes every minute." : ""}</p>
       ${gwSetupHTML()}
       ${B.pairs.length ? `<p class="note">Transfers already made on FPL for GW${gwNext}: ${B.pairs.map(([o, i]) => `${o ? esc(o.web_name) : "?"} → ${i ? esc(i.web_name) : "?"}`).join(", ")}${B.cost ? ` (−${B.cost} pts)` : ""}.</p>` : ""}
       <div class="ed-sum ${changed ? "changed" : ""}">
