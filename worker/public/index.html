@@ -840,6 +840,21 @@ td.fx2-c { padding: 4px 3px; }
 .nf-grp { font-size: .7rem; text-transform: uppercase; letter-spacing: .06em; color: var(--accent); font-weight: 700; margin: 8px 0 0; }
 .nf-cats { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 6px; } .nf-grp { grid-column: 1 / -1; }
 @media (max-width: 800px) { .nf-cats { grid-template-columns: minmax(0, 1fr); } }
+/* Train the model: layers, loop, strategy, learning */
+.tr-top { align-items: stretch; }
+.layers { display: grid; gap: 6px; } .ly { display: grid; grid-template-columns: 34px minmax(0, 1fr) auto; gap: 10px; align-items: center; padding: 8px 10px; border: 1px solid var(--line); border-radius: 8px; }
+.ly-n { font-family: var(--font-display); font-weight: 700; color: var(--muted); } .ly small { display: block; color: var(--muted); font-size: .74rem; } .ly-v { font-family: var(--font-display); font-size: 1.1rem; }
+.loop { display: grid; gap: 6px; position: relative; } .lp-step { display: grid; grid-template-columns: 28px minmax(0, 1fr); gap: 10px; align-items: center; padding: 7px 10px; border: 1px solid var(--line); border-radius: 8px; }
+.lp-step.ok { border-color: color-mix(in srgb, var(--good) 50%, var(--line)); } .lp-step.last { border-color: var(--accent); background: color-mix(in srgb, var(--accent) 7%, var(--surface)); }
+.lp-n { display: grid; place-items: center; width: 24px; height: 24px; border-radius: 50%; background: var(--surface-2); font-weight: 700; font-size: .8rem; } .lp-step.ok .lp-n { background: var(--good); color: #fff; }
+.lp-step small { display: block; color: var(--muted); font-size: .74rem; } .lp-back { font-size: .76rem; color: var(--accent); text-align: right; }
+.strat { display: grid; gap: 6px; } .st-row { display: flex; justify-content: space-between; align-items: center; gap: 12px; padding: 7px 10px; border: 1px solid var(--line); border-radius: 8px; }
+.st-l { display: grid; min-width: 0; } .st-l small { color: var(--muted); font-size: .74rem; } .st-row select { flex: 0 0 140px; }
+.lr-sum { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 8px; margin-bottom: 6px; } .lr-sum > div { border: 1px solid var(--line); border-radius: 8px; padding: 8px 10px; } .lr-sum .k { display: block; font-size: .68rem; text-transform: uppercase; letter-spacing: .05em; color: var(--muted); } .lr-sum b { font-family: var(--font-display); font-size: 1.3rem; }
+.lr-h { margin: 14px 0 6px; font-size: .85rem; text-transform: uppercase; letter-spacing: .05em; color: var(--muted); }
+.lr-tbl td { vertical-align: top; font-size: .84rem; } .lr-tbl tr.lr-unlucky td:first-child, .lr-tbl tr.lr-ok td:first-child { color: var(--good); } .lr-tbl tr.lr-event td:first-child { color: var(--muted); }
+.lr-pat { margin: 0; padding-left: 18px; display: grid; gap: 4px; font-size: .86rem; }
+@media (max-width: 700px) { .st-row { flex-wrap: wrap; } .st-row select { flex: 1 1 100%; } .lr-sum { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
 </style>
 
 <header class="bar">
@@ -1460,6 +1475,7 @@ td.fx2-c { padding: 4px 3px; }
   }
   // Share of a player's expected minutes left in gameweek index i once a rival returns.
   function compFactor(e, i) {
+    if (LAYER.noRisk) return 1;
     const c = FA.comp && FA.comp[e.id]; if (!c) return 1;
     let f = 1;
     c.forEach(({ r, kind }) => { const from = returnFrom(r); if (i < from) return; f = Math.min(f, kind === "direct" ? (i === from ? 0.8 : 0.6) : 0.9); });
@@ -1483,6 +1499,7 @@ td.fx2-c { padding: 4px 3px; }
   const deadlineOf = (g) => Date.parse(D.events.find((e) => e.id === g)?.deadline || 0);
 
   function minutesInfo(e) {
+    if (LAYER.noRisk) return { avg: 90, last: 90, src: "season" };
     const h = FA.summ[e.id];
     if (h && h.length) {
       const by = {}; h.forEach(([r, m]) => (by[r] = (by[r] || 0) + m));
@@ -1514,6 +1531,7 @@ td.fx2-c { padding: 4px 3px; }
   }
   // Chance a player misses gameweek index i through a yellow-card ban picked up in an earlier match.
   function banMiss(e, i) {
+    if (LAYER.noRisk) return 0;
     const r = banRisk(e); if (!r || r.away !== 1) return 0;
     let s = 0; for (let k = Math.max(0, i - r.games); k < i; k++) if (gwNext + k <= r.until) s += (1 - r.p) ** k * r.p;
     return Math.min(1, s);
@@ -1522,6 +1540,7 @@ td.fx2-c { padding: 4px 3px; }
 
   // Chance a player is available for gameweek g (i = index from the next gameweek).
   function availFor(e, g, i) {
+    if (LAYER.noRisk) return 1;
     const back = expectedBack(e);
     if (back) return back > deadlineOf(g) ? 0 : 0.85;
     if (e.status === "s") return i === 0 ? 0 : 1;
@@ -1658,17 +1677,25 @@ td.fx2-c { padding: 4px 3px; }
   // attackers, bonus potential from BPS per 90, price trend, and recent news.
   function expertScore(e, n, TO) {
     const key = e.id + ":" + n; if (XS.has(key)) return XS.get(key);
+    const sc = scoreCore(e, n, TO);
+    XS.set(key, sc);
+    return sc;
+  }
+  function scoreCore(e, n, TO) {
     const m = modelPts(e, n, TO).total, p = proj(e, n, TO).total;
-    let sc = 0.55 * m + 0.45 * p;
+    const wP = stratHistW(); // your "avoid chasing historical points" priority sets how much form counts
+    let sc = (1 - wP) * m + wP * p;
     if (e.element_type >= 3) { const gap = e.goals_scored - (+e.expected_goals || 0); sc += Math.max(-1.5, Math.min(1.5, -gap * 0.25)) * (n / 5); }
     const bps90 = e.minutes >= 270 ? (e.bps / e.minutes) * 90 : 20;
     sc += (bps90 - 20) * 0.03 * n;
     const pm = priceMove(e); if (pm.cls === "up") sc += 0.2; else if (pm.cls === "down") sc -= 0.2;
-    const nw = newsFor(e);
-    if (nw.some((x) => x.tone === "neg" && x.strong)) sc *= 0.5; else if (nw.some((x) => x.tone === "neg")) sc *= 0.85;
-    if (teamNews(e.team).length) sc *= 0.95; // new manager: some rotation risk
-    sc *= noteFactor(e) * calFactor(e); // your notes, and calibration from tracked results
-    XS.set(key, sc);
+    if (!LAYER.noRisk) {
+      const nw = newsFor(e);
+      if (nw.some((x) => x.tone === "neg" && x.strong)) sc *= 0.5; else if (nw.some((x) => x.tone === "neg")) sc *= 0.85;
+      if (teamNews(e.team).length) sc *= 0.95; // new manager: some rotation risk
+    }
+    if (!LAYER.noNote) sc *= noteFactor(e); // your notes
+    if (!LAYER.noCal) sc *= calFactor(e); // recalibration from tracked results
     return sc;
   }
   // Short evidence list for a player, drawn from the Insights data.
@@ -2149,7 +2176,7 @@ td.fx2-c { padding: 4px 3px; }
     const cameo = h.filter((x) => x[1] > 0 && x[1] < 30).length, off = h.filter((x) => x[1] >= 50 && x[1] < 70).length, dnp = h.filter((x) => x[1] === 0).length;
     const hasFx = (teamFx[e.team][gwNext] || []).length > 0;
     const blend = (k, s) => (k + 2 * s) / (n + 2);
-    const rStart = Math.min(1, blend(st, sStart) * ntE.start), rPlay = Math.max(rStart, blend(app, sApp));
+    const rStart = Math.min(1, blend(st, sStart) * ntE.start * (CAL && CAL.start ? CAL.start : 1)), rPlay = Math.max(rStart, blend(app, sApp));
     const pStart = hasFx ? a * rStart : 0, p70 = hasFx ? a * blend(f70, s70) : 0, p60 = hasFx ? a * blend(f60, s60) : 0;
     const pPlay = hasFx ? a * rPlay : 0, pCameo = Math.max(0, pPlay - pStart), pAbsent = hasFx ? 1 - pPlay : 1;
     const startMins = h.filter((x) => x[1] >= 50).map((x) => x[1]);
@@ -2196,7 +2223,7 @@ td.fx2-c { padding: 4px 3px; }
   // A player worth buying must be fit, an established starter, and not have dropped out of the side last time.
   function buySecure(e) {
     const mp = minutesProfile(e), lm = lastMatch(e);
-    const why = hasTag(e.id, "avoid") ? "your note says avoid" : mp.a < 1 ? `flagged (${pct(mp.a)} to play${e.news ? ": " + esc(e.news) : ""})` : lm && lm.mins < 45 ? `only ${lm.mins}' in GW${lm.gw}${lm.mins ? "" : " (unused)"}, a possible rotation or role change` : mp.rStart < 0.7 ? `not a regular starter (${pct(mp.rStart)} of matches)` : "";
+    const why = hasTag(e.id, "avoid") ? "your note says avoid" : mp.a < 1 ? `flagged (${pct(mp.a)} to play${e.news ? ": " + esc(e.news) : ""})` : lm && lm.mins < 45 ? `only ${lm.mins}' in GW${lm.gw}${lm.mins ? "" : " (unused)"}, a possible rotation or role change` : mp.rStart < stratNailed() ? `not a regular starter (${pct(mp.rStart)} of matches)` : "";
     return { ok: !why, why, mp, lm };
   }
   const minsLine = (s) => (s.lm ? `started ${s.mp.st} of his last ${s.mp.n}, ${s.lm.mins}' in GW${s.lm.gw}` : `starts ${pct(s.mp.rStart)} of matches`);
@@ -2250,6 +2277,7 @@ td.fx2-c { padding: 4px 3px; }
       const f = (teamFx[e.team][gwNext] || []).map(fxLabel).join(", ") || "no fixture";
       const bits = [
         `GW${gwNext}: ${f}`,
+        `<b>Layers</b> ${layerTxt(e)} <i>(projection)</i>`,
         `<b>Minutes</b> ${pct(mp.pStart)} to start, ${pct(mp.p60)} 60+, ${pct(mp.p70)} 70+, ${pct(mp.pCameo)} cameo, about ${Math.round(mp.xMinsIfStart)}' when he starts <i>(projection)</i>`,
         mp.mins.length ? `Recent minutes: ${mp.mins.join(", ")} <i>(FPL)</i>` : "",
         t >= 2 ? `<b>Threat</b> npxG ${npxg90(e).toFixed(2)}/90${e.penalties_order === 1 ? " (est., excl. pens)" : ""}, xA ${(+e.expected_assists_per_90 || 0).toFixed(2)}/90 over ${fmt(e.minutes)}' <i>(Opta via FPL)</i>` : `Saves ${(+e.saves_per_90 || 0).toFixed(1)}/90 <i>(FPL)</i>`,
@@ -2340,7 +2368,7 @@ td.fx2-c { padding: 4px 3px; }
       // Within 0.5 xP the mini-league decides: chasing takes the lower captaincy EO, protecting the higher.
       const capEO = (id) => (own[id] || 0) + (capCount[id] || 0) / (D._n || 1);
       let leagueNote = "";
-      if (capC[0].p - capC[1].p < 0.5 && L.stance !== "balanced") {
+      if (stratDiff() > 0 && capC[0].p - capC[1].p < stratDiff() && L.stance !== "balanced") {
         const [x, y] = capC, flip = L.stance === "chase" ? capEO(y.id) < capEO(x.id) - 0.1 : capEO(y.id) > capEO(x.id) + 0.1;
         if (flip) { capC[0] = y; capC[1] = x; leagueNote = ` League call: only ${(x.p - y.p).toFixed(1)} xP apart, and ${L.stance === "chase" ? `${esc(E[y.id].web_name)} is the differential (league captaincy EO ${Math.round(capEO(y.id) * 100)}% vs ${Math.round(capEO(x.id) * 100)}%), which suits chasing` : `${esc(E[y.id].web_name)} is the safer template pick (EO ${Math.round(capEO(y.id) * 100)}% vs ${Math.round(capEO(x.id) * 100)}%), which suits protecting your lead`}.`; }
       }
@@ -2447,7 +2475,7 @@ td.fx2-c { padding: 4px 3px; }
     const sellFor = (id) => (st.xf.some((t) => t.inn === id) ? E[id].now_cost : B.sell[id] ?? E[id].now_cost);
     // Rolling a free transfer keeps flexibility for next week (up to 5 can be saved). Valued at ~1.5 pts
     // while you hold fewer than 4, ~0.5 at 4 and nothing at 5 (an assumption, labelled as such).
-    const rollValue = B.unlimited ? 0 : ftLeft >= 5 ? 0 : ftLeft === 4 ? 0.5 : 1.5;
+    const rollValue = (B.unlimited ? 0 : ftLeft >= 5 ? 0 : ftLeft === 4 ? 0.5 : 1.5) * stratRoll();
     const sh0 = squadHealth(st.ids).n;
     let bank = c.bank, cur = [...st.ids]; const tc = {}; cur.forEach((id) => (tc[E[id].team] = (tc[E[id].team] || 0) + 1));
     const xi5 = (ids) => bestXI(ids, gp5).sum, xi1 = (ids) => bestXI(ids, gp1).sum;
@@ -2462,16 +2490,17 @@ td.fx2-c { padding: 4px 3px; }
         [...candidates(e.element_type, budget, new Set(cur), tc, e.team, TO, new Set()).slice(0, 6), ...tgt.filter((t) => !candidates(e.element_type, budget, new Set(cur), tc, e.team, TO, new Set()).slice(0, 6).some((c) => c.e.id === t.e.id))].forEach((cd) => {
           const nid = cur.map((x) => (x === id ? cd.e.id : x)), g = xi5(nid) - base5;
           // below 14 playable, restoring a reliable body is worth ~1 pt of cover
-          const cover = sh < 14 && !minutesProfile(e).playable && minutesProfile(cd.e).playable ? 1 : 0;
+          const cover = sh < 14 && !minutesProfile(e).playable && minutesProfile(cd.e).playable ? stratCover() : 0;
           const tb = hasTag(cd.e.id, "target") ? 1.5 : 0; // your buy target gets a nudge
-          const opt = { out: e, inn: cd.e, gain: g, cover, score: g + cover + tb, budget, nid, slot, mo };
-          if (mo.hold) { if (round === 0 && (!held[e.id] || opt.score > held[e.id].score)) held[e.id] = opt; return; }
+          const m70 = stratMins70() * (1 - minutesProfile(cd.e).p70); // your 70+ minutes priority
+          const opt = { out: e, inn: cd.e, gain: g, cover, score: g + cover + tb - m70, budget, nid, slot, mo };
+          if (mo.hold && STR("history") < 4) { if (round === 0 && (!held[e.id] || opt.score > held[e.id].score)) held[e.id] = opt; return; }
           if (!best || g + cover > best.score) best = opt;
         });
       });
       if (!best) break;
       const free = round < ftLeft;
-      if (free ? best.score < Math.max(3, rollValue + 1.5) : best.score - 4 < 4) break;
+      if (free ? best.score < Math.max(3, rollValue + 1.5) : best.score - 4 < stratHit()) break;
       picks.push({ ...best, g1: xi1(best.nid) - xi1(cur), free, bankAfter: best.budget - best.inn.now_cost, sellP: sellFor(best.out.id) });
       bank = best.budget - best.inn.now_cost; tc[best.out.team]--; tc[best.inn.team] = (tc[best.inn.team] || 0) + 1; cur = best.nid;
       if (!free) break;
@@ -2518,6 +2547,8 @@ td.fx2-c { padding: 4px 3px; }
     const live = B.mt && (B.mt.ok ? B.mt : B.mt.last);
     let avail = live && live.chips && live.chips.length ? live.chips.filter((c) => c.status_for_entry === "available").map((c) => c.name) : chipsLeft(myM).filter((c) => !c.used).map((c) => c.name);
     avail = avail.filter((n) => ["bboost", "3xc", "freehit", "wildcard"].includes(n));
+    if (STR("chips") === 0) { const o = [{ sec: "chip", k: "good", lab: "Assumption", t: "Chip suggestions are off", d: "Your strategy has Optimise chip deployment set to Off. Change it in Train the model." }]; GWE.chipsAdv = { key, out: o }; return o; }
+    const eager = STR("chips") >= 3;
     const out = [];
     const def = (D.chips_def || []).find(([n, s, e]) => gwNext >= s && gwNext <= e);
     const expires = def ? def[2] : 38;
@@ -2530,14 +2561,14 @@ td.fx2-c { padding: 4px 3px; }
       const bench = st.ids.slice(11);
       const v = [...Array(N)].map((_, k) => bench.reduce((a, id) => a + per(E[id], k), 0));
       const bestK = v.indexOf(Math.max(...v));
-      const now = bestK === 0 && v[0] >= 10;
+      const now = bestK === 0 && v[0] >= (eager ? 9 : 10);
       out.push({ sec: "chip", k: now ? "warn" : "good", lab: "Projection", t: now ? `Bench Boost: use it this week` : `Bench Boost: save it`, d: `Your bench projects ${v[0].toFixed(1)} xP in GW${gwNext}; the best week in the next ${N} is GW${gwNext + bestK} (${v[bestK].toFixed(1)}). A Bench Boost is best in a double gameweek with 15 playable players${dgw(0) ? `; ${dgw(0)} of yours play twice this week` : ""}.`, unc: scen.length ? `Fixture scenarios before it expires (GW${expires}): ${scen.join("; ")}.` : `No double gameweeks are scheduled for your players before it expires (GW${expires}); rearranged fixtures could create one.` });
     }
     if (avail.includes("3xc")) {
       const xi = st.ids.slice(0, 11);
       const v = [...Array(N)].map((_, k) => Math.max(...st.ids.map((id) => per(E[id], k))));
       const bestK = v.indexOf(Math.max(...v)), capNow = Math.max(...xi.map((id) => gp1(E[id])));
-      const now = bestK === 0 && capNow >= 9;
+      const now = bestK === 0 && capNow >= (eager ? 8 : 9);
       out.push({ sec: "chip", k: now ? "warn" : "good", lab: "Projection", t: now ? `Triple Captain: use it this week` : `Triple Captain: save it`, d: `Your best captain projects ${capNow.toFixed(1)} xP this week, so the chip adds about ${capNow.toFixed(1)}. The best week in the next ${N} is GW${gwNext + bestK} (${v[bestK].toFixed(1)}). It's worth most on a premium player with two games or a standout home fixture.`, unc: `Must be used by GW${expires}. ${scen.length ? `Scenarios: ${scen.join("; ")}.` : "No doubles scheduled yet."}` });
     }
     if (avail.includes("freehit")) {
@@ -4745,7 +4776,7 @@ td.fx2-c { padding: 4px 3px; }
   function loadNotes() {
     if (notesP) return notesP;
     const get = (p) => (D.source === "live" ? fetch("api/" + p, { cache: "no-store" }).then((r) => (r.ok ? r.json() : null)).catch(() => null) : Promise.resolve(null));
-    return (notesP = Promise.all([get("notes"), get("calib")]).then(([n, c]) => { NOTES = n || {}; CAL = c && c.f ? c : null; XS.clear(); NF.clear(); }));
+    return (notesP = Promise.all([get("notes"), get("calib"), get("strategy")]).then(([n, c, st]) => { NOTES = n || {}; CAL = c && (c.f || c.start || c.noteRel) ? c : null; STRAT = st || {}; XS.clear(); NF.clear(); }));
   }
   // A note holds any number of overall calls (tags) and what-you-saw categories (cats: {key: "+" | "-"}).
   // Older notes with a single `tag` still work.
@@ -4757,10 +4788,10 @@ td.fx2-c { padding: 4px 3px; }
   function noteEffect(e) {
     const n = noteOf(e.id); if (!n) return { f: 1, aCap: 1, aFloor: 0, start: 1 };
     let f = 1, aCap = 1, aFloor = 0, start = 1;
-    nTags(n).forEach((k) => (f *= NOTE_TAGS[k].f));
+    nTags(n).forEach((k) => (f *= 1 + (NOTE_TAGS[k].f - 1) * noteWeight("t:" + k)));
     if (nTags(n).includes("injury")) aCap = Math.min(aCap, 0.5);
     if (nTags(n).includes("rotation")) start *= 0.75;
-    nCats(n).forEach(([k, v]) => { const c = NOTE_CATS[k], x = v === "+" ? c.pos : c.neg; if (c.types && !c.types.includes(e.element_type)) return; f *= x.f || 1; if (x.start) start *= x.start; if (x.aCap) aCap = Math.min(aCap, x.aCap); if (x.aFloor) aFloor = Math.max(aFloor, x.aFloor); });
+    nCats(n).forEach(([k, v]) => { const c = NOTE_CATS[k], x = v === "+" ? c.pos : c.neg; if (c.types && !c.types.includes(e.element_type)) return; f *= 1 + ((x.f || 1) - 1) * noteWeight(`c:${k}:${v}`); if (x.start) start *= x.start; if (x.aCap) aCap = Math.min(aCap, x.aCap); if (x.aFloor) aFloor = Math.max(aFloor, x.aFloor); });
     const sg = noteSignals(n); f *= sg.f; aCap = Math.min(aCap, sg.aCap); start *= sg.rot;
     // One note can move a projection by at most +20% (or −55%, so a serious injury worry still bites)
     return { f: Math.max(0.45, Math.min(1.2, f)), aCap, aFloor, start };
@@ -4842,17 +4873,23 @@ td.fx2-c { padding: 4px 3px; }
   async function renderTrain() {
     const app = $("#app");
     app.innerHTML = `<section class="view"><div class="panel-head"><h2>Train the model</h2></div><p class="empty">Loading your notes…</p></section>`;
-    try { await loadOfficial(); await ensureFA(baseSquad().map((p) => p[0])); } catch (e) { /* season data used */ }
+    try { await loadOfficial(); await ensureFA(baseSquad().map((p) => p[0])); GWE.eng = await gwEngine(); if (GWE.eng) recordAdvice(GWE.eng); } catch (e) { /* season data used */ }
     if (view !== "train") return;
     app.innerHTML = `<section class="view">
       <div class="panel-head"><h2>Train the model</h2><span class="note">Your judgement and the results teach the model</span></div>
       <p class="lede">The numbers miss things you can see: a change of role, a manager's hint, a player who's sharper than his stats. Notes here change that player's projection everywhere on the site, and every recommendation they affect says so. Results train it too: the site scores its advice after each gameweek and corrects its own bias.</p>
+      <div class="grid-2 tr-top"><div class="panel"><div class="panel-head"><h3>The five-layer model</h3></div>${layersHTML()}</div>
+        <div class="panel"><div class="panel-head"><h3>The weekly feedback loop</h3></div><div id="loopBox">${loopHTML(null)}</div></div></div>
+      <div class="panel" id="stratPanel">${strategyPanelHTML()}</div>
       <div class="panel" id="notesPanel">${notesPanelHTML()}</div>
+      <div class="panel" id="learning"><p class="empty">Comparing saved predictions with results…</p></div>
       <div class="panel" id="adviceScore"><p class="empty">Checking how the advice did…</p></div>
       ${freshness()}
     </section>`;
-    const redraw = () => { const b = $("#notesPanel"); if (!b) return; b.innerHTML = notesPanelHTML(); wireNotes(b, redraw); };
-    wireNotes($("#notesPanel"), redraw);
+    const redraw = () => { const b = $("#notesPanel"); if (b) { b.innerHTML = notesPanelHTML(); wireNotes(b, redraw); } const sp = $("#stratPanel"); if (sp) { sp.innerHTML = strategyPanelHTML(); wireStrategy(sp, redraw); } };
+    wireNotes($("#notesPanel"), redraw); wireStrategy($("#stratPanel"), redraw);
+    fetch("api/recs", { cache: "no-store" }).then((r) => (r.ok ? r.json() : null)).then((recs) => { const b = $("#loopBox"); if (b) b.innerHTML = loopHTML(recs); }).catch(() => {});
+    renderLearning().catch(() => {});
     renderAdviceScore().catch(() => {});
   }
 
@@ -4864,9 +4901,15 @@ td.fx2-c { padding: 4px 3px; }
     const bx = bestXI(B.ids);
     const buys = adv.filter((x) => x.act && x.act.a === "xfer").map((x) => ({ out: x.act.out, inn: x.act.inn, gain: +x.act.gain.toFixed(2), hit: x.act.hit }));
     const pool = new Set([...B.ids, ...buys.map((b) => b.inn), ...Object.values(E).filter((e) => isFit(e) && e.minutes >= 450).sort((a, b) => gp1(b) - gp1(a)).slice(0, 60).map((e) => e.id)]);
-    const preds = {}; pool.forEach((id) => (preds[id] = +gp1(E[id]).toFixed(2)));
-    const body = { gw: gwNext, at: Date.now(), cap: cap ? cap.capId : null, vc: cap ? cap.vcId : null, xi: bx.ids, squad: B.ids, buys, holds: adv.filter((x) => x.hold).map((x) => x.hold), preds };
-    const hash = JSON.stringify([body.cap, body.vc, body.xi, body.buys, body.holds]);
+    // Each prediction keeps the inputs needed to classify its error afterwards.
+    const TO = gwTO(), preds = {};
+    pool.forEach((id) => {
+      const e = E[id], mp = minutesProfile(e), sc = scoreChance(e, TO), o = TO[e.team], share = Math.min(1, mp.xMinsIfStart / 90) * mp.pStart;
+      const xg = (+e.expected_goals_per_90 || 0) * share, tf = sc && xg > 0.01 ? sc.lam / xg : 1;
+      preds[id] = { xp: +gp1(e).toFixed(2), ps: +mp.pStart.toFixed(2), p70: +mp.p70.toFixed(2), xm: Math.round(mp.xMinsIfStart), lg: +(sc ? sc.lam : 0).toFixed(2), la: +((+e.expected_assists_per_90 || 0) * share * tf).toFixed(2), cs: o ? +o.cs.toFixed(2) : null, tf: o ? +o.lam.toFixed(2) : fixtureGoals(e.team, (teamFx[e.team][gwNext] || [])[0] || { opp: e.team, home: true }, gwNext + 1).for, nf: +noteFactor(e).toFixed(3), nk: noteOf(id) ? noteKeys(noteOf(id)) : [] };
+    });
+    const body = { v: 2, gw: gwNext, at: Date.now(), cap: cap ? cap.capId : null, vc: cap ? cap.vcId : null, xi: bx.ids, squad: B.ids, buys, holds: adv.filter((x) => x.hold).map((x) => x.hold), preds };
+    const hash = JSON.stringify(["v2", body.cap, body.vc, body.xi, body.buys, body.holds, Object.keys(NOTES).length]);
     if (store.get("recHash:" + gwNext, "") === hash) return;
     try { await ownerPost(`rec/${gwNext}`, body); store.set("recHash:" + gwNext, hash); } catch (e) { /* tried; will retry on the next load */ }
   }
@@ -4892,14 +4935,14 @@ td.fx2-c { padding: 4px 3px; }
       if (myCap && !(myCap in act)) Object.assign(act, await recPts([myCap], g));
       const xiBest = r.xi ? Math.max(...r.xi.map((id) => act[id] ?? 0)) : null;
       const bt = (r.buys || []).reduce((a, b) => a + ((act[b.inn] ?? 0) - (act[b.out] ?? 0)) - (b.hit ? 4 : 0), 0);
-      Object.entries(r.preds).forEach(([id, p]) => { if (act[id] != null && E[id]) errs[E[id].element_type].push([p, act[id], g]); });
+      Object.entries(r.preds).forEach(([id, p]) => { const xp = typeof p === "object" ? p.xp : p; if (act[id] != null && E[id]) errs[E[id].element_type].push([xp, act[id], g]); });
       rows.push({ g, cap: r.cap, capPts: act[r.cap], myCap, myCapPts: act[myCap], xiBest, buys: r.buys || [], bt, live: g === gwCur && !D.events.find((e) => e.id === g).finished });
     }
     const all = Object.values(errs).flat(), mae = all.length ? all.reduce((a, [p, x]) => a + Math.abs(p - x), 0) / all.length : 0, bias = all.length ? all.reduce((a, [p, x]) => a + (x - p), 0) / all.length : 0;
     // Calibration: per position, actual ÷ projected once there are 2+ finished gameweeks and 30+ samples.
     const fin = new Set(rows.filter((r) => !r.live).map((r) => r.g));
     const f = {}; [1, 2, 3, 4].forEach((t) => { const xs = errs[t].filter((x) => fin.has(x[2])); if (fin.size >= 2 && xs.length >= 30) { const pa = xs.reduce((a, x) => a + x[0], 0), aa = xs.reduce((a, x) => a + x[1], 0); f[t] = Math.max(0.85, Math.min(1.15, aa / Math.max(1, pa))); } });
-    if (Object.keys(f).length && ownerKey() && JSON.stringify(f) !== JSON.stringify(CAL && CAL.f)) ownerPost("calib", { f, gws: [...fin], at: Date.now() }).then(() => { CAL = { f }; XS.clear(); }).catch(() => {});
+    // (recalibration now comes from the learning loop in Train the model)
     const nm = (id) => esc(E[id]?.web_name || "?");
     box.innerHTML = head + `<div class="tbl-wrap"><table class="cards-sm"><thead><tr><th>GW</th><th>Recommended captain</th><th>Your captain</th><th>Best in XI</th><th>Recommended transfers</th></tr></thead><tbody>
       ${rows.map((r) => `<tr><td>GW${r.g}${r.live ? ' <span class="pill">Live</span>' : ""}</td><td>${r.cap ? `${nm(r.cap)} <strong>${r.capPts ?? "–"}</strong>` : "–"}</td><td>${r.myCap ? `${nm(r.myCap)} <strong>${r.myCapPts ?? "–"}</strong>${r.myCap !== r.cap && r.capPts != null && r.myCapPts != null ? ` <span class="${r.capPts > r.myCapPts ? "down" : r.capPts < r.myCapPts ? "up" : "note"}">(${r.capPts > r.myCapPts ? "advice +" + 2 * (r.capPts - r.myCapPts) : r.capPts < r.myCapPts ? "you +" + 2 * (r.myCapPts - r.capPts) : "same"})</span>` : ""}` : "–"}</td><td>${r.xiBest ?? "–"}</td><td>${r.buys.length ? r.buys.map((b) => `${nm(b.out)} → ${nm(b.inn)}`).join(", ") + ` <strong class="${r.bt >= 0 ? "up" : "down"}">${r.bt >= 0 ? "+" : ""}${r.bt}</strong>` : "Roll"}</td></tr>`).join("")}
@@ -4951,7 +4994,7 @@ td.fx2-c { padding: 4px 3px; }
         });
       });
       const free = m < ft;
-      if (!best || (free ? best.gain < 3 : best.gain - 4 < 4)) break;
+      if (!best || (free ? best.gain < 3 : best.gain - 4 < stratHit())) break;
       moves.push({ ...best, hit: !free, bankAfter: best.budget - best.inn.now_cost });
       bank = best.budget - best.inn.now_cost; cur = best.nid;
       if (!free) break;
@@ -4986,6 +5029,202 @@ td.fx2-c { padding: 4px 3px; }
         ${w.holds && w.holds.length ? `<p class="note">Kept this week: ${w.holds.map(nm).join(", ")} (form and fixture).</p>` : ""}
         <p class="note">Bank after: £${price(w.bank)}m</p></div>`).join("")}</div>
       <p class="note">Week 1 is the same plan as the Current gameweek tab. Weeks 2–3 then pick the move that most improves your best XI over the following 5 gameweeks: free transfers first, a −4 only when it still gains 4+. Free transfers roll over (up to 5), and the money freed in week 1 is spent in later weeks. It assumes today's prices and fitness, so it will change as news comes in. <span class="lab lab-proj">Projection</span> <span class="lab lab-asm">Assumption</span></p>`;
+  }
+
+  // =====================================================================================
+  // Model training: five layers, your strategy, and the weekly feedback loop
+  // =====================================================================================
+
+  // ---- Layer switches (used only to work out each layer's contribution) ----
+  const LAYER = { noRisk: false, noNote: false, noCal: false };
+  // Statistical (with fixture difficulty) → Context (bookmaker odds) → Risk (minutes, availability,
+  // bans, news) → Human (your notes) → Feedback (recalibration) = the projection.
+  function layerBreakdown(e) {
+    const TO = gwTO();
+    const run = (f, to) => { Object.assign(LAYER, f); try { return scoreCore(e, 1, to); } finally { LAYER.noRisk = LAYER.noNote = LAYER.noCal = false; } };
+    const stat = run({ noRisk: true, noNote: true, noCal: true }, {});
+    const ctx = run({ noRisk: true, noNote: true, noCal: true }, TO);
+    const risk = run({ noRisk: false, noNote: true, noCal: true }, TO);
+    const hum = run({ noRisk: false, noNote: false, noCal: true }, TO);
+    const full = gp1(e);
+    return { stat, context: ctx - stat, risk: risk - ctx, human: hum - risk, feedback: full - hum, full };
+  }
+  const layerTxt = (e) => { const L = layerBreakdown(e), s = (v) => (v >= 0 ? "+" : "−") + Math.abs(v).toFixed(1); return `Statistical ${L.stat.toFixed(1)} · Context ${s(L.context)} · Risk ${s(L.risk)} · Human ${s(L.human)} · Feedback ${s(L.feedback)} = ${L.full.toFixed(1)} xP`; };
+
+  // ---- Your strategy: priorities that change decisions, not projections (except "historical points") ----
+  const LEVELS = ["Off", "Situational", "High", "Very high", "Critical"];
+  const STRAT_RULES = [
+    { k: "xp", l: "Maximise cumulative expected points", def: 4, fixed: true, fx: () => "The basis of every projection and decision: always on." },
+    { k: "squad14", l: "Maintain 14 playable squad members", def: 4, fx: (v) => (v ? `A transfer that restores a reliable player (when you have under 14) scores +${[0, 0.25, 0.5, 0.75, 1][v]} pts.` : "Playable-squad count is ignored in transfers.") },
+    { k: "nailed", l: "Prioritise nailed starters", def: 3, fx: (v) => `Only players who start ${pct([0.4, 0.55, 0.65, 0.7, 0.8][v])}+ of matches are suggested as buys.` },
+    { k: "mins70", l: "Prefer players expected to play 70+ minutes", def: 3, fx: (v) => (v ? `Buys lose up to ${[0, 0.25, 0.5, 1, 1.5][v]} pts for each 100% short of certain 70+ minutes.` : "70+ minute chance isn't weighed in transfers.") },
+    { k: "horizon", l: "Assess fixtures over 3–5 gameweeks", def: 2, fixed: true, fx: () => "Transfers are valued over the next 5 gameweeks; the 3-gameweek plan sequences them." },
+    { k: "flex", l: "Preserve transfer flexibility", def: 2, fx: (v) => `Rolling a free transfer is worth about ${(1.5 * [0, 0.5, 1, 1.5, 2][v]).toFixed(1)} pts, so a move must beat that.` },
+    { k: "hits", l: "Minimise unnecessary points hits", def: 2, fx: (v) => `A −4 is suggested only if it still gains ${[1, 2, 4, 6, 8][v]}+ pts over 5 gameweeks after the hit.` },
+    { k: "history", l: "Avoid chasing historical points", def: 2, fx: (v) => `Form and points per game make up ${Math.round([0.55, 0.5, 0.45, 0.35, 0.25][v] * 100)}% of a projection (the rest is underlying numbers).${v === 4 ? " The momentum hold is switched off." : ""}` },
+    { k: "diffs", l: "Consider differential opportunities", def: 1, fx: (v) => (v ? `When chasing, a captain differential is taken if it costs under ${[0, 0.5, 0.8, 1.2, 1.6][v]} xP.` : "Captaincy ignores league ownership.") },
+    { k: "chips", l: "Optimise chip deployment", def: 1, fx: (v) => (v ? (v >= 3 ? "Chips are suggested a little more readily when the timing is good." : "Chips are suggested when this week is clearly the best window.") : "Chip suggestions are switched off.") },
+  ];
+  let STRAT = {};
+  const STR = (k) => { const r = STRAT_RULES.find((x) => x.k === k); return STRAT[k] != null && !r.fixed ? STRAT[k] : r.def; };
+  const stratHistW = () => [0.55, 0.5, 0.45, 0.35, 0.25][STR("history")];
+  const stratNailed = () => [0.4, 0.55, 0.65, 0.7, 0.8][STR("nailed")];
+  const stratMins70 = () => [0, 0.25, 0.5, 1, 1.5][STR("mins70")];
+  const stratRoll = () => [0, 0.5, 1, 1.5, 2][STR("flex")];
+  const stratHit = () => [1, 2, 4, 6, 8][STR("hits")];
+  const stratCover = () => [0, 0.25, 0.5, 0.75, 1][STR("squad14")];
+  const stratDiff = () => [0, 0.5, 0.8, 1.2, 1.6][STR("diffs")];
+  function strategyPanelHTML() {
+    const can = !!ownerKey() && D.source === "live" && ownerOk !== false;
+    return `<div class="panel-head"><h3>Your strategy</h3><span class="note">How the model makes decisions: separate from how it projects players</span></div>
+      <p class="note">Set a priority for each rule. They change which transfers, captains, holds and chips are suggested.${can ? "" : " Unlock Your notes below to change them."}</p>
+      <div class="strat">${STRAT_RULES.map((r) => { const v = STR(r.k); return `<div class="st-row"><span class="st-l"><strong>${r.l}</strong><small>${r.fx(v)}</small></span>${r.fixed ? `<span class="pill">${LEVELS[r.def]}</span>` : `<select data-strat="${r.k}" ${can ? "" : "disabled"} aria-label="${esc(r.l)} priority">${LEVELS.map((l, i) => `<option value="${i}" ${i === v ? "selected" : ""}>${l}</option>`).join("")}</select>`}</div>`; }).join("")}</div>
+      <p class="note" id="stratMsg"></p>`;
+  }
+  function wireStrategy(box, after) {
+    box.querySelectorAll("[data-strat]").forEach((s) => s.addEventListener("change", async () => {
+      const next = { ...STRAT, [s.dataset.strat]: +s.value };
+      $("#stratMsg").textContent = "Saving…";
+      try { await ownerPost("strategy", next); STRAT = next; XS.clear(); GWE.buys = null; GWE.chipsAdv = null; Object.keys(PRC).forEach((k) => delete PRC[k]); after(); } catch (e) { $("#stratMsg").textContent = "Couldn't save: " + e.message + "."; }
+    }));
+  }
+
+  // ---- Feedback loop: classify each prediction error after the gameweek ----
+  const ERR_CATS = {
+    bench: { l: "Unexpected benching", learn: "Improve starting probability" },
+    early: { l: "Early substitution", learn: "Improve expected minutes" },
+    tactic: { l: "Tactical change (suspected)", learn: "Improve role assessment: confirm with a note" },
+    attack: { l: "Unexpected attacking output", learn: "Review attacking projections" },
+    defence: { l: "Defensive underperformance", learn: "Reassess team strength" },
+    fixture: { l: "Incorrect fixture assessment", learn: "Improve fixture and matchup analysis" },
+    event: { l: "Unpredictable event", learn: "No model change: avoid overreacting" },
+    human: { l: "Human observation error", learn: "Reassess note reliability" },
+    unlucky: { l: "Good pick, unlucky", learn: "Not an error: the underlying numbers were there" },
+    lucky: { l: "Lucky output", learn: "Not a reason to chase him" },
+    ok: { l: "On target", learn: "" },
+  };
+  // What a player's match was worth on its underlying numbers (minutes, xG, xA, xG conceded, defensive actions).
+  function deservedPts(t, a) {
+    const [mins, , xg, xa, xgc, saves, bonus, defcon] = a, S = SCORE[t];
+    let p = mins >= 60 ? 2 : mins > 0 ? 1 : 0;
+    p += xg * S.g + xa * 3;
+    if (mins >= 60 && S.cs) p += S.cs * Math.exp(-xgc);
+    if (t <= 2) p -= 0.5 * xgc;
+    if (t >= 2 && defcon >= (t === 2 ? 10 : 12)) p += 2;
+    if (t === 1) p += saves / 3;
+    return p + 0.5 * bonus;
+  }
+  const LRN = { cache: {} };
+  async function learnGw(g, rec) {
+    if (LRN.cache[g]) return LRN.cache[g];
+    const gd = await fetch(`api/gw/${g}`, { cache: "no-store" }).then((r) => (r.ok ? r.json() : null)).catch(() => null);
+    if (!gd || !gd.els) return null;
+    if (!MT.fx) { try { MT.fx = await api("fixtures/"); } catch (e) { MT.fx = []; } }
+    const fxs = (MT.fx || []).filter((f) => f.event === g);
+    const ev = new Set(); fxs.forEach((f) => (f.stats || []).filter((s) => ["red_cards", "own_goals", "penalties_missed"].includes(s.identifier)).forEach((s) => [...s.h, ...s.a].forEach((x) => ev.add(x.element))));
+    const conceded = {}, played = {}; fxs.forEach((f) => { if (f.team_h_score == null) return; conceded[f.team_h] = (conceded[f.team_h] || 0) + f.team_a_score; conceded[f.team_a] = (conceded[f.team_a] || 0) + f.team_h_score; played[f.team_h] = played[f.team_a] = true; });
+    const teamXg = {}; Object.entries(gd.els).forEach(([id, a]) => { const e = E[id]; if (e) teamXg[e.team] = (teamXg[e.team] || 0) + a[2]; });
+    const rows = [], fixtureFlag = new Set();
+    Object.entries(rec.preds || {}).forEach(([id, pr]) => {
+      const e = E[id]; if (!e || typeof pr !== "object" || !played[e.team]) return;
+      const a = gd.els[id] || [0, 0, 0, 0, 0, 0, 0, 0, 0], t = e.element_type;
+      const actual = a[1], des = deservedPts(t, a), started = a[8] > 0, mins = a[0];
+      const cats = [];
+      if (ev.has(+id) || (started && mins < 45 && ["i", "d", "s"].includes(e.status))) cats.push("event");
+      if (pr.ps >= 0.7 && !started) cats.push("bench");
+      if (started && mins < 60 && pr.p70 >= 0.6 && !cats.includes("event")) cats.push("early");
+      if (started && mins >= 70 && t >= 3 && pr.lg + pr.la >= 0.3 && a[2] + a[3] < 0.35 * (pr.lg + pr.la)) cats.push("tactic");
+      if (t <= 2 && pr.cs >= 0.4 && (conceded[e.team] || 0) >= 2) cats.push("defence");
+      if (pr.tf != null && Math.abs((teamXg[e.team] || 0) - pr.tf) >= 1.0) { cats.push("fixture"); fixtureFlag.add(e.team); }
+      if (t >= 3 && started && Math.abs(des - pr.xp) >= 3 && !cats.length) cats.push("attack");
+      if (pr.nf && pr.nf !== 1) { const right = pr.nf > 1 ? des >= pr.xp / pr.nf : des <= pr.xp / pr.nf; if (!right) cats.push("human"); }
+      if (des - actual >= 3) cats.push("unlucky"); else if (actual - des >= 4) cats.push("lucky");
+      if (!cats.length) cats.push("ok");
+      rows.push({ id: +id, t, pr, a, actual, des, started, cats, noteRight: pr.nf && pr.nf !== 1 ? !cats.includes("human") : null });
+    });
+    const res = { g, final: !!gd.final, rows, fixtureFlag };
+    if (gd.final) LRN.cache[g] = res;
+    return res;
+  }
+  // Recalibration from finished gameweeks: per-position (vs underlying numbers), starting probability,
+  // and the reliability of each kind of note. Small, capped and only with enough evidence.
+  function calibrate(results) {
+    const fin = results.filter((r) => r && r.final);
+    const all = fin.flatMap((r) => r.rows);
+    const out = { gws: fin.map((r) => r.g), at: Date.now() };
+    if (fin.length >= 2) {
+      const f = {}; [1, 2, 3, 4].forEach((t) => { const xs = all.filter((x) => x.t === t && !x.cats.includes("event")); if (xs.length >= 30) { const p = xs.reduce((s, x) => s + x.pr.xp, 0), d = xs.reduce((s, x) => s + x.des, 0); f[t] = Math.max(0.85, Math.min(1.15, d / Math.max(1, p))); } });
+      if (Object.keys(f).length) out.f = f;
+      const st = all.filter((x) => x.pr.ps >= 0.5); if (st.length >= 30) out.start = Math.max(0.85, Math.min(1.1, (st.filter((x) => x.started).length + 1) / (st.reduce((s, x) => s + x.pr.ps, 0) + 1)));
+    }
+    const rel = {}; all.forEach((x) => { if (x.noteRight == null) return; (x.pr.nk || []).forEach((k) => { rel[k] = rel[k] || [0, 0]; rel[k][1]++; if (x.noteRight) rel[k][0]++; }); });
+    if (Object.keys(rel).length) out.noteRel = rel;
+    return out;
+  }
+  // How much to trust each kind of note, from its record (1 = neutral until there's evidence).
+  const noteWeight = (key) => { const r = CAL && CAL.noteRel && CAL.noteRel[key]; if (!r || r[1] < 2) return 1; return Math.max(0.5, Math.min(1.4, 0.5 + (r[0] + 1) / (r[1] + 2))); };
+
+  async function renderLearning() {
+    const box = $("#learning"); if (!box) return;
+    let recs = null; try { recs = D.source === "live" ? await fetch("api/recs", { cache: "no-store" }).then((r) => (r.ok ? r.json() : null)) : null; } catch (e) { recs = null; }
+    if (!document.body.contains(box)) return;
+    const gws = recs ? Object.keys(recs).map(Number).filter((g) => recs[g] && g <= gwCur).sort((a, b) => b - a) : [];
+    const results = [];
+    for (const g of gws) { if (recs[g].v >= 2) results.push(await learnGw(g, recs[g])); }
+    const res = results.filter(Boolean);
+    const head = `<div class="panel-head"><h3>Learning from results</h3><span class="note">Each gameweek's prediction errors, classified, with what the model learns</span></div>`;
+    if (!res.length) {
+      box.innerHTML = head + `<p class="note">${recs && recs[gwNext] ? `GW${gwNext}'s predictions are saved (${new Date(recs[gwNext].at).toLocaleString("en-GB", { timeZone: "Europe/London", dateStyle: "short", timeStyle: "short" })}). ` : ""}Once GW${gwNext} is played, every saved prediction is compared with what happened and its error is classified: unexpected benching, early substitution, tactical change, attacking output, defensive underperformance, fixture assessment, unpredictable event or note error. Good picks that blank on strong underlying numbers count as unlucky, not wrong. After two gameweeks the model starts recalibrating itself.</p>`;
+      return;
+    }
+    const all = res.flatMap((r) => r.rows), nm = (id) => esc(E[id]?.web_name || "?");
+    const errKeys = Object.keys(ERR_CATS).filter((k) => k !== "ok");
+    const count = (rows, k) => rows.filter((x) => x.cats.includes(k));
+    const mae = (rows, f) => (rows.length ? rows.reduce((s, x) => s + Math.abs(f(x) - x.pr.xp), 0) / rows.length : 0);
+    // recurring patterns: an error category repeating for the same club and position
+    const pat = {}; all.forEach((x) => x.cats.filter((k) => !["ok", "unlucky", "lucky", "event"].includes(k)).forEach((k) => { const key = `${k}|${E[x.id].team}|${x.t}`; (pat[key] = pat[key] || []).push(x); }));
+    const patterns = Object.entries(pat).filter(([, xs]) => xs.length >= 2).sort((a, b) => b[1].length - a[1].length).slice(0, 6);
+    const cal = calibrate(res);
+    if (ownerKey() && JSON.stringify([cal.f, cal.start, cal.noteRel]) !== JSON.stringify([CAL && CAL.f, CAL && CAL.start, CAL && CAL.noteRel])) ownerPost("calib", cal).then(() => { CAL = cal; XS.clear(); }).catch(() => {});
+    const latest = res[0];
+    box.innerHTML = head + `
+      <div class="lr-sum"><div><span class="k">Average miss vs points</span><b>${mae(all, (x) => x.actual).toFixed(1)}</b></div><div><span class="k">vs underlying numbers</span><b>${mae(all, (x) => x.des).toFixed(1)}</b></div><div><span class="k">Players tracked</span><b>${all.length}</b></div><div><span class="k">Gameweeks</span><b>${res.map((r) => "GW" + r.g + (r.final ? "" : " (live)")).join(", ")}</b></div></div>
+      <p class="note">Missing by the underlying numbers is the fairer test: a player with 1.2 xGI who scores 2 pts was still a good pick.</p>
+      <h4 class="lr-h">GW${latest.g}: errors by type</h4>
+      <div class="tbl-wrap"><table class="lr-tbl"><thead><tr><th>Error type</th><th class="n">Players</th><th>Examples</th><th>What the model learns</th></tr></thead><tbody>
+      ${[...errKeys, "ok"].map((k) => { const xs = count(latest.rows, k); if (!xs.length) return ""; return `<tr class="lr-${k}"><td><strong>${ERR_CATS[k].l}</strong></td><td class="n">${xs.length}</td><td>${xs.slice(0, 4).map((x) => `${nm(x.id)} <span class="note">${x.pr.xp.toFixed(1)} xP → ${x.actual} pts (${x.des.toFixed(1)} deserved)</span>`).join(", ")}${xs.length > 4 ? ` +${xs.length - 4}` : ""}</td><td class="note">${ERR_CATS[k].learn}</td></tr>`; }).join("")}
+      </tbody></table></div>
+      <h4 class="lr-h">Recurring patterns</h4>
+      ${patterns.length ? `<ul class="lr-pat">${patterns.map(([key, xs]) => { const [k, team, t] = key.split("|"); return `<li><strong>${ERR_CATS[k].l}</strong>: ${esc(T[team].name)} ${D.positions[t]} ×${xs.length} <span class="note">(${[...new Set(xs.map((x) => E[x.id].web_name))].map(esc).join(", ")})</span></li>`; }).join("")}</ul>` : `<p class="note">None yet: a pattern needs the same error for the same club and position at least twice.</p>`}
+      <h4 class="lr-h">Recalibration</h4>
+      <p class="note">${cal.f ? `Projections by position (against underlying numbers): ${Object.entries(cal.f).map(([t, v]) => `${D.positions[t]} ×${v.toFixed(2)}`).join(", ")}. ` : "Position corrections start after two finished gameweeks with 30+ players each. "}${cal.start ? `Starting probability ×${cal.start.toFixed(2)}.` : ""} Corrections are capped (±15%) so one odd week can't swing the model.</p>
+      <h4 class="lr-h">Reliability of your notes</h4>
+      ${cal.noteRel ? `<ul class="lr-pat">${Object.entries(cal.noteRel).sort((a, b) => b[1][1] - a[1][1]).map(([k, [r, n]]) => `<li>${esc(noteKeyLabel(k))}: right ${r} of ${n}${n >= 2 ? ` · weight ×${noteWeight(k).toFixed(2)}` : " · needs 2+ to adjust"}</li>`).join("")}</ul>` : `<p class="note">No noted players have been through a gameweek yet. Each kind of note earns more weight when it proves right and less when it doesn't.</p>`}
+      <p class="note"><span class="lab lab-fact">Fact</span> results from FPL's live data · <span class="lab lab-proj">Projection</span> deserved points from the underlying numbers.</p>`;
+  }
+  const noteKeyLabel = (k) => { const [kind, key, dir] = k.split(":"); return kind === "t" ? (NOTE_TAGS[key] ? NOTE_TAGS[key].l : key) : `${NOTE_CATS[key] ? NOTE_CATS[key].l : key} (${dir === "+" ? "positive" : "concern"})`; };
+  const noteKeys = (n) => [...nTags(n).map((k) => "t:" + k), ...nCats(n).map(([k, v]) => `c:${k}:${v}`)];
+
+  // ---- The feedback loop, step by step ----
+  function loopHTML(recs) {
+    const nNotes = Object.keys(NOTES).filter((id) => noteOf(+id)).length, saved = recs && recs[gwNext];
+    const done = recs ? Object.keys(recs).map(Number).filter((g) => g < gwNext && recs[g] && recs[g].v >= 2) : [];
+    const steps = [
+      ["Collect statistics and player notes", `FPL Opta data, odds and news; ${nNotes} note${nNotes === 1 ? "" : "s"} from you`, true],
+      ["Generate adjusted predictions", "Five layers, with your notes and strategy", true],
+      ["Save predictions before deadline", saved ? `GW${gwNext} saved ${new Date(saved.at).toLocaleString("en-GB", { timeZone: "Europe/London", weekday: "short", hour: "2-digit", minute: "2-digit" })}` : ownerKey() ? `Saved when you open Current gameweek before the GW${gwNext} deadline` : "Needs your owner password on this device", !!saved],
+      ["Compare against actual performance", done.length ? `${done.length} gameweek${done.length > 1 ? "s" : ""} compared` : `After GW${gwNext} is played`, !!done.length],
+      ["Identify errors and recurring patterns", done.length ? "See Learning from results" : "Starts after the first compared gameweek", !!done.length],
+      ["Recalibrate future predictions", CAL && (CAL.f || CAL.start || CAL.noteRel) ? "Corrections active" : "After two finished gameweeks", !!(CAL && (CAL.f || CAL.start))],
+    ];
+    return `<div class="loop">${steps.map(([t, d, ok], i) => `<div class="lp-step ${ok ? "ok" : ""} ${i === 5 ? "last" : ""}"><span class="lp-n">${ok ? "✓" : i + 1}</span><span><strong>${t}</strong><small>${d}</small></span></div>`).join("")}<div class="lp-back">↻ back to the start each gameweek</div></div>`;
+  }
+  function layersHTML() {
+    const cap = GWE.eng && GWE.eng.adv.find((x) => x.sec === "cap" && x.capId);
+    const e = cap ? E[cap.capId] : null, L = e ? layerBreakdown(e) : null, s = (v) => (v >= 0 ? "+" : "−") + Math.abs(v).toFixed(1);
+    const rows = [["01", "Statistical intelligence", "xG, xA, xGI, xG conceded, defensive contributions and FPL's scoring rules, with fixture difficulty", L && L.stat.toFixed(1)], ["02", "Contextual intelligence", "Bookmaker odds (margin removed), home and away, team strength, opposition", L && s(L.context)], ["03", "Human intelligence", "Your notes: eye test, roles, movement, confidence, manager comments", L && s(L.human)], ["04", "Risk intelligence", "Chance of starting, 70+ minutes, injuries, bans, rotation and news", L && s(L.risk)], ["05", "Feedback and learning", "Predictions scored against results; errors classified; recalibrated", L && s(L.feedback)]];
+    return `<div class="layers">${rows.map(([n, t, d, v]) => `<div class="ly"><span class="ly-n">${n}</span><span><strong>${t}</strong><small>${d}</small></span>${v != null ? `<b class="ly-v">${v}</b>` : ""}</div>`).join("")}</div>
+      ${e ? `<p class="note">The numbers on the right are your captain ${esc(e.web_name)}'s GW${gwNext} projection, layer by layer: ${L.full.toFixed(1)} xP in total. Tap Why? on any recommendation to see it for other players.</p>` : ""}`;
   }
 
   // ---------- Matches: every fixture in a gameweek with the score, scorers, assists and your players' stats ----------

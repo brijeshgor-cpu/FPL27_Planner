@@ -157,6 +157,34 @@ bench order, transfers or chip before the deadline?*
   from `/api/gwplayers`. It shows the current gameweek until every match is played
   (`matchesDefaultGw()`), then the next one with kick-off times, win odds and your players' xP and
   start chance. Arrows browse other gameweeks.
+- **Five-layer model and feedback loop (Train the model):**
+  - **Layers:** `scoreCore()` is the projection; `expertScore()` caches it. `LAYER` switches let
+    `layerBreakdown(e)` split a projection into Statistical (stats with FDR), Context (odds), Risk
+    (minutes, availability, bans, news), Human (notes) and Feedback (recalibration). Why? shows it.
+  - **Saving predictions:** `recordAdvice()` saves rich predictions (v2) before the deadline. Each
+    holds xp, start chance, 70+ chance, expected minutes, goal and assist λ, clean sheet chance, team
+    goal λ, note factor and note keys.
+  - **Error classification:** `learnGw()` compares predictions with `/api/gw/{gw}` and the
+    fixtures' events, and classifies each error into `ERR_CATS`: benching, early sub, suspected
+    tactical change, attacking output, defensive underperformance, fixture assessment, unpredictable
+    event, human observation error, plus "good pick, unlucky" and "lucky output". It judges against
+    `deservedPts()` (what the match's underlying numbers were worth), not just points.
+  - **Recalibration:** `calibrate()` needs 2+ finished gameweeks and produces per-position factors
+    (vs deserved, ±15%), a starting-probability factor and note reliability (`noteRel`). These are
+    saved to `/api/calib`. `noteWeight()` scales each kind of note's effect by its record
+    (0.5 to 1.4).
+- **Your strategy:** `STRAT_RULES`, saved to `/api/strategy` (owner only), with priority levels Off to
+  Critical. They change decisions:
+  - nailed: the buy start-rate floor;
+  - mins70: a penalty for buys unlikely to play 70+;
+  - flex: the value of rolling a transfer;
+  - hits: the net gain a −4 needs;
+  - squad14: the bonus for restoring cover;
+  - diffs: the captain-differential threshold;
+  - chips: off, normal or eager;
+  - history: the form weight in `scoreCore` (Critical also turns off the momentum hold).
+
+  The defaults reproduce the previous behaviour.
 - **Train the model tab:** `renderTrain()` (`#train`). It holds Your notes and the advice scorecard
   ("How the advice did"). The note types are 15 `NOTE_CATS` in three groups:
   - Player: performance, tactical role, attacking threat, creativity, set-piece duties, defensive

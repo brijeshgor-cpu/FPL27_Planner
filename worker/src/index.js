@@ -43,6 +43,7 @@ export default {
       return json({ ok: !!env.OWNER_KEY && k === String(env.OWNER_KEY).trim(), configured: !!env.OWNER_KEY }, 200);
     }
     if (path === "calib" || path === "calib/") return ownerStore(request, env, "calib", null);
+    if (path === "strategy" || path === "strategy/") return ownerStore(request, env, "strategy", null);
     if (request.method !== "GET") return new Response("Method not allowed", { status: 405 });
 
     if (path === "odds" || path === "odds/") return odds(env);
