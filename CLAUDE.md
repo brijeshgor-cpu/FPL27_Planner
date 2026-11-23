@@ -166,7 +166,20 @@ bench order, transfers or chip before the deadline?*
   - avoid: `buySecure` fails, so he's never suggested as a buy;
   - hold: `gwBuys` never sells him.
 
+  - captain: favoured as captain when it's close (×1.15 in the captain ranking only);
+  - target: considered for every transfer in his position, with a +1.5 nudge.
+
+  The note's words count too. `noteSignals()` reads phrases from the text and applies small, visible
+  multipliers through `NOTE_SIGNALS`:
+  - "on pens" +5%, set pieces +3%, a more attacking role +6%, form or confidence +4%;
+  - "knock" or "doubt": −15% and chance of playing capped at 75%;
+  - "rested" or rotation: −10% and start rate ×0.85;
+  - form or role worry −6%; new manager −5%.
+
   `noteFactor` and `calFactor` are applied in `expertScore`. The panel is on the Current gameweek tab.
+  Show notes wherever they act: `noteLine()` adds "Your note applied" (with xP before and after) to
+  every recommendation involving a noted player. The GW decision box, the Overview priorities and
+  Key insights list the active notes.
 - **Advice tracking:** `recordAdvice()` posts the GW plan before the deadline to `/api/rec/{gw}`. That
   covers captain, vice, best XI, transfers, holds and projections; the Worker refuses writes after the
   deadline. `renderAdviceScore()` (Insights) scores it afterwards. Once there are 2+ finished
