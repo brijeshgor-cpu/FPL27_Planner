@@ -956,7 +956,7 @@ details.why[open] { flex-basis: 100%; }
         <div class="kpi"><span class="k">GW${gwCur} points</span><span class="v">${meRow.event_total}</span><span class="s">League avg ${avgGw} · ${ordinal(gwRank)} this GW${ev?.avg ? ` · FPL avg ${ev.avg}` : ""}</span></div>
         <div class="kpi"><span class="k">Overall rank</span><span class="v ${rankDir(myM)}">${fmt(D.entry.summary_overall_rank || lh[6] || 0)}</span>${rankMove(myM)}<span class="s">${above ? `${above.total - meRow.total} pts to ${ordinal(above.rank)} in league` : "Top of the league"}</span></div>
         <div class="kpi"><span class="k">Bank · Squad value</span><span class="v">£${price(bankOf(myM))}m</span><span class="s">Squad value £${price(squadValue(myM))}m · total £${price(squadValue(myM) + bankOf(myM))}m</span></div>
-        <div class="kpi"><span class="k">Free transfers</span><span class="v">${ft}</span><span class="s">Estimate for GW${gwNext} · ${cl.filter((c) => !c.used).map((c) => CHIP_LABEL[c.name] || c.name).join(" ") || "no chips"} left</span></div>
+        <div class="kpi" id="kpiFt"><span class="k">Free transfers</span><span class="v">${ft}</span><span class="s">Estimate for GW${gwNext} · ${cl.filter((c) => !c.used).map((c) => CHIP_LABEL[c.name] || c.name).join(" ") || "no chips"} left</span></div>
       </div>
       ${freshness()}
       <div class="grid-2">
@@ -974,6 +974,8 @@ details.why[open] { flex-basis: 100%; }
     </section>`;
     renderFuture();
     renderGwStats();
+    // swap the free-transfer estimate for FPL's own figure once your Pick Team has loaded
+    loadOfficial().then((o) => { const k = $("#kpiFt"); if (!o || !k || view !== "overview") return; k.innerHTML = `<span class="k">Free transfers</span><span class="v">${o.unlimited ? "∞" : o.ft}</span><span class="s">GW${gwNext}, from FPL${o.made ? ` (${o.made} already used)` : ""} · £${price(o.bank)}m in the bank · ${cl.filter((c) => !c.used).map((c) => CHIP_LABEL[c.name] || c.name).join(" ") || "no chips"} left</span>`; });
   }
 
   // ---- Current gameweek team stats: each of your players' match stats, live ----
@@ -1695,7 +1697,7 @@ details.why[open] { flex-basis: 100%; }
         <div class="kpi"><span class="k">Gap to ${esc(lName)}</span><span class="v">${gap > 0 ? gap : "Leading"}</span><span class="s">${esc(leader.entry_name)}, ${ordinal(leader.rank)}</span></div>
         <div class="kpi"><span class="k">Your XI, next 3 GWs</span><span class="v">${pNow.toFixed(0)}${moves.length ? ` → ${pAfter.toFixed(0)}` : ""}</span><span class="s">Projected, now${moves.length ? " → after the plan" : ""}</span></div>
         <div class="kpi"><span class="k">${esc(lName)}'s XI, next 3 GWs</span><span class="v">${pLead.toFixed(0)}</span><span class="s">Projected on his current squad</span></div>
-        <div class="kpi"><span class="k">Free transfers</span><span class="v">${ft}</span><span class="s">£${price(myM.picks?.bank ?? lastHist(myM)[8])}m in the bank</span></div>
+        <div class="kpi"><span class="k">Free transfers</span><span class="v">${ft}</span><span class="s">£${price(bank)}m in the bank${plan && plan.eng ? " (FPL)" : ""}</span></div>
       </div>
       <p class="lede">${verdictTxt}</p>
       ${(() => { const near = mine.map((m) => ({ m, b: banRisk(m.e) })).filter((x) => x.b && x.b.away <= 2 && x.m.e.status !== "s").sort((a, b) => a.b.away - b.b.away || b.b.p - a.b.p);
@@ -2990,18 +2992,44 @@ details.why[open] { flex-basis: 100%; }
 
   // ---------- planner ----------
   let selOut = null;
-  function planState() { return store.get("plan:" + gwNext, []); }
+  // ---- Your official team for the coming gameweek, from FPL's Pick Team (needs the FPL login) ----
+  // OFF: { picks, bank, ft, made, cost, sell, buy, fetched } or null when only public data is available.
+  let OFF;
+  function offFrom(mt) {
+    const live = mt && mt.ok ? mt : mt && mt.last ? mt.last : null;
+    if (!live || !live.picks || live.picks.length !== 15) return null;
+    const tr = live.transfers || {};
+    const sell = {}, buy = {};
+    live.picks.forEach((p) => { if (p.selling_price != null) sell[p.element] = p.selling_price; if (p.purchase_price != null) buy[p.element] = p.purchase_price; });
+    return { picks: live.picks.map((p) => [p.element, p.position, p.multiplier, p.is_captain, p.is_vice_captain]).sort((a, b) => a[1] - b[1]), bank: tr.bank ?? null, ft: Math.max(0, (tr.limit || 0) - (tr.made || 0)), limit: tr.limit, made: tr.made || 0, unlimited: tr.status === "unlimited", sell, buy, fetched: live.fetched, stale: !mt.ok };
+  }
+  async function loadOfficial() {
+    if (OFF !== undefined) return OFF;
+    if (D.source !== "live") return (OFF = null);
+    if (!GWE.mtP) GWE.mtP = fetch("api/my-team", { cache: "no-store" }).then((r) => (r.ok ? r.json() : null)).catch(() => null);
+    OFF = offFrom(await GWE.mtP);
+    return OFF;
+  }
+  const baseSquad = () => (OFF ? OFF.picks : squadOf(myM));
+  function planState() {
+    // keep only planned moves that still make sense for the current official squad
+    const ids = new Set(baseSquad().map((p) => p[0])), ok = [];
+    store.get("plan:" + gwNext, []).forEach((m) => { if (ids.has(m.out) && !ids.has(m.inn) && E[m.inn]) { ok.push(m); ids.delete(m.out); ids.add(m.inn); } });
+    return ok;
+  }
   function setPlan(p) { store.set("plan:" + gwNext, p); }
   function plannedSquad() {
     const plan = planState();
-    const sq = squadOf(myM).map((p) => ({ el: p[0], slot: p[1], orig: p[0] }));
+    const sq = baseSquad().map((p) => ({ el: p[0], slot: p[1], orig: p[0] }));
     plan.forEach(({ out, inn }) => { const s = sq.find((x) => x.el === out); if (s) s.el = inn; });
     return sq;
   }
-  // ---- prices: paid (latest transfer in, else opening-day price) and sale price under FPL's 50% rule ----
-  function boughtPrice(id) { let best = null; (D.transfers || []).forEach((t) => { if (t[1] === id && (!best || t[0] >= best[0])) best = t; }); return best ? best[2] : E[id].now_cost - (E[id].cost_change_start || 0); }
+  // ---- prices: FPL's own purchase and sale prices when logged in; otherwise paid (latest transfer in,
+  //      else opening-day price) and sale price under FPL's 50% rule ----
+  function boughtPrice(id) { if (OFF && OFF.buy[id] != null) return OFF.buy[id]; let best = null; (D.transfers || []).forEach((t) => { if (t[1] === id && (!best || t[0] >= best[0])) best = t; }); return best ? best[2] : E[id].now_cost - (E[id].cost_change_start || 0); }
   function sellPrice(id) {
-    if (!squadOf(myM).some((p) => p[0] === id)) return E[id].now_cost; // bought this week: sells at today's price
+    if (OFF && OFF.sell[id] != null) return OFF.sell[id];
+    if (!baseSquad().some((p) => p[0] === id)) return E[id].now_cost; // not in your squad: today's price
     const b = boughtPrice(id), n = E[id].now_cost; return n <= b ? n : b + Math.floor((n - b) / 2);
   }
   // FPL's own price-change progress: ±100% means the price changes at the next overnight update.
@@ -3027,13 +3055,21 @@ details.why[open] { flex-basis: 100%; }
   };
 
   function renderPlanner() {
+    if (OFF === undefined) {
+      $("#app").innerHTML = `<section class="view"><div class="panel-head"><h2>GW${gwNext} transfer planner</h2></div><p class="empty">Loading your GW${gwNext} team from FPL…</p></section>`;
+      loadOfficial().then(() => { if (view === "planner") renderPlanner(); });
+      return;
+    }
     const h = store.get("horizon", 5);
     const plan = planState();
     const sq = plannedSquad();
-    const bank0 = myM.picks?.bank ?? lastHist(myM)[8];
+    const bank0 = OFF && OFF.bank != null ? OFF.bank : myM.picks?.bank ?? lastHist(myM)[8];
     const bank = plan.reduce((b, { out, inn }) => b + (E[out] ? sellPrice(out) : 0) - (E[inn]?.now_cost || 0), bank0);
-    const ft = freeTransfers(myM, D.entry.started_event || 1);
+    const ft = OFF ? (OFF.unlimited ? 15 : OFF.ft) : freeTransfers(myM, D.entry.started_event || 1);
     const hits = Math.max(0, plan.length - ft) * 4;
+    // transfers already made on FPL for this gameweek (official squad vs last gameweek's)
+    const oldIds = new Set(squadOf(myM).map((p) => p[0])), offIds = new Set(baseSquad().map((p) => p[0]));
+    const doneOut = OFF ? squadOf(myM).map((p) => p[0]).filter((id) => !offIds.has(id)) : [], doneIn = OFF ? [...offIds].filter((id) => !oldIds.has(id)) : [];
     const gain = plan.reduce((g, { out, inn }) => g + project(E[inn], h) - project(E[out], h), 0);
     const teamCount = {}; sq.forEach((s) => (teamCount[E[s.el].team] = (teamCount[E[s.el].team] || 0) + 1));
     const mine = new Set(sq.map((s) => s.el));
@@ -3083,10 +3119,11 @@ details.why[open] { flex-basis: 100%; }
         <label class="controls"><span class="note">Projection window</span><select id="hz">${[3, 5, 8].map((v) => `<option value="${v}" ${v === h ? "selected" : ""}>Next ${v} GWs</option>`).join("")}</select></label></div>
       <div class="plan-sum">
         <div><div class="k">In the bank</div><div class="v ${bank < 0 ? "down" : ""}">£${price(bank)}m</div></div>
-        <div><div class="k">Transfers</div><div class="v">${plan.length} / ${ft} free</div></div>
+        <div><div class="k">Transfers planned</div><div class="v">${plan.length} / ${ft} free</div></div>
         <div><div class="k">Hit cost</div><div class="v ${hits ? "down" : ""}">${hits ? "−" + hits : "0"}</div></div>
         <div><div class="k">Projected gain</div><div class="v ${gain - hits >= 0 ? "up" : "down"}">${sign(Number((gain - hits).toFixed(1)))}</div></div>
       </div>
+      <p class="fresh">${OFF ? `Squad, bank, sale prices and free transfers from your FPL Pick Team${OFF.stale ? " (last saved copy: the FPL login needs renewing, see the Current gameweek tab)" : ""}, loaded at ${new Date(OFF.fetched).toLocaleTimeString("en-GB", { hour: "2-digit", minute: "2-digit" })}. ${doneOut.length ? `Already made on FPL for GW${gwNext}: ${doneOut.map((o, i) => `${esc(E[o].web_name)} → ${doneIn[i] ? esc(E[doneIn[i]].web_name) : "?"}`).join(", ")} (${OFF.made} of ${OFF.limit} free transfers used, ${ft} left).` : `No transfers made on FPL for GW${gwNext} yet.`} <span class="lab lab-fact">Fact</span>` : `Rebuilt from public data (your GW${gwCur} team): FPL keeps GW${gwNext} transfers private until the deadline unless the site is signed in to your FPL account. Free transfers are an estimate. <span class="lab lab-asm">Assumption</span>`}</p>
       ${plan.length ? `<ul class="moves">${plan.map(({ out, inn }, i) => `<li><span><span class="down">${esc(E[out].web_name)}</span> → <span class="up">${esc(E[inn].web_name)}</span> <span class="note">sells £${price(sellPrice(out))}m → costs £${price(E[inn].now_cost)}m</span></span><button class="btn sm" data-undo="${i}">Undo</button></li>`).join("")}</ul><div class="controls"><button class="btn" id="reset">Clear plan</button></div>` : ""}
 
       <div class="panel">
