@@ -631,6 +631,23 @@ tr.benchrow td { background: var(--surface-2); }
 @media (max-width: 1100px) { .ed-sum { grid-template-columns: repeat(3, minmax(0, 1fr)); } .ed-sum > div.reset { grid-column: 1 / -1; } }
 @media (max-width: 900px) { .ed-grid { grid-template-columns: minmax(0, 1fr); } .ed-pick { position: static; } .pk-jump { display: inline-flex; } .pk-list { max-height: 560px; } }
 @media (max-width: 600px) { .ed-sum { grid-template-columns: repeat(2, minmax(0, 1fr)); } .ed-sum .v { font-size: 1.4rem; } .pk-row { grid-template-columns: 26px minmax(0, 1fr) 46px 64px; } .pk-fx { display: none; } }
+.capsel { display: flex; flex-wrap: wrap; gap: 10px; margin-bottom: 10px; }
+.capsel label { display: flex; align-items: center; gap: 6px; font-size: .78rem; font-weight: 600; text-transform: uppercase; letter-spacing: .05em; color: var(--muted); flex: 1 1 180px; }
+.capsel select { flex: 1; text-transform: none; letter-spacing: 0; font-weight: 600; color: var(--ink); min-width: 0; }
+.adv-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 16px 20px; }
+.adv-sec h4 { margin: 0 0 8px; font-size: .8rem; text-transform: uppercase; letter-spacing: .07em; color: var(--muted); }
+.adv-acts { display: flex; flex-wrap: wrap; gap: 8px; align-items: flex-start; margin-top: 6px; }
+details.why summary { cursor: pointer; font-size: .8rem; font-weight: 600; color: var(--accent); list-style: none; padding: 3px 8px; border: 1px solid var(--line); border-radius: 999px; display: inline-block; }
+details.why summary::-webkit-details-marker { display: none; }
+details.why[open] { flex-basis: 100%; }
+.why-b { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 8px; margin-top: 8px; }
+.why-p { background: var(--surface-2); border-radius: 8px; padding: 8px 10px; font-size: .78rem; }
+.why-p ul { margin: 4px 0 0; padding-left: 16px; display: grid; gap: 2px; color: var(--muted); list-style: disc; }
+.insights .why-p li { display: list-item; }
+.insights .why-p li::before { content: none; }
+.pc .meta.st-ok { color: var(--good); } .pc .meta.st-sev2 { color: var(--warn); font-weight: 700; } .pc .meta.st-sev3 { color: var(--bad); font-weight: 700; }
+.pc .meta .newtag { font-weight: 700; }
+@media (max-width: 900px) { .adv-grid { grid-template-columns: minmax(0, 1fr); } }
 </style>
 
 <header class="bar">
@@ -1732,6 +1749,8 @@ tr.benchrow td { background: var(--surface-2); }
     try { await ensureFA(squadOf(myM).map((p) => p[0])); } catch (e) { /* season data used */ }
     if (view !== "gw") return;
     gwBuild(mt);
+    try { await fetchSumm(GWE.st.ids); } catch (e) { /* season minutes used */ }
+    if (view !== "gw") return;
     GWE.sel = null; GWE.msg = "";
     drawGw();
     gwPoll();
@@ -1868,6 +1887,193 @@ tr.benchrow td { background: var(--surface-2); }
     st.xf.splice(i, 1); GWE.sel = null; GWE.msg = ""; gwSave();
   }
 
+  // ---- Minutes model: chance of starting and of playing 70+ minutes ----
+  // From the player's last 5 team matches (FPL match history), blended with his season start rate
+  // (worth 2 matches) and scaled by FPL's chance of playing. A start is counted at 50+ minutes,
+  // which separates starters from substitutes (a half-time sub plays 45).
+  function minutesProfile(e) {
+    const a = e.status === "s" ? 0 : availability(e);
+    const gp = teamPlayed(e.team) || 1;
+    const sStart = Math.min(1, e.starts / gp), s70 = Math.min(sStart, sStart * Math.min(1, e.minutes / Math.max(1, e.starts * 80)));
+    const h = (FA.summ[e.id] || []).slice().sort((x, y) => y[0] - x[0]).slice(0, 5);
+    const n = h.length, st = h.filter((x) => x[1] >= 50).length, f70 = h.filter((x) => x[1] >= 70).length;
+    const cameo = h.filter((x) => x[1] > 0 && x[1] < 30).length, off = h.filter((x) => x[1] >= 50 && x[1] < 70).length, dnp = h.filter((x) => x[1] === 0).length;
+    const pStart = a * (st + 2 * sStart) / (n + 2), p70 = a * (f70 + 2 * s70) / (n + 2);
+    const label = pStart >= 0.85 ? "Nailed" : pStart >= 0.65 ? "Likely starter" : pStart >= 0.4 ? "Rotation risk" : "Unlikely to start";
+    const gws = h.length ? `GW${h[h.length - 1][0]}–${h[0][0]}` : "";
+    const pattern = n ? `Started ${st} of his last ${n} (${gws})${f70 < st ? `, ${st - f70 === 1 ? "once" : st - f70 + " times"} taken off before 70'` : ""}${cameo ? `, ${cameo} cameo${cameo > 1 ? "s" : ""} under 30'` : ""}${dnp ? `, ${dnp} unused` : ""}` : `${e.starts} starts in ${gp} team matches this season`;
+    return { pStart, p70, label, n, st, f70, cameo, off, dnp, pattern, mins: h.slice().reverse().map((x) => `GW${x[0]} ${x[1]}'`), a };
+  }
+  const confCls = (p) => (p >= 0.85 ? "ok" : p >= 0.65 ? "" : p >= 0.4 ? "sev2" : "sev3");
+  const newsDate = (e) => (e.news_added ? new Date(e.news_added).toLocaleString("en-GB", { timeZone: "Europe/London", day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" }) : "");
+
+  // The "Why?" panel: Opta-based stats and team odds that explain a decision.
+  function whyHTML(list) {
+    const TO = gwTO();
+    const row = (e) => {
+      const mp = minutesProfile(e), sc = scoreChance(e, TO), o = TO[e.team], t = e.element_type;
+      const f = (teamFx[e.team][gwNext] || []).map(fxLabel).join(", ") || "no fixture";
+      const bits = [
+        `GW${gwNext}: ${f}`,
+        `${pct(mp.pStart)} to start, ${pct(mp.p70)} to play 70+`,
+        mp.mins.length ? `Recent minutes: ${mp.mins.join(", ")}` : "",
+        t >= 2 ? `xG ${(+e.expected_goals_per_90 || 0).toFixed(2)}/90, xA ${(+e.expected_assists_per_90 || 0).toFixed(2)}/90` : `Saves ${(+e.saves_per_90 || 0).toFixed(1)}/90`,
+        sc && t >= 2 ? `Anytime scorer ${pct(sc.p)}` : "",
+        o ? (t <= 2 ? `${tShort(e.team)} clean sheet ${pct(o.cs)}` : `${tShort(e.team)} to score ${pct(o.score)}`) : "",
+        t >= 2 ? `Defcon ${(+e.defensive_contribution_per_90 || 0).toFixed(1)}/90 (${pct(poisAtLeast(+e.defensive_contribution_per_90 || 0, t === 2 ? 10 : 12))} of games hit the bonus)` : "",
+        e.minutes ? `BPS ${((e.bps / e.minutes) * 90).toFixed(1)}/90` : "",
+        e.penalties_order === 1 ? "On penalties" : e.penalties_order === 2 ? "Second on penalties" : "",
+        e.news ? `FPL news: ${esc(e.news)}${e.news_added ? ` (updated ${newsDate(e)})` : ""}` : "",
+      ].filter(Boolean);
+      return `<div class="why-p"><strong>${esc(e.web_name)}</strong><ul>${bits.map((b) => `<li>${b}</li>`).join("")}</ul></div>`;
+    };
+    return `<details class="why"><summary>Why?</summary><div class="why-b">${list.map(row).join("")}</div></details>`;
+  }
+
+  // Best legal XI from a 15-man squad: best keeper plus the best 10 outfielders within 3–5 DEF, 2–5 MID, 1–3 FWD.
+  function bestXI(ids) {
+    const gks = ids.filter((id) => E[id].element_type === 1).sort((a, b) => gp1(E[b]) - gp1(E[a]));
+    const out = ids.filter((id) => E[id].element_type > 1);
+    let best = null;
+    for (let i = 0; i < out.length; i++) for (let j = i + 1; j < out.length; j++) for (let k = j + 1; k < out.length; k++) {
+      const xi = out.filter((_, x) => x !== i && x !== j && x !== k);
+      const cnt = { 2: 0, 3: 0, 4: 0 }; xi.forEach((id) => cnt[E[id].element_type]++);
+      if ([2, 3, 4].some((t) => cnt[t] < FORM_LIM[t][0] || cnt[t] > FORM_LIM[t][1])) continue;
+      const sum = xi.reduce((a, id) => a + gp1(E[id]), 0);
+      if (!best || sum > best.sum) best = { xi, sum, cnt };
+    }
+    const xi = [gks[0], ...best.xi];
+    return { ids: xi, sum: best.sum + gp1(E[gks[0]]), formation: `${best.cnt[2]}-${best.cnt[3]}-${best.cnt[4]}`, gkBench: gks[1], bench: out.filter((id) => !best.xi.includes(id)) };
+  }
+  // Who actually comes on if a starter doesn't play: first bench outfielder (in order) who plays and keeps a legal formation.
+  function autoSub(st, outId, playsP = 0.5) {
+    const e = E[outId];
+    if (e.element_type === 1) { const g = st.ids[11]; return g && minutesProfile(E[g]).pStart >= playsP ? g : null; }
+    const xi = st.ids.slice(0, 11).filter((id) => id !== outId);
+    for (const id of st.ids.slice(12)) {
+      if (minutesProfile(E[id]).pStart < playsP) continue;
+      const cnt = { 2: 0, 3: 0, 4: 0 }; [...xi, id].forEach((x) => E[x].element_type > 1 && cnt[E[x].element_type]++);
+      if (cnt[2] >= 3 && cnt[3] >= 2 && cnt[4] >= 1) return id;
+    }
+    return null;
+  }
+
+  // Recommendations for the team as edited. Every item has to pass one test: would it change your
+  // starting XI, captain, vice-captain or bench order before the deadline?
+  function gwAdvice(st) {
+    const TO = gwTO(), out = [];
+    const xiIds = st.ids.slice(0, 11), benchIds = st.ids.slice(11);
+    const P = (id) => gp1(E[id]), MP = (id) => minutesProfile(E[id]), nm = (id) => esc(E[id].web_name);
+    const fmt1 = (v) => (v >= 0 ? "+" : "−") + Math.abs(v).toFixed(1);
+
+    // 1. Best XI
+    const bx = bestXI(st.ids), cur = xiIds.reduce((a, id) => a + P(id), 0), gain = bx.sum - cur;
+    const ins = bx.ids.filter((id) => !xiIds.includes(id)).sort((a, b) => P(b) - P(a)), outs = xiIds.filter((id) => !bx.ids.includes(id)).sort((a, b) => P(a) - P(b));
+    const curCnt = { 2: 0, 3: 0, 4: 0 }; xiIds.forEach((id) => E[id].element_type > 1 && curCnt[E[id].element_type]++);
+    const curForm = `${curCnt[2]}-${curCnt[3]}-${curCnt[4]}`;
+    if (!ins.length || gain < 0.05) out.push({ sec: "xi", k: "good", t: `Your XI is the best XI from your squad (${curForm})`, d: `It projects ${cur.toFixed(1)} pts before the captain. No bench player projects more than the starter he'd replace.` });
+    else {
+      const close = gain < 0.5;
+      // pair each incoming player with the outgoing one in the same position where possible
+      const left = [...outs], rest = [], pairs = [];
+      ins.forEach((id) => { const k = left.findIndex((o) => E[o].element_type === E[id].element_type); if (k >= 0) pairs.push([left.splice(k, 1)[0], id]); else rest.push(id); });
+      rest.forEach((id) => { const k = left.findIndex((o) => E[o].element_type > 1); pairs.push([left.splice(k >= 0 ? k : 0, 1)[0], id]); });
+      const list = (a) => (a.length > 1 ? a.slice(0, -1).join(", ") + " and " + a[a.length - 1] : a[0]);
+      out.push({
+        sec: "xi", k: close ? "" : "warn",
+        t: close ? `Close call: ${pairs.map(([o, i]) => `${nm(i)} or ${nm(o)}`).join("; ")}` : `Start ${list(pairs.map(([, i]) => nm(i)))} instead of ${list(pairs.map(([o]) => nm(o)))}${bx.formation !== curForm ? ` (switch to ${bx.formation})` : ""}`,
+        d: close ? `Only ${gain.toFixed(1)} pts between them. ${pairs.map(([o, i]) => `${nm(i)} ${pct(MP(i).p70)} to play 70+ vs ${nm(o)} ${pct(MP(o).p70)}`).join("; ")}: go with the one more likely to play the full game.`
+          : `Projects ${fmt1(gain)} pts: ${pairs.map(([o, i]) => `${nm(i)} ${P(i).toFixed(1)} vs ${nm(o)} ${P(o).toFixed(1)}`).join(", ")}.`,
+        why: whyHTML(pairs.flat().map((id) => E[id])), act: close ? null : { a: "bestxi", l: "Apply best XI" },
+      });
+    }
+
+    // 2. Captain and vice
+    const capC = xiIds.map((id) => ({ id, p: P(id), mp: MP(id), sc: scoreChance(E[id], TO) })).filter((x) => x.mp.pStart >= 0.6).sort((a, b) => b.p - a.p);
+    if (capC.length >= 2) {
+      const [c1, c2] = capC, g = c1.p - c2.p, e1 = E[c1.id], e2 = E[c2.id];
+      const reasons = [];
+      const s1 = c1.sc ? c1.sc.p : 0, s2 = c2.sc ? c2.sc.p : 0;
+      if (s1 - s2 >= 0.08) reasons.push([s1 - s2, `more likely to score (${pct(s1)} vs ${pct(s2)})`]);
+      const f1 = (teamFx[e1.team][gwNext] || [])[0], f2 = (teamFx[e2.team][gwNext] || [])[0];
+      if (f1 && f2 && f2.fdr - f1.fdr >= 1) reasons.push([0.1 * (f2.fdr - f1.fdr), `easier fixture (${fxLabel(f1)} vs ${fxLabel(f2)})`]);
+      if ((teamFx[e1.team][gwNext] || []).length > (teamFx[e2.team][gwNext] || []).length) reasons.push([1, "plays twice this gameweek"]);
+      if (c1.mp.p70 - c2.mp.p70 >= 0.15) reasons.push([c1.mp.p70 - c2.mp.p70, `more secure minutes (${pct(c1.mp.p70)} vs ${pct(c2.mp.p70)} to play 70+)`]);
+      if (e1.penalties_order === 1 && e2.penalties_order !== 1) reasons.push([0.12, "on penalties"]);
+      const x1 = +e1.expected_goal_involvements_per_90 || 0, x2 = +e2.expected_goal_involvements_per_90 || 0;
+      if (x1 - x2 >= 0.12) reasons.push([x1 - x2, `higher xGI (${x1.toFixed(2)} vs ${x2.toFixed(2)} per 90)`]);
+      const a1 = +e1.expected_assists_per_90 || 0, a2 = +e2.expected_assists_per_90 || 0;
+      if (a1 - a2 >= 0.08) reasons.push([a1 - a2, `creates more chances (xA ${a1.toFixed(2)} vs ${a2.toFixed(2)} per 90)`]);
+      const b1 = e1.minutes ? (e1.bps / e1.minutes) * 90 : 0, b2 = e2.minutes ? (e2.bps / e2.minutes) * 90 : 0;
+      if (b1 - b2 >= 4) reasons.push([(b1 - b2) / 40, `more bonus potential (BPS ${b1.toFixed(0)} vs ${b2.toFixed(0)} per 90)`]);
+      if (e1.element_type === 3 && e2.element_type === 4) reasons.push([0.05, "a midfielder gets 5 a goal (a forward 4) and a point for a clean sheet"]);
+      reasons.sort((a, b) => b[0] - a[0]);
+      const against = s2 - s1 >= 0.08 ? ` ${E[c2.id].web_name} is likelier to score (${pct(s2)} vs ${pct(s1)}), but ${E[c1.id].web_name} adds more elsewhere.` : "";
+      const why1 = (reasons.length ? reasons.slice(0, 2).map((r) => r[1]).join(" and ") : "better all-round projection") + "." + against;
+      const close = g < 0.6;
+      const isCap = st.cap === c1.id, isVc = st.vc === c2.id;
+      out.push({
+        sec: "cap", k: isCap && isVc ? "good" : "warn",
+        t: `${isCap ? "Keep" : "Captain"} ${nm(c1.id)}, vice ${nm(c2.id)}${close ? " (close call)" : ""}`,
+        d: `${nm(c1.id)} ${c1.p.toFixed(1)} vs ${nm(c2.id)} ${c2.p.toFixed(1)} pts (${(2 * g).toFixed(1)} once doubled). Main edge: ${why1}${close ? ` It's close: ${nm(c1.id)} ${c1.sc ? pct(c1.sc.p) + " to score" : ""}${e1.penalties_order === 1 ? ", on pens" : ""}, ${pct(c1.mp.p70)} for 70+ mins; ${nm(c2.id)} ${c2.sc ? pct(c2.sc.p) + " to score" : ""}${e2.penalties_order === 1 ? ", on pens" : ""}, ${pct(c2.mp.p70)} for 70+ mins.` : ""}${!isCap && st.cap ? ` You have ${nm(st.cap)} (${P(st.cap).toFixed(1)}).` : ""}`,
+        why: whyHTML([e1, e2]), act: isCap && isVc ? null : { a: "cap", id: c1.id, vc: c2.id, l: `Make ${E[c1.id].web_name} captain, ${E[c2.id].web_name} vice` },
+      });
+    }
+
+    // 3. Risks before the deadline (starters, and the first substitute)
+    const risky = [];
+    xiIds.forEach((id) => {
+      const e = E[id], mp = MP(id);
+      const trig = [];
+      if (e.status === "s") trig.push("Suspended");
+      else if (mp.a === 0) trig.push(`Ruled out: ${esc(e.news || "unavailable")}`);
+      else if (mp.a < 1) trig.push(`${pct(mp.a)} chance of playing: ${esc(e.news)}`);
+      if (!(teamFx[e.team][gwNext] || []).length) trig.push(`No GW${gwNext} fixture`);
+      if (mp.a > 0 && mp.pStart < 0.75) trig.push(`${mp.pStart >= 0.65 ? "Not nailed" : mp.label}: ${mp.pattern}`);
+      else if (mp.a > 0 && mp.p70 < 0.5 && e.element_type > 1) trig.push(`Often off early: ${mp.pattern}`);
+      if (!trig.length) return;
+      risky.push(id);
+      const cover = autoSub(st, id);
+      const better = benchIds.filter((b) => E[b].element_type === e.element_type || (E[b].element_type > 2 && e.element_type > 2)).filter((b) => MP(b).pStart >= 0.75).sort((a, b) => P(b) - P(a))[0];
+      const act = better && E[id].element_type > 1 && P(better) >= P(id) - 0.3 ? { a: "swap", id, with: better, l: `Start ${E[better].web_name} instead` } : null;
+      out.push({ sec: "risk", k: mp.pStart < 0.5 || mp.a === 0 ? "bad" : "warn", t: `${nm(id)}: ${pct(mp.pStart)} to start, ${pct(mp.p70)} to play 70+`, d: `${trig.join(". ")}.${e.news_added && e.news ? ` FPL news updated ${newsDate(e)}.` : mp.n ? ` Based on matches up to GW${gwCur}.` : ""}${cover ? ` If he misses out, ${nm(cover)} comes on (${P(cover).toFixed(1)} pts).` : " If he misses out, nobody on your bench can come on: you'd play with 10."}${act ? ` ${E[better].web_name} projects ${P(better).toFixed(1)} vs his ${P(id).toFixed(1)}.` : ""}`, why: whyHTML([e, ...(cover ? [E[cover]] : [])]), act });
+    });
+
+    // 4. Bench cover and order
+    risky.filter((id) => E[id].element_type > 1).forEach((id) => {
+      const cover = autoSub(st, id); if (!cover) return;
+      const c = E[cover], mp = MP(cover), o = TO[c.team];
+      const weak = [];
+      if (mp.pStart < 0.6) weak.push(`he's a minutes risk himself (${pct(mp.pStart)} to start)`);
+      // a defender is weak cover when both routes to points are poor: unlikely clean sheet and low defcon
+      if (c.element_type === 2 && o && o.cs < 0.25 && poisAtLeast(+c.defensive_contribution_per_90 || 0, 10) < 0.2) weak.push(`${tShort(c.team)} are only ${pct(o.cs)} to keep a clean sheet and his defensive contributions are low (${(+c.defensive_contribution_per_90 || 0).toFixed(1)}/90)`);
+      if (P(cover) < 2.5) weak.push(`projects only ${P(cover).toFixed(1)} pts`);
+      if (weak.length) out.push({ sec: "bench", k: "warn", t: `Weak cover for ${nm(id)}: ${nm(cover)} would come on`, d: `Under the formation rules ${nm(cover)} is the first eligible substitute, but ${weak.join(", ")}.`, why: whyHTML([E[id], c]) });
+    });
+    const outB = benchIds.slice(1), ideal = [...outB].sort((a, b) => P(b) * MP(b).pStart - P(a) * MP(a).pStart);
+    if (outB.join() !== ideal.join() && P(ideal[0]) * MP(ideal[0]).pStart - P(outB[0]) * MP(outB[0]).pStart >= 0.5) {
+      out.push({ sec: "bench", k: "warn", t: `Reorder your bench: ${ideal.map(nm).join(", ")}`, d: `${nm(ideal[0])} is the most valuable substitute (${P(ideal[0]).toFixed(1)} pts, ${pct(MP(ideal[0]).pStart)} to start) but is currently ${["first", "second", "third"][outB.indexOf(ideal[0])]} in line. FPL brings substitutes on in bench order.`, why: whyHTML(ideal.map((id) => E[id])), act: { a: "bench", ids: ideal, l: "Apply bench order" } });
+    }
+    if (!out.some((x) => x.sec === "risk")) out.push({ sec: "risk", k: "good", t: "No minutes or availability risks in your XI", d: "Every starter is fit, has a fixture and has been starting regularly." });
+    if (!out.some((x) => x.sec === "bench")) out.push({ sec: "bench", k: "good", t: "Bench order is right", d: `If a starter misses out, ${(() => { const s = benchIds.slice(1).find((id) => MP(id).pStart >= 0.5); return s ? `${nm(s)} (${P(s).toFixed(1)} pts) is first in line` : "your bench covers the formation"; })()}.` });
+    return out;
+  }
+  function gwApply(act) {
+    const st = GWE.st;
+    if (act.a === "bestxi") {
+      const bx = bestXI(st.ids);
+      const order = (ids) => [...ids].sort((a, b) => E[a].element_type - E[b].element_type);
+      const bench = [bx.gkBench, ...bx.bench.sort((a, b) => gp1(E[b]) * minutesProfile(E[b]).pStart - gp1(E[a]) * minutesProfile(E[a]).pStart)];
+      st.ids = [...order(bx.ids), ...bench];
+      const xi = st.ids.slice(0, 11), byP = [...xi].sort((a, b) => gp1(E[b]) - gp1(E[a]));
+      if (!xi.includes(st.cap)) st.cap = byP.find((id) => id !== st.vc) || byP[0];
+      if (!xi.includes(st.vc) || st.vc === st.cap) st.vc = byP.find((id) => id !== st.cap);
+    } else if (act.a === "cap") { st.cap = act.id; st.vc = act.vc; }
+    else if (act.a === "swap") { gwSwap(act.id, act.with); }
+    else if (act.a === "bench") { st.ids = [...st.ids.slice(0, 12), ...act.ids]; }
+    GWE.sel = null; gwSave();
+  }
+
   // ---- drawing ----
   function drawGw() {
     const app = $("#app"), B = GWE.base, st = GWE.st; if (!B || view !== "gw") return;
@@ -1887,7 +2093,7 @@ tr.benchrow td { background: var(--surface-2); }
       const code = T[e.team]?.code;
       return `<button type="button" class="pc ed ${GWE.sel === id ? "on" : ""} ${ch} ${GWE.sel && GWE.sel !== id && slot ? "tgt" : ""}" data-el="${id}" aria-pressed="${GWE.sel === id}" aria-label="${esc(e.web_name)}, ${POSN(e)}, ${gp1(e).toFixed(1)} projected points">
         <span class="kit">${st.cap === id ? '<span class="badge">C</span>' : st.vc === id ? '<span class="badge vc">V</span>' : ""}${a < 1 ? `<span class="flag ${a === 0 ? "out" : ""}">!</span>` : ""}${code != null ? `<img src="kit/${code}${e.element_type === 1 ? "_1" : ""}.png" alt="" width="56" height="56" decoding="async" onerror="this.parentNode.classList.add('nokit');this.remove()">` : ""}</span>
-        <span class="plate"><span class="nm">${esc(e.web_name)}</span><span class="pts">${(gp1(e) * (st.cap === id ? (B.pending.includes("3xc") ? 3 : 2) : 1)).toFixed(1)}</span><span class="fx fdr${fx.length ? fx[0].fdr : 0}">${fx.length ? fxLabel(fx[0]) + (fx.length > 1 ? " +1" : "") : "No fixture"}</span>${isNew ? '<span class="meta newtag">New</span>' : `<span class="meta">£${price(e.now_cost)}m</span>`}</span>
+        <span class="plate"><span class="nm">${esc(e.web_name)}</span><span class="pts">${(gp1(e) * (st.cap === id ? (B.pending.includes("3xc") ? 3 : 2) : 1)).toFixed(1)}</span><span class="fx fdr${fx.length ? fx[0].fdr : 0}">${fx.length ? fxLabel(fx[0]) + (fx.length > 1 ? " +1" : "") : "No fixture"}</span>${(() => { const mp = minutesProfile(e); return `<span class="meta st-${confCls(mp.pStart) || "mid"}" title="${esc(mp.label)}: ${esc(mp.pattern)}">${isNew ? '<b class="newtag">New</b> · ' : ""}${pct(mp.pStart)} start</span>`; })()}</span>
       </button>`;
     };
     const xiIds = st.ids.slice(0, 11), benchIds = st.ids.slice(11);
@@ -1898,19 +2104,13 @@ tr.benchrow td { background: var(--surface-2); }
         <span class="acts"><button class="btn sm pri pk-jump" data-act="pick">Find replacement</button>${st.ids.indexOf(sel.id) < 11 ? `<button class="btn sm" data-act="cap" ${st.cap === sel.id ? "disabled" : ""}>Captain</button><button class="btn sm" data-act="vc" ${st.vc === sel.id ? "disabled" : ""}>Vice-captain</button>` : ""}<button class="btn sm" data-act="clear">Cancel</button></span></div>`
       : `<div class="selbar idle">Tap a player to swap him with the bench, change the captain, or replace him with someone from the list.</div>`;
 
-    // checks on the edited team
-    const checks = [];
-    const xiR = xiIds.map((id) => ({ e: E[id], pts: gp1(E[id]), rk: risks(E[id], gwTO()) })); xiR.forEach((r) => (r.sev = sevOf(r.rk)));
-    xiR.filter((r) => r.sev >= 3).forEach((r) => checks.push({ k: "bad", t: `${esc(r.e.web_name)} is starting but ${r.e.status === "s" ? "suspended" : "unlikely to play"}`, d: esc(r.rk.find((x) => x[0] >= 3)[1]) }));
-    xiR.filter((r) => !(teamFx[r.e.team][gwNext] || []).length).forEach((r) => checks.push({ k: "bad", t: `${esc(r.e.web_name)} has no GW${gwNext} fixture`, d: "He scores nothing if he starts." }));
-    const capR = xiR.find((r) => r.e.id === st.cap), best = [...xiR].filter((r) => r.sev < 2).sort((a, b) => b.pts - a.pts)[0];
-    if (capR && best && best.e.id !== capR.e.id && best.pts - capR.pts >= 0.8) checks.push({ k: "warn", t: `Captain: ${esc(best.e.web_name)} projects more than ${esc(capR.e.web_name)}`, d: `${best.pts.toFixed(1)} vs ${capR.pts.toFixed(1)} pts, worth about ${(2 * (best.pts - capR.pts)).toFixed(1)} doubled.` });
-    benchIds.filter((id) => E[id].element_type > 1 && availability(E[id]) >= 0.75).forEach((id) => {
-      const b = E[id], bp = gp1(b), weak = xiR.filter((x) => x.e.element_type > 1 && (x.e.element_type === b.element_type || (x.e.element_type > 2 && b.element_type > 2))).sort((a, d) => a.pts - d.pts)[0];
-      if (weak && bp - weak.pts >= 1.2) checks.push({ k: "warn", t: `Consider starting ${esc(b.web_name)} over ${esc(weak.e.web_name)}`, d: `${bp.toFixed(1)} vs ${weak.pts.toFixed(1)} projected pts.` });
-    });
-    if (c.paid) checks.push({ k: "bad", t: `${c.paid} transfer${c.paid > 1 ? "s" : ""} over your free allowance: −${4 * c.paid} pts`, d: `Over 5 gameweeks the new players project ${fmt1(c.gain5)} pts, so ${net >= 0 ? `you're still ${fmt1(net)} ahead after the hit` : `you'd be ${fmt1(net)} worse off after the hit`}.` });
-    if (!checks.length) checks.push({ k: "good", t: "No problems spotted", d: "Every starter is available with a fixture, and your captain is your best option." });
+    // recommendations on the edited team
+    const adv = gwAdvice(st);
+    if (c.paid) adv.unshift({ sec: "xi", k: "bad", t: `${c.paid} transfer${c.paid > 1 ? "s" : ""} over your free allowance: −${4 * c.paid} pts`, d: `Over 5 gameweeks the new players project ${fmt1(c.gain5)} pts, so ${net >= 0 ? `you're still ${fmt1(net)} ahead after the hit` : `you'd be ${fmt1(net)} worse off after the hit`}.` });
+    GWE.adv = adv;
+    const SECS = [["xi", "Best XI this gameweek"], ["cap", "Captain and vice-captain"], ["risk", "Risks before the deadline"], ["bench", "Bench cover"]];
+    const advHTML = SECS.map(([k, l]) => `<div class="adv-sec"><h4>${l}</h4><ul class="insights">${adv.map((x, i) => [x, i]).filter(([x]) => x.sec === k).map(([x, i]) => `<li class="${x.k}"><div><div class="t">${x.t}</div><div class="d">${x.d}</div>${x.act || x.why ? `<div class="adv-acts">${x.act ? `<button class="btn sm pri" data-adv="${i}">${esc(x.act.l)}</button>` : ""}${x.why || ""}</div>` : ""}</div></li>`).join("")}</ul></div>`).join("");
+    const capSel = `<div class="capsel"><label>Captain <select id="gwCap">${xiIds.map((id) => `<option value="${id}" ${st.cap === id ? "selected" : ""}>${esc(E[id].web_name)} (${gp1(E[id]).toFixed(1)})</option>`).join("")}</select></label><label>Vice-captain <select id="gwVc">${xiIds.map((id) => `<option value="${id}" ${st.vc === id ? "selected" : ""}>${esc(E[id].web_name)} (${gp1(E[id]).toFixed(1)})</option>`).join("")}</select></label></div>`;
 
     const xfList = st.xf.length ? `<ul class="moves">${st.xf.map((t, i) => `<li class="${!B.unlimited && i >= B.ft ? "hit" : ""}"><span><span class="down">${esc(E[t.out].web_name)}</span> <span class="note">£${price(B.sell[t.out] ?? E[t.out].now_cost)}m</span> → <span class="up">${esc(E[t.inn].web_name)}</span> <span class="note">£${price(E[t.inn].now_cost)}m</span> ${!B.unlimited && i >= B.ft ? '<span class="pill sev3">−4 pts</span>' : '<span class="pill ok">Free</span>'} <span class="note">${fmt1(gp1(E[t.inn]) - gp1(E[t.out]))} GW${gwNext}, ${fmt1(gp5(E[t.inn]) - gp5(E[t.out]))} over 5 GWs</span></span><button class="btn sm" data-undo-x="${i}">Undo</button></li>`).join("")}</ul>` : "";
 
@@ -1930,10 +2130,11 @@ tr.benchrow td { background: var(--surface-2); }
       ${GWE.msg ? `<p class="ed-msg" role="alert">${esc(GWE.msg)}</p>` : ""}
       ${xfList}
       <div class="ed-grid">
-        <div class="panel ed-team"><div class="panel-head"><h3>Your GW${gwNext} team</h3><span class="note">Projected points on each shirt (captain's doubled)</span></div>${selBar}${pitch}</div>
+        <div class="panel ed-team"><div class="panel-head"><h3>Your GW${gwNext} team</h3><span class="note">Projected points on each shirt (captain's doubled) and chance of starting</span></div>${capSel}${selBar}${pitch}</div>
         <div class="panel ed-pick" id="gwPick"></div>
       </div>
-      <div class="panel"><div class="panel-head"><h3>Line-up checks</h3><span class="note">For the team as edited</span></div><ul class="insights">${checks.map((x) => `<li class="${x.k}"><div><div class="t">${x.t}</div><div class="d">${x.d}</div></div></li>`).join("")}</ul></div>
+      <div class="panel adv"><div class="panel-head"><h3>Recommendations for GW${gwNext}</h3><span class="note">For the team as edited. Only what could change your XI, captain or bench order before the deadline.</span></div><div class="adv-grid">${advHTML}</div>
+        <p class="note">Chance of starting and of playing 70+ minutes come from each player's last 5 matches (a start counts at 50+ minutes), blended with his season start rate and FPL's chance of playing. Tap Why? for the stats and odds behind a call.</p></div>
       <p class="note">Changes here are a sandbox saved in this browser only: make them on the FPL site to make them real. Projected points use the site's expert score (xG, xA, clean sheet odds, defensive contributions, bonus, fixtures and bookmaker odds, minutes, injuries and news). Sale prices follow FPL's rule that you keep half of any rise.</p>
       ${freshness()}
     </section>`;
@@ -1947,6 +2148,11 @@ tr.benchrow td { background: var(--surface-2); }
     }));
     app.querySelector('[data-act="cap"]')?.addEventListener("click", () => { if (st.vc === GWE.sel) st.vc = st.cap; st.cap = GWE.sel; GWE.sel = null; gwSave(); drawGw(); });
     app.querySelector('[data-act="vc"]')?.addEventListener("click", () => { if (st.cap === GWE.sel) st.cap = st.vc; st.vc = GWE.sel; GWE.sel = null; gwSave(); drawGw(); });
+    app.querySelectorAll("[data-adv]").forEach((b) => b.addEventListener("click", () => { const x = GWE.adv[Number(b.dataset.adv)]; if (x && x.act) { gwApply(x.act); drawGw(); } }));
+    $("#gwCap")?.addEventListener("change", (ev) => { const v = Number(ev.target.value); if (st.vc === v) st.vc = st.cap; st.cap = v; gwSave(); drawGw(); });
+    $("#gwVc")?.addEventListener("change", (ev) => { const v = Number(ev.target.value); if (st.cap === v) st.cap = st.vc; st.vc = v; gwSave(); drawGw(); });
+    const missing = st.ids.filter((id) => !(id in FA.summ));
+    if (missing.length && D.source === "live" && !GWE.fetching) { GWE.fetching = true; fetchSumm(missing).then(() => { GWE.fetching = false; drawGw(); }).catch(() => { GWE.fetching = false; }); }
     app.querySelector('[data-act="pick"]')?.addEventListener("click", () => $("#gwPick")?.scrollIntoView({ behavior: "smooth", block: "start" }));
     app.querySelector('[data-act="clear"]')?.addEventListener("click", () => { GWE.sel = null; GWE.msg = ""; drawGw(); });
     app.querySelectorAll("[data-undo-x]").forEach((b) => b.addEventListener("click", () => { gwUndo(Number(b.dataset.undoX)); drawGw(); }));
