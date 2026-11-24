@@ -314,8 +314,11 @@ bench order, transfers or chip before the deadline?*
     `REPORT_RE`) covers injuries, fitness, availability and manager comments.
   - Sections: Your players' availability (FPL flags, with bench cover from `autoSub`), Latest press conference and
     team news, then a card per club (your teams first, or all). Each card has the next fixture, the expected press
-    conference day (kick-off minus 2 days, an Assumption), FPL availability flags for key players, relevant
-    articles (yours first) and other club news collapsed.
+    conference day (kick-off minus 2 days, an Assumption) and, with no article lists (the owner's preference), a
+    one-line outlook for each injured, suspended or possibly dropped key player: `outlook()` gives Likely to start,
+    Doubt leaning yes, Doubt, Unlikely or Out. It uses the strongest source available: news since the flag
+    (`POS_RE`/`NEG_RE` on articles naming him, quoted, labelled Assumption), then FPL's flag (Fact), then
+    `minutesProfile().pStart` (Projection).
   - Key players: your squad, 10%+ owned overall or 20%+ in the league, and each club's top 3 scorers.
   - Possibly dropped or rotated (`newsDropped()`): players you own, 3%+ owned overall or 10%+ in the league, who had
     3+ starts in their club's previous 5 games but in the club's latest finished match didn't play, came off the

@@ -857,6 +857,10 @@ td.fx2-c { padding: 4px 3px; }
 @media (max-width: 700px) { .st-row { flex-wrap: wrap; } .st-row select { flex: 1 1 100%; } .lr-sum { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
 /* Player predictions: compare */
 .pr-mode button { min-width: 130px; }
+.nw-ol { list-style: none; margin: 0; padding: 0; display: grid; gap: 8px; }
+.nw-ol li { border-top: 1px solid var(--line); padding-top: 8px; } .nw-ol li:first-child { border-top: 0; padding-top: 0; }
+.nw-ol-h { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 6px; } .nw-v { margin-left: auto; }
+.nw-ol li.mine strong { color: var(--accent); }
 .nw-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 14px; }
 @media (max-width: 900px) { .nw-grid { grid-template-columns: minmax(0, 1fr); } }
 .nw-card { margin-top: 0 !important; display: flex; flex-direction: column; gap: 10px; scroll-margin-top: 120px; }
@@ -6528,17 +6532,42 @@ td.fx2-c { padding: 4px 3px; }
     const presser = (tid) => { const f = D.fixtures.find((x) => x[1] === gwNext && (x[2] === tid || x[3] === tid)); if (!f || !f[6]) return ""; const d = new Date(Date.parse(f[6]) - 2 * 864e5); return d > now ? `Press conference expected around ${d.toLocaleDateString("en-GB", { timeZone: "Europe/London", weekday: "short", day: "numeric", month: "short" })}` : "Pre-match press conference should be out"; };
     let teams = D.teams.map((t) => t.id).filter((tid) => NW.scope === "all" || myCount(tid) > 0);
     teams.sort((a, b) => (myCount(b) - myCount(a)) || ((kick(a) ? 0 : 1) - (kick(b) ? 0 : 1)) || T[a].name.localeCompare(T[b].name));
+    // Will he start the next game? Strongest source first: what the manager or the news has said since the
+    // gameweek started (Assumption, quoted), then FPL's flag (Fact), then the model's start chance (Projection).
+    const NEG_RE = /ruled out|out for|will miss|set to miss|faces? (a )?(spell|lay-?off)|sidelined|surgery|operation|\bweeks\b|\bmonths\b|setback|suspended|suspension|\bban\b|not (be )?available|won't (be fit|play|feature)/i;
+    const POS_RE = /fit (again|to|for)|available (again|for)|back in training|returns? to training|trained|not serious|nothing serious|minor|boost|should (be fine|be fit|play|be available)|will (play|start|be available|be fit)|in contention|recovered|expected to (play|start|feature)|ready to (play|start)/i;
+    const outlook = (e, d) => {
+      const mp = minutesProfile(e), flag = e.status !== "a" || (e.chance_of_playing_next_round != null && e.chance_of_playing_next_round < 100);
+      const arts = (byTeam[e.team] || []).filter((x) => x.pl.some((p) => p.id === e.id)).sort((a, b) => b.date - a.date);
+      let p = mp.pStart, src = "model", lab = "Projection", why = "", quote = null;
+      if (["i", "s", "u", "n"].includes(e.status)) { p = 0; src = "flag"; lab = "Fact"; }
+      else if (flag) { p = Math.min(mp.pStart, (e.chance_of_playing_next_round ?? 50) / 100); src = "flag"; lab = "Fact"; }
+      // news since the flag was set overrides it
+      const flagT = e.news_added ? Date.parse(e.news_added) : 0;
+      for (const x of arts) {
+        const t = x.title + " " + x.desc, neg = NEG_RE.test(t), pos = POS_RE.test(t);
+        if (!neg && !pos) continue;
+        quote = x;
+        if (x.date >= flagT || src !== "flag") {
+          if (pos && neg) p = Math.min(Math.max(p, 0.5), 0.6);
+          else if (pos) p = e.status === "s" ? 0 : Math.max(p, 0.75);
+          else p = Math.min(p, 0.2);
+          src = "news"; lab = "Assumption";
+        }
+        break;
+      }
+      const v = p >= 0.75 ? ["ok", "Likely to start"] : p >= 0.5 ? ["warn", "Doubt, leaning yes"] : p >= 0.25 ? ["warn", "Doubt"] : p > 0 ? ["bad", "Unlikely to start"] : ["bad", "Out"];
+      const what = d ? (d.kind === "out" ? `didn't play in GW${d.last}` : d.kind === "red" ? `sent off in GW${d.last}` : d.kind === "bench" ? `came off the bench in GW${d.last} (${d.mins}')` : `taken off after ${d.mins}' in GW${d.last}`) : "";
+      why = [flag ? `FPL: ${esc(e.news || flagTxt(e))}` : d ? `no FPL flag, so ${d.kind === "hooked" ? "possibly a knock or a tactical change" : "a selection call"}` : "",
+        src === "news" && quote ? `latest news: "${esc(quote.title)}" (${esc(quote.source)}, ${ago(quote.date)})` : src === "model" ? `model start chance from his last 5 matches` : ""].filter(Boolean).join("; ");
+      return { e, d, p, v, lab, what, why };
+    };
     const card = (tid) => {
-      let l = byTeam[tid]; if (NW.pressOnly) l = l.filter((x) => x.press);
-      const rel = l.filter((x) => x.pl.length || x.press), other = l.filter((x) => !(x.pl.length || x.press)), fl = flagged(tid);
-      const shownRel = NW.open[tid] ? rel : rel.slice(0, 4);
-      return `<div class="cmp-card nw-card" id="nw-${tid}"><div class="nw-h">${T[tid]?.code != null ? `<img src="kit/${T[tid].code}.png" alt="" width="34" height="34" loading="lazy" onerror="this.remove()">` : ""}<div><h3>${esc(T[tid].name)}${myCount(tid) ? ` <span class="pill acc">${myCount(tid)} yours</span>` : ""}</h3><span class="note">${nextFx(tid)}</span></div></div>
-        ${presser(tid) ? `<p class="note nw-press">${presser(tid)} <span class="lab lab-asm">Assumption</span> managers usually speak 1–2 days before kick-off; FPL's flags below update after it.</p>` : ""}
-        ${dropByTeam[tid] ? `<div class="nw-flags nw-drop"><span class="k">Missed out or benched in GW${dropByTeam[tid][0].last}</span>${dropByTeam[tid].map((d) => `<div class="nw-flag ${d.mine ? "mine" : ""}"><span class="pill ${minutesProfile(d.e).pStart >= 0.7 ? "ok" : minutesProfile(d.e).pStart >= 0.45 ? "warn" : "bad"}">${pct(minutesProfile(d.e).pStart)} to start</span> <strong>${esc(d.e.web_name)}</strong>${d.mine ? ` <span class="pill acc">Yours</span>` : ""} <span class="note">${d.kind === "out" ? "didn't play" : d.kind === "red" ? `sent off (${d.mins}')` : d.kind === "bench" ? `came off the bench (${d.mins}')` : `taken off after ${d.mins}'`}</span></div>`).join("")}</div>` : ""}
-        ${fl.length ? `<div class="nw-flags"><span class="k">FPL availability</span>${fl.map((e) => `<div class="nw-flag ${mine.has(e.id) ? "mine" : ""}"><span class="pill ${stCls(e)}">${flagTxt(e)}</span> <strong>${esc(e.web_name)}</strong>${mine.has(e.id) ? ` <span class="pill acc">Yours</span>` : ""} <span class="note">${esc(e.news)}${e.news_added ? ` · ${ago(Date.parse(e.news_added))}` : ""}</span></div>`).join("")}</div>` : `<div class="nw-flags"><span class="k">FPL availability</span><span class="note">No flags on key players.</span></div>`}
-        ${shownRel.length ? `<ul class="nw-list">${shownRel.map(item).join("")}</ul>` : `<p class="note">${NW.pressOnly ? "No press conference or team news yet this gameweek." : "No news about key players since the gameweek started."}</p>`}
-        ${rel.length > 4 ? `<button class="btn sm" data-nwmore="${tid}">${NW.open[tid] ? "Show fewer" : `Show ${rel.length - 4} more`}</button>` : ""}
-        ${!NW.pressOnly && other.length ? `<details class="nw-other"><summary>Other ${esc(T[tid].short)} news (${other.length})</summary><ul class="nw-list">${other.map(item).join("")}</ul></details>` : ""}</div>`;
+      const list = [...new Map([...flagged(tid).map((e) => [e.id, null]), ...(dropByTeam[tid] || []).map((d) => [d.e.id, d])])].map(([id, d]) => outlook(E[id], d || (dropByTeam[tid] || []).find((x) => x.e.id === id)))
+        .sort((a, b) => (mine.has(b.e.id) - mine.has(a.e.id)) || (a.p - b.p));
+      return `<div class="cmp-card nw-card" id="nw-${tid}"><div class="nw-h">${T[tid]?.code != null ? `<img src="kit/${T[tid].code}.png" alt="" width="34" height="34" loading="lazy" onerror="this.remove()">` : ""}<div><h3>${esc(T[tid].name)}${myCount(tid) ? ` <span class="pill acc">${myCount(tid)} yours</span>` : ""}</h3><span class="note">${nextFx(tid)}${presser(tid) ? ` · ${presser(tid).charAt(0).toLowerCase() + presser(tid).slice(1)}` : ""}</span></div></div>
+        ${list.length ? `<ul class="nw-ol">${list.map((o) => `<li class="${mine.has(o.e.id) ? "mine" : ""}"><div class="nw-ol-h"><strong>${esc(o.e.web_name)}</strong> <span class="note">${POSN(o.e)}</span>${mine.has(o.e.id) ? ` <span class="pill acc">Yours</span>` : ""}<span class="pill ${o.v[0]} nw-v">${o.v[1]}${o.p > 0 && o.p < 1 ? ` · ${pct(o.p)}` : ""}</span></div>
+          <div class="note">${o.what ? `${o.what.charAt(0).toUpperCase() + o.what.slice(1)}. ` : ""}${o.why ? o.why.charAt(0).toUpperCase() + o.why.slice(1) + "." : ""} <span class="lab ${{ Fact: "lab-fact", Projection: "lab-proj", Assumption: "lab-asm" }[o.lab]}">${o.lab}</span></div></li>`).join("")}</ul>` : `<p class="note">No injury, suspension or selection worries for key players.</p>`}</div>`;
     };
     app.innerHTML = `<section class="view">
       <div class="panel-head"><h2>News for GW${gwNext}</h2><span class="note">Refreshed ${ukT(j.fetched)} · news from before the GW${started ? started.id : gwCur} deadline (${ukT(cutoff)}) is removed</span></div>
@@ -6546,14 +6575,12 @@ td.fx2-c { padding: 4px 3px; }
       ${dropHTML}
       ${pressAll.length ? `<div class="panel"><div class="panel-head"><h3>Latest press conference and team news</h3></div><ul class="nw-list">${pressAll.map((x) => `<li class="nw-it"><span class="pill nw-team">${esc(T[x.tid].short)}</span> <a href="${esc(x.link)}" target="_blank" rel="noopener">${esc(x.title)}</a><div class="nw-meta"><span class="note">${esc(x.source)} · ${ago(x.date)}</span>${x.mineP.map((e) => `<span class="pill acc">Your player: ${esc(e.web_name)}</span>`).join("")}</div></li>`).join("")}</ul></div>` : ""}
       <div class="panel nw-ctl"><div class="seg" role="group">${[["mine", "Your teams"], ["all", "All teams"]].map(([k, l]) => `<button data-nwscope="${k}" aria-pressed="${NW.scope === k}">${l}</button>`).join("")}</div>
-        <label class="fx-toggle"><input type="checkbox" id="nwPress" ${NW.pressOnly ? "checked" : ""}><span class="sw"></span>Press conferences &amp; team news only</label>
         <label class="nw-jump"><span class="k">Jump to</span><select id="nwJump"><option value="">Choose a team</option>${teams.map((tid) => `<option value="${tid}">${esc(T[tid].name)}</option>`).join("")}</select></label></div>
       <div class="nw-grid">${teams.map(card).join("")}</div>
       <p class="note">Sources: BBC Sport club feeds, BBC Sport and The Guardian Premier League feeds, and FPL's player flags, all fetched on every visit. Articles are matched to clubs by feed, club name or player name, and to players by their FPL name. Exact press conference times aren't in any free feed, so the expected day is an estimate. ${j.failed && j.failed.length ? `Couldn't reach the feed for ${j.failed.join(", ")} this time.` : ""}</p>
     </section>`;
     app.querySelectorAll("[data-nwscope]").forEach((b) => b.addEventListener("click", () => { NW.scope = b.dataset.nwscope; drawNews(); }));
     $("#nwDropMore")?.addEventListener("click", () => { NW.dropAll = !NW.dropAll; drawNews(); });
-    $("#nwPress").addEventListener("change", (e) => { NW.pressOnly = e.target.checked; drawNews(); });
     $("#nwJump").addEventListener("change", (e) => { const el = $(`#nw-${e.target.value}`); if (el) el.scrollIntoView({ behavior: "smooth", block: "start" }); });
     app.querySelectorAll("[data-nwmore]").forEach((b) => b.addEventListener("click", () => { const t = b.dataset.nwmore; NW.open[t] = !NW.open[t]; drawNews(); $(`#nw-${t}`)?.scrollIntoView({ block: "start" }); }));
   }
