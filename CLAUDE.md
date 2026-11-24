@@ -154,6 +154,19 @@ bench order, transfers or chip before the deadline?*
 
   Match data comes from `element-summary` (`pcHist`). xPts for a match is `deservedPts()` on its
   underlying numbers. A small-sample warning shows under 270 minutes.
+- **Opta stats tab:** `renderOpta()` (`#opta`) and `drawOptaTable()`, state in `OS`. Data comes from the Worker's
+  `/api/gwstats/{gw}`: every player's full live stats for a gameweek, with fixture ids, indexed by `OI`, and KV-cached
+  once the gameweek is final. `optaRows()` sums the records over the Gameweeks, Venue and Fixture difficulty filters
+  (venue and FDR come from each record's fixture). Teams sum their players, take goals conceded from the keepers and
+  only count matches played for the current club.
+  - Categories (`OCATS`, columns in `OCOLS`): Key stats, Goal threat, Creativity, Involvement (ICT), Set pieces
+    (taker order), Defending (tackles, CBI, recoveries, DC, DC points), Goalkeeping, Discipline and FPL.
+  - Players/Teams; Total / Per app / Per start / Per 90; search; position (including Your squad); price slider;
+    Hide low minutes (under 30% of possible minutes); Per £1m. Click a header to sort.
+  - xPts is `deservedPts()` per match. `optaInsights()` shows "due a goal", the best value threat (passes
+    `buySecure`), your player running hot, and your weakest underlying numbers.
+  - Not in FPL's free data: shots, shots on target, shots in the box, big chances, key passes, big chances created
+    and passing. Non-penalty xG needs penalty xG per match, which FPL doesn't publish.
 - **Fixtures tab:** `renderFixtures()` and `drawFxTable()`. Sort by Overall (FPL FDR × 2, or team
   strength when the toggle is on), Attack, Defence, Goals or Clean sheets, with an Order, a Teams
   filter, a GW range slider with quick-set 3/5/8, and a Team strength toggle. FPL's own strength

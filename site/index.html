@@ -857,6 +857,37 @@ td.fx2-c { padding: 4px 3px; }
 @media (max-width: 700px) { .st-row { flex-wrap: wrap; } .st-row select { flex: 1 1 100%; } .lr-sum { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
 /* Player predictions: compare */
 .pr-mode button { min-width: 130px; }
+.os-panel { display: grid; gap: 14px; }
+.os-cats { display: flex; gap: 4px; overflow-x: auto; padding-bottom: 6px; border-bottom: 1px solid var(--line); scrollbar-width: thin; }
+.os-cats button { flex: none; border: 0; background: none; padding: 8px 12px; border-radius: 8px; font-weight: 600; color: var(--muted); white-space: nowrap; }
+.os-cats button[aria-selected="true"] { background: color-mix(in srgb, var(--accent) 16%, transparent); color: var(--ink); }
+.os-row { display: flex; flex-wrap: wrap; gap: 10px; justify-content: space-between; align-items: center; }
+.os-filters { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 12px; }
+.os-filters .k, .os-sl .k { display: block; font-size: .72rem; text-transform: uppercase; letter-spacing: .06em; color: var(--muted); font-weight: 600; margin-bottom: 4px; }
+.os-filters input, .os-filters select { width: 100%; }
+.os-sliders { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 12px 24px; }
+@media (max-width: 900px) { .os-filters { grid-template-columns: repeat(2, minmax(0, 1fr)); } .os-sliders { grid-template-columns: minmax(0, 1fr); } }
+.os-sl.off, label.off { opacity: .5; }
+.os-tbl { width: 100%; border-collapse: separate; border-spacing: 0; font-variant-numeric: tabular-nums; }
+.os-tbl th, .os-tbl td { padding: 8px 8px; white-space: nowrap; border-bottom: 1px solid var(--line); }
+.os-tbl th { position: static; }
+.os-tbl .os-grp th { text-align: center; font-size: .68rem; letter-spacing: .1em; padding-top: 10px; }
+.os-tbl th button { border: 0; background: none; color: inherit; font: inherit; letter-spacing: inherit; text-transform: inherit; padding: 0; cursor: pointer; display: inline-flex; gap: 3px; align-items: center; }
+.os-tbl th .ar { opacity: .45; font-size: .65rem; } .os-tbl th.on { color: var(--c-solid); } .os-tbl th.on .ar { opacity: 1; }
+.os-tbl td.on { font-weight: 700; }
+.os-tbl .g-a { background: color-mix(in srgb, var(--c-solid) 6%, var(--surface)); }
+.os-tbl .g-b { background: var(--surface); }
+.os-tbl .g-start { border-left: 1px solid var(--line); }
+.os-tbl thead .g-a { background: color-mix(in srgb, var(--c-solid) 9%, var(--surface-2)); }
+.os-tbl .os-name { position: sticky; left: 0; z-index: 1; background: var(--surface); text-align: left; min-width: 150px; }
+.os-tbl thead .os-name { background: var(--surface-2); }
+.os-tbl tr.mine td { box-shadow: inset 0 0 0 9999px color-mix(in srgb, var(--accent) 7%, transparent); }
+.os-pl { display: flex; align-items: center; gap: 8px; } .os-pl small { display: block; color: var(--muted); font-size: .72rem; letter-spacing: .05em; }
+.os-pos { font-size: .65rem; font-weight: 700; padding: 3px 6px; border-radius: 999px; border: 1px solid var(--line); color: var(--c-solid); min-width: 34px; text-align: center; }
+.os-pos.p1 { color: var(--muted); } .os-pos.p3 { color: var(--good); } .os-pos.p4 { color: var(--bad); }
+.os-wrap { margin-top: 4px; } .os-foot { display: flex; justify-content: space-between; align-items: center; gap: 10px; margin-top: 10px; flex-wrap: wrap; }
+.os-ins { margin-bottom: 14px; }
+@media (max-width: 600px) { .os-tbl .os-name { min-width: 118px; max-width: 140px; } .os-tbl .os-name strong { display: inline-block; max-width: 92px; overflow: hidden; text-overflow: ellipsis; vertical-align: bottom; } .os-tbl th, .os-tbl td { padding: 7px 6px; } .os-tbl .os-name .pill { font-size: .58rem; padding: 1px 5px; } }
 .og-panel { margin-top: 16px; }
 .og-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; }
 .og-heads { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; }
@@ -914,6 +945,7 @@ td.fx2-c { padding: 4px 3px; }
     <a href="#league" data-v="league">Standings</a>
     <a href="#planner" data-v="planner">Transfer planner</a>
     <a href="#predict" data-v="predict">Player predictions</a>
+    <a href="#opta" data-v="opta">Opta stats</a>
     <a href="#insights" data-v="insights">Insights</a>
     <a href="#fixtures" data-v="fixtures">Fixtures</a>
     <a href="#matches" data-v="matches">Matches</a>
@@ -1150,9 +1182,9 @@ td.fx2-c { padding: 4px 3px; }
   // ---------- routing ----------
   function route() {
     const v = (location.hash || "#overview").slice(1);
-    view = ["overview", "gw", "train", "analysis", "league", "planner", "predict", "insights", "fixtures", "matches", "odds"].includes(v) ? v : "overview";
+    view = ["overview", "gw", "train", "analysis", "league", "planner", "predict", "opta", "insights", "fixtures", "matches", "odds"].includes(v) ? v : "overview";
     document.querySelectorAll(".tabs a").forEach((a) => { if (a.dataset.v === view) a.setAttribute("aria-current", "page"); else a.removeAttribute("aria-current"); });
-    ({ overview: renderOverview, gw: renderGw, train: renderTrain, analysis: renderAnalysis, league: renderLeague, planner: renderPlanner, predict: renderPredict, insights: renderInsights, fixtures: renderFixtures, matches: renderMatches, odds: renderOdds })[view]();
+    ({ overview: renderOverview, gw: renderGw, train: renderTrain, analysis: renderAnalysis, league: renderLeague, planner: renderPlanner, predict: renderPredict, opta: renderOpta, insights: renderInsights, fixtures: renderFixtures, matches: renderMatches, odds: renderOdds })[view]();
   }
 
   function tick() {
@@ -5724,6 +5756,219 @@ td.fx2-c { padding: 4px 3px; }
     const a = +($("#rotA")?.value || 0), b = +($("#rotB")?.value || 0);
     if (!a || !b || a === b) { box.innerHTML = `<p class="note">Pick two different teams in the Rotation table above.</p>`; return; }
     box.innerHTML = teamCompareHTML(a, b);
+  }
+
+  // ---------- Opta stats tab: sortable FPL (Opta) stats for players and teams ----------
+  // Data: /api/gwstats/{gw} per gameweek, summed over the chosen range. Record fields (see the Worker):
+  const OI = { M: 0, ST: 1, G: 2, A: 3, XG: 4, XA: 5, XGC: 6, CS: 7, GC: 8, SV: 9, B: 10, BPS: 11, DC: 12, CBI: 13, REC: 14, TK: 15, YC: 16, RC: 17, OG: 18, PS: 19, PM: 20, INF: 21, CRE: 22, THR: 23, PTS: 24, FX: 25 };
+  const OS = { cat: "key", unit: "players", per: "total", q: "", pos: "all", venue: "all", p0: null, p1: null, g0: 1, g1: null, f0: 1, f1: 5, low: true, pm: false, sort: "pts", dir: -1, n: 50, gw: {} };
+  const OCATS = [["key", "Key stats"], ["threat", "Goal threat"], ["creativity", "Creativity"], ["involvement", "Involvement"], ["setpieces", "Set pieces"], ["defending", "Defending"], ["gk", "Goalkeeping"], ["discipline", "Discipline"], ["fpl", "FPL"]];
+  // Column: [key, header, group, value(r), decimals, rate?, title]
+  const OCOLS = (() => {
+    const s = (i) => (r) => r.s[i], d2 = 2;
+    const c = {
+      price: ["price", "£", "", (r) => r.price, 1, false, "Price now (£m)"],
+      apps: ["apps", "Apps", "", (r) => r.apps, 0, false, "Appearances (games for teams)"],
+      starts: ["starts", "Starts", "", s(OI.ST), 0, false, "Starts"],
+      mins: ["mins", "Mins", "", s(OI.M), 0, false, "Minutes played"],
+      xg: ["xg", "xG", "", s(OI.XG), d2, true, "Expected goals (includes penalties)"],
+      g: ["g", "G", "", s(OI.G), 0, true, "Goals"],
+      gxg: ["gxg", "G−xG", "", (r) => r.s[OI.G] - r.s[OI.XG], d2, true, "Goals minus xG: above 0 is finishing hot, below 0 is due"],
+      xgi: ["xgi", "xGI", "", (r) => r.s[OI.XG] + r.s[OI.XA], d2, true, "Expected goal involvements"],
+      gi: ["gi", "GI", "", (r) => r.s[OI.G] + r.s[OI.A], 0, true, "Goal involvements"],
+      xa: ["xa", "xA", "", s(OI.XA), d2, true, "Expected assists"],
+      a: ["a", "A", "", s(OI.A), 0, true, "Assists"],
+      axa: ["axa", "A−xA", "", (r) => r.s[OI.A] - r.s[OI.XA], d2, true, "Assists minus xA"],
+      thr: ["thr", "Threat", "", s(OI.THR), 1, true, "FPL ICT threat"],
+      cre: ["cre", "Creat.", "", s(OI.CRE), 1, true, "FPL ICT creativity"],
+      inf: ["inf", "Infl.", "", s(OI.INF), 1, true, "FPL ICT influence"],
+      ict: ["ict", "ICT", "", (r) => r.s[OI.INF] + r.s[OI.CRE] + r.s[OI.THR], 1, true, "ICT index (influence + creativity + threat)"],
+      pm: ["pm", "PM", "", s(OI.PM), 0, true, "Penalties missed"],
+      ps: ["ps", "PS", "", s(OI.PS), 0, true, "Penalties saved"],
+      xpts: ["xpts", "xPts", "", (r) => r.xpts, d2, true, "Expected points from each match's underlying numbers"],
+      bps: ["bps", "BPS", "", s(OI.BPS), 0, true, "Bonus points system score"],
+      b: ["b", "B", "", s(OI.B), 0, true, "Bonus points"],
+      dc: ["dc", "DC", "", s(OI.DC), 0, true, "Defensive contributions"],
+      dch: ["dch", "DC pts", "", (r) => r.dch, 0, true, "Matches that hit the defensive contribution threshold (+2 pts each)"],
+      tk: ["tk", "Tkl", "", s(OI.TK), 0, true, "Tackles"],
+      cbi: ["cbi", "CBI", "", s(OI.CBI), 0, true, "Clearances, blocks and interceptions"],
+      rec: ["rec", "Rec", "", s(OI.REC), 0, true, "Recoveries"],
+      cs: ["cs", "CS", "", s(OI.CS), 0, true, "Clean sheets"],
+      gc: ["gc", "GC", "", s(OI.GC), 0, true, "Goals conceded"],
+      xgc: ["xgc", "xGC", "", s(OI.XGC), d2, true, "Expected goals conceded"],
+      gp: ["gp", "Prevented", "", (r) => r.s[OI.XGC] - r.s[OI.GC], d2, true, "xGC minus goals conceded: above 0 is better than expected"],
+      sv: ["sv", "Saves", "", s(OI.SV), 0, true, "Saves"],
+      yc: ["yc", "YC", "", s(OI.YC), 0, true, "Yellow cards"],
+      rc: ["rc", "RC", "", s(OI.RC), 0, true, "Red cards"],
+      og: ["og", "OG", "", s(OI.OG), 0, true, "Own goals"],
+      pts: ["pts", "Pts", "", s(OI.PTS), 0, true, "FPL points"],
+      pxp: ["pxp", "Pts−xPts", "", (r) => r.s[OI.PTS] - r.xpts, d2, true, "Points minus expected points: above 0 is running hot"],
+      ppm: ["ppm", "Pts/£m", "", (r) => (r.price ? r.s[OI.PTS] / r.price : 0), d2, false, "Points per £1m of current price"],
+      sel: ["sel", "Sel%", "", (r) => r.sel, 1, false, "Selected by (overall)"],
+      lg: ["lg", "League%", "", (r) => r.lg, 0, false, "Owned in Bring It On!"],
+      pen: ["pen", "Pens", "", (r) => r.ord?.[0], 0, false, "Penalty order (1 = first choice)"],
+      cor: ["cor", "Corners", "", (r) => r.ord?.[1], 0, false, "Corners and indirect free kicks order"],
+      fk: ["fk", "FKs", "", (r) => r.ord?.[2], 0, false, "Direct free kicks order"],
+    };
+    const G = (g, ...ks) => ks.map((k) => [...c[k].slice(0, 2), g, ...c[k].slice(3)]);
+    return {
+      key: [...G("", "price", "apps", "mins"), ...G("Goal threat", "xg", "g"), ...G("Goal involvement", "xgi", "gi"), ...G("Creativity", "xa", "a"), ...G("FPL", "xpts", "bps", "b", "dc", "pts")],
+      threat: [...G("", "price", "apps", "mins"), ...G("Goal threat", "g", "xg", "gxg", "thr", "pm"), ...G("Involvement", "gi", "xgi"), ...G("FPL", "pts")],
+      creativity: [...G("", "price", "apps", "mins"), ...G("Creativity", "a", "xa", "axa", "cre"), ...G("Involvement", "gi", "xgi"), ...G("FPL", "pts")],
+      involvement: [...G("", "price", "apps", "starts", "mins"), ...G("ICT index", "inf", "cre", "thr", "ict"), ...G("Bonus", "bps", "b"), ...G("FPL", "pts")],
+      setpieces: [...G("", "price", "mins"), ...G("Duties (order)", "pen", "cor", "fk"), ...G("Output", "g", "xg", "a", "xa", "pm"), ...G("FPL", "pts")],
+      defending: [...G("", "price", "apps", "mins"), ...G("Defensive actions", "tk", "cbi", "rec", "dc", "dch"), ...G("Team defence", "cs", "gc", "xgc", "gp"), ...G("FPL", "pts")],
+      gk: [...G("", "price", "apps", "mins"), ...G("Shot stopping", "sv", "ps", "gc", "xgc", "gp"), ...G("Clean sheets", "cs"), ...G("FPL", "bps", "b", "pts")],
+      discipline: [...G("", "price", "apps", "mins"), ...G("Cards", "yc", "rc"), ...G("Mistakes", "og", "pm"), ...G("FPL", "pts")],
+      fpl: [...G("", "price", "apps", "mins"), ...G("Ownership", "sel", "lg"), ...G("Points", "pts", "xpts", "pxp", "ppm"), ...G("Bonus", "bps", "b")],
+    };
+  })();
+  async function loadOptaGws() {
+    const last = Math.max(1, gwCur);
+    const need = []; for (let g = 1; g <= last; g++) if (!OS.gw[g]) need.push(g);
+    await Promise.all(need.map((g) => fetch(`api/gwstats/${g}`).then((r) => (r.ok ? r.json() : null)).then((j) => { if (j && j.els) OS.gw[g] = j; }).catch(() => null)));
+    return last;
+  }
+  // Sum each player's (or team's) gameweek records over the filters.
+  function optaRows() {
+    const FX = {}; D.fixtures.forEach((f) => (FX[f[0]] = f));
+    const fxOk = (team, ids) => ids.some((id) => { const f = FX[id]; if (!f) return OS.venue === "all" && OS.f0 <= 1 && OS.f1 >= 5; const home = f[2] === team, away = f[3] === team; if (!home && !away) return OS.venue === "all"; const fdr = home ? f[4] : f[5];
+      return (OS.venue === "all" || (OS.venue === "home") === home) && fdr >= OS.f0 && fdr <= OS.f1; });
+    const mine = new Set(baseSquad().map((p) => p[0])), out = {}, teams = {};
+    for (let g = OS.g0; g <= OS.g1; g++) {
+      const gd = OS.gw[g]; if (!gd) continue;
+      for (const [id, rec] of Object.entries(gd.els)) {
+        const e = E[id]; if (!e) continue;
+        if (!fxOk(e.team, rec[OI.FX] || [])) continue;
+        const r = (out[id] ||= { e, s: new Array(25).fill(0), apps: 0, xpts: 0, dch: 0, fx: new Set() });
+        for (let i = 0; i < 25; i++) r.s[i] += rec[i];
+        r.apps++; (rec[OI.FX] || []).forEach((x) => r.fx.add(x));
+        const xp = deservedPts(e.element_type, [rec[OI.M], rec[OI.PTS], rec[OI.XG], rec[OI.XA], rec[OI.XGC], rec[OI.SV], rec[OI.B], rec[OI.DC]]);
+        const hit = e.element_type >= 2 && rec[OI.DC] >= (e.element_type === 2 ? 10 : 12);
+        r.xpts += xp; if (hit) r.dch++;
+        // team totals: attacking and defensive actions from everyone, goals conceded from the keepers
+        // (only matches played for his current club, so mid-season transfers don't add fixtures)
+        const own_ = (rec[OI.FX] || []).filter((x) => FX[x] && (FX[x][2] === e.team || FX[x][3] === e.team));
+        if (!own_.length) continue;
+        const t = (teams[e.team] ||= { team: e.team, s: new Array(25).fill(0), apps: 0, xpts: 0, dch: 0, fx: new Set() });
+        [OI.M, OI.ST, OI.G, OI.A, OI.XG, OI.XA, OI.B, OI.BPS, OI.DC, OI.CBI, OI.REC, OI.TK, OI.YC, OI.RC, OI.OG, OI.PS, OI.PM, OI.INF, OI.CRE, OI.THR, OI.PTS, OI.SV].forEach((i) => (t.s[i] += rec[i]));
+        if (e.element_type === 1) { t.s[OI.XGC] += rec[OI.XGC]; t.s[OI.GC] += rec[OI.GC]; t.s[OI.CS] += rec[OI.CS]; }
+        own_.forEach((x) => t.fx.add(x)); t.xpts += xp; if (hit) t.dch++;
+      }
+    }
+    if (OS.unit === "teams") return Object.values(teams).map((t) => ({ ...t, apps: t.fx.size, name: T[t.team].name, short: T[t.team].short, price: 0, teamRow: true }));
+    return Object.values(out).map((r) => ({ ...r, id: r.e.id, price: r.e.now_cost / 10, sel: +r.e.selected_by_percent || 0, lg: Math.round((own[r.e.id] || 0) * 100), mine: mine.has(r.e.id),
+      ord: [r.e.penalties_order || null, r.e.corners_and_indirect_freekicks_order || null, r.e.direct_freekicks_order || null] }));
+  }
+  function optaVal(r, col) {
+    let v = col[3](r); if (v == null) return null;
+    if (col[5]) {
+      const per = OS.unit === "teams" ? (OS.per === "total" ? 1 : r.apps) : OS.per === "app" ? r.apps : OS.per === "start" ? r.s[OI.ST] : OS.per === "90" ? r.s[OI.M] / 90 : 1;
+      v = per ? v / per : 0;
+      if (OS.pm && OS.unit === "players" && r.price) v /= r.price;
+    }
+    return v;
+  }
+  function optaInsights(list) {
+    const span = OS.g1 - OS.g0 + 1, enough = (r) => r.s[OI.M] >= span * 90 * 0.4, p90 = (r, v) => (r.s[OI.M] ? (v * 90) / r.s[OI.M] : 0);
+    const ok = (r) => r.mine || buySecure(r.e).ok, ins = [];
+    const due = list.filter((r) => enough(r) && r.e.element_type >= 2 && ok(r)).sort((a, b) => (b.s[OI.XG] - b.s[OI.G]) - (a.s[OI.XG] - a.s[OI.G]))[0];
+    if (due && due.s[OI.XG] - due.s[OI.G] >= 1.5) ins.push({ k: "good", lab: "Projection", t: `Due a goal: ${esc(due.e.web_name)} (${tShort(due.e.team)}, £${due.price.toFixed(1)}m)${due.mine ? " · yours" : ""}`, d: `${due.s[OI.G]} goal${due.s[OI.G] === 1 ? "" : "s"} from ${due.s[OI.XG].toFixed(2)} xG in GW${OS.g0}–${OS.g1}. The chances are there; finishing usually catches up.` });
+    const barg = list.filter((r) => enough(r) && r.e.element_type >= 3 && r.price <= 6.5 && ok(r)).sort((a, b) => p90(b, b.s[OI.XG] + b.s[OI.XA]) - p90(a, a.s[OI.XG] + a.s[OI.XA]))[0];
+    if (barg) ins.push({ k: "good", lab: "Projection", t: `Best value threat: ${esc(barg.e.web_name)} (${tShort(barg.e.team)}, £${barg.price.toFixed(1)}m)${barg.mine ? " · yours" : ""}`, d: `${p90(barg, barg.s[OI.XG] + barg.s[OI.XA]).toFixed(2)} xGI per 90, the most of any regular starter at £6.5m or less. Passes the buy checks (fit, regular starter, 45+ minutes last match).` });
+    const mineL = list.filter((r) => r.mine && r.e.element_type >= 2 && r.s[OI.M] >= 270);
+    const hot = [...mineL].sort((a, b) => (b.s[OI.PTS] - b.xpts) - (a.s[OI.PTS] - a.xpts))[0];
+    if (hot && hot.s[OI.PTS] - hot.xpts >= 8) ins.push({ k: "warn", lab: "Projection", t: `Running hot: ${esc(hot.e.web_name)}`, d: `${hot.s[OI.PTS]} points from ${hot.xpts.toFixed(1)} expected. Good while it lasts, but don't pay a hit to keep him over a player with better underlying numbers.` });
+    const cold = [...mineL].sort((a, b) => p90(a, a.xpts) - p90(b, b.xpts))[0];
+    if (cold) ins.push({ k: "info", lab: "Fact", t: `Weakest underlying numbers in your squad: ${esc(cold.e.web_name)}`, d: `${p90(cold, cold.xpts).toFixed(2)} expected points per 90 (${cold.s[OI.PTS]} actual points, ${cold.s[OI.M]} minutes). A candidate to replace when a transfer is free.` });
+    const LB = { Fact: "lab-fact", Projection: "lab-proj" };
+    return ins.length ? `<ul class="insights os-ins">${ins.map((i) => `<li class="${i.k}"><div><div class="t">${i.t} <span class="lab ${LB[i.lab]}">${i.lab}</span></div><div class="d">${i.d}</div></div></li>`).join("")}</ul>` : "";
+  }
+  function drawOptaTable() {
+    const nq = (x) => norm(x).normalize("NFD").replace(/[\u0300-\u036f]/g, "");
+    const box = $("#osTable"); if (!box) return;
+    const cols = OCOLS[OS.cat].filter((c) => OS.unit === "players" || !["price", "sel", "lg", "ppm", "pen", "cor", "fk", "starts", "mins"].includes(c[0]));
+    if (!cols.some((c) => c[0] === OS.sort)) { OS.sort = (cols.find((c) => c[0] === "pts") || cols[cols.length - 1])[0]; OS.dir = -1; }
+    let list = optaRows();
+    const all = list;
+    if (OS.unit === "players") {
+      const span = OS.g1 - OS.g0 + 1, q = nq(OS.q);
+      list = list.filter((r) => (OS.pos === "all" || (OS.pos === "mine" ? r.mine : r.e.element_type === +OS.pos)) && r.price * 10 >= OS.p0 && r.price * 10 <= OS.p1
+        && (!q || nq(r.e.web_name).includes(q) || nq(T[r.e.team].name).includes(q) || nq(T[r.e.team].short) === q)
+        && (!OS.low || r.s[OI.M] >= span * 90 * 0.3));
+    } else if (OS.q) { const q = nq(OS.q); list = list.filter((r) => nq(r.name).includes(q) || nq(r.short) === q); }
+    const sc = cols.find((c) => c[0] === OS.sort);
+    list.sort((a, b) => { const x = optaVal(a, sc), y = optaVal(b, sc); return x == null && y == null ? 0 : x == null ? 1 : y == null ? -1 : (x - y) * OS.dir; });
+    const shown = list.slice(0, OS.n);
+    const fmt = (v, c) => (v == null ? "–" : (c[5] && OS.per !== "total") || (OS.pm && c[5]) ? v.toFixed(c[4] === 0 ? 2 : c[4]) : v.toFixed(c[4]));
+    const groups = []; cols.forEach((c) => { const l = groups[groups.length - 1]; if (l && l.g === c[2]) l.n++; else groups.push({ g: c[2], n: 1 }); });
+    let gi = 0; const gcls = groups.map((g) => (g.g ? (gi++ % 2 ? "g-b" : "g-a") : ""));
+    const colCls = []; groups.forEach((g, i) => { for (let k = 0; k < g.n; k++) colCls.push(gcls[i] + (k === 0 && g.g ? " g-start" : "")); });
+    const nameCell = (r) => OS.unit === "teams"
+      ? `<td class="os-name"><span class="os-pl">${T[r.team]?.code != null ? `<img src="kit/${T[r.team].code}.png" alt="" width="26" height="26" loading="lazy" onerror="this.remove()">` : ""}<span><strong>${esc(r.name)}</strong><small>${esc(r.short)}</small></span></span></td>`
+      : `<td class="os-name"><span class="os-pl"><span class="os-pos p${r.e.element_type}">${POSN(r.e)}</span><span><strong>${esc(r.e.web_name)}</strong>${r.mine ? ` <span class="pill acc">Yours</span>` : ""}<small>${tShort(r.e.team)}</small></span></span></td>`;
+    box.innerHTML = `${OS.unit === "players" ? optaInsights(all) : ""}
+      <div class="tbl-wrap os-wrap"><table class="os-tbl">
+        <thead><tr class="os-grp"><th class="os-name"></th>${groups.map((g, i) => `<th colspan="${g.n}" class="${gcls[i]} ${g.g ? "g-start" : ""}">${esc(g.g)}</th>`).join("")}</tr>
+        <tr><th class="os-name">${OS.unit === "teams" ? "Team" : "Player"}</th>${cols.map((c, i) => `<th class="n ${colCls[i]} ${OS.sort === c[0] ? "on" : ""}" title="${esc(c[6])}"><button data-ossort="${c[0]}">${OS.unit === "teams" && c[0] === "apps" ? "Games" : c[1]}<span class="ar">${OS.sort === c[0] ? (OS.dir < 0 ? "▼" : "▲") : "↕"}</span></button></th>`).join("")}</tr></thead>
+        <tbody>${shown.map((r) => `<tr class="${r.mine ? "mine" : ""}">${nameCell(r)}${cols.map((c, i) => `<td class="n ${colCls[i]} ${OS.sort === c[0] ? "on" : ""}">${c[0] === "price" ? `£${r.price.toFixed(1)}m` : fmt(optaVal(r, c), c)}</td>`).join("")}</tr>`).join("") || `<tr><td colspan="${cols.length + 1}" class="note">No ${OS.unit} match these filters.</td></tr>`}</tbody>
+      </table></div>
+      <div class="os-foot"><span class="note">Showing ${shown.length} of ${list.length} ${OS.unit}</span>${list.length > shown.length ? `<button class="btn sm" id="osMore">Show 50 more</button>` : ""}</div>`;
+    box.querySelectorAll("[data-ossort]").forEach((b) => b.addEventListener("click", () => { const k = b.dataset.ossort; if (OS.sort === k) OS.dir *= -1; else { OS.sort = k; OS.dir = ["gc", "xgc", "yc", "rc", "og", "pm", "price"].includes(k) ? 1 : -1; } drawOptaTable(); }));
+    $("#osMore")?.addEventListener("click", () => { OS.n += 50; drawOptaTable(); });
+  }
+  async function renderOpta() {
+    $("#app").innerHTML = `<section class="view"><div class="panel-head"><h2>Opta stats</h2></div><p class="empty">Loading every gameweek's Opta stats from FPL…</p></section>`;
+    if (OFF === undefined) await loadOfficial().catch(() => null);
+    const last = await loadOptaGws();
+    if (view !== "opta") return;
+    if (!Object.keys(OS.gw).length) { $("#app").innerHTML = `<section class="view"><div class="panel-head"><h2>Opta stats</h2></div><div class="err">Couldn't load the gameweek stats. Try again later.</div></section>`; return; }
+    if (OS.g1 == null) OS.g1 = last;
+    const prices = Object.values(E).map((e) => e.now_cost), pMin = Math.min(...prices), pMax = Math.max(...prices);
+    if (OS.p0 == null) { OS.p0 = pMin; OS.p1 = pMax; }
+    const seg = (attr, opts, v) => `<div class="seg" role="group">${opts.map(([k, l]) => `<button data-${attr}="${k}" aria-pressed="${k === v}">${l}</button>`).join("")}</div>`;
+    const dual = (id, a, b, lo, hi, step, fmtv, label) => `<div class="os-sl"><span class="k">${label}</span><div class="dual"><span class="pill acc" id="${id}L">${fmtv(a)}</span><div class="dual-track"><input type="range" id="${id}A" min="${lo}" max="${hi}" step="${step}" value="${a}" aria-label="${label} from"><input type="range" id="${id}B" min="${lo}" max="${hi}" step="${step}" value="${b}" aria-label="${label} to"></div><span class="pill acc" id="${id}H">${fmtv(b)}</span></div></div>`;
+    const sel = (id, opts, v) => `<select id="${id}">${opts.map(([k, l]) => `<option value="${k}" ${String(k) === String(v) ? "selected" : ""}>${l}</option>`).join("")}</select>`;
+    $("#app").innerHTML = `
+    <section class="view">
+      <div class="panel-head"><h2>Opta stats</h2><span class="note">FPL's official Opta data for every player, GW1–${last}, summed over the gameweeks you choose</span></div>
+      <div class="panel os-panel">
+        <div class="os-cats" role="tablist">${OCATS.map(([k, l]) => `<button role="tab" data-oscat="${k}" aria-selected="${OS.cat === k}">${l}</button>`).join("")}</div>
+        <div class="os-row">${seg("osunit", [["players", "Players"], ["teams", "Teams"]], OS.unit)}${seg("osper", OS.unit === "teams" ? [["total", "Total"], ["app", "Per match"]] : [["total", "Total"], ["app", "Per app"], ["start", "Per start"], ["90", "Per 90"]], OS.per)}</div>
+        <div class="os-filters">
+          <label class="os-search"><span class="k">Search</span><input type="search" id="osQ" placeholder="Search players or teams" value="${esc(OS.q)}"></label>
+          <label><span class="k">Position</span>${sel("osPos", [["all", "All positions"], ["1", "Goalkeepers"], ["2", "Defenders"], ["3", "Midfielders"], ["4", "Forwards"], ["mine", "Your squad"]], OS.pos)}</label>
+          <label><span class="k">Venue</span>${sel("osVen", [["all", "Home and away"], ["home", "Home"], ["away", "Away"]], OS.venue)}</label>
+          <label><span class="k">Season</span><select disabled><option>2026/27</option></select></label>
+        </div>
+        <div class="os-sliders">
+          ${dual("osP", OS.p0, OS.p1, pMin, pMax, 1, (v) => `£${(v / 10).toFixed(1)}m`, "Price")}
+          ${dual("osG", OS.g0, OS.g1, 1, last, 1, (v) => `GW${v}`, "Gameweeks")}
+          ${dual("osF", OS.f0, OS.f1, 1, 5, 1, String, "Fixture difficulty")}
+        </div>
+        <div class="os-row"><label class="fx-toggle"><input type="checkbox" id="osLow" ${OS.low ? "checked" : ""}><span class="sw"></span>Hide low minutes</label><label class="fx-toggle"><input type="checkbox" id="osPm" ${OS.pm ? "checked" : ""}><span class="sw"></span>Per £1m</label></div>
+      </div>
+      <div class="panel" id="osTable"></div>
+      <p class="note">Source: FPL's live gameweek data (Opta), refreshed on every reload; finished gameweeks are cached. xPts is what each match's underlying numbers were worth under FPL scoring. Not in FPL's free data: shots, shots on target, shots in the box, big chances, key passes, big chances created and passing, so those columns aren't shown. Non-penalty xG isn't shown either, because FPL doesn't publish penalty xG per match. Earlier seasons are in Player predictions → Compare two players.</p>
+    </section>`;
+    const redraw = () => { OS.n = 50; drawOptaTable(); };
+    $("#app").querySelectorAll("[data-oscat]").forEach((b) => b.addEventListener("click", () => { OS.cat = b.dataset.oscat; $("#app").querySelectorAll("[data-oscat]").forEach((x) => x.setAttribute("aria-selected", x === b)); redraw(); }));
+    $("#app").querySelectorAll("[data-osunit]").forEach((b) => b.addEventListener("click", () => { OS.unit = b.dataset.osunit; if (OS.unit === "teams" && !["total", "app"].includes(OS.per)) OS.per = "app"; renderOpta(); }));
+    $("#app").querySelectorAll("[data-osper]").forEach((b) => b.addEventListener("click", () => { OS.per = b.dataset.osper; $("#app").querySelectorAll("[data-osper]").forEach((x) => x.setAttribute("aria-pressed", x === b)); redraw(); }));
+    let qt; $("#osQ").addEventListener("input", (e) => { clearTimeout(qt); qt = setTimeout(() => { OS.q = e.target.value; redraw(); }, 200); });
+    $("#osPos").addEventListener("change", (e) => { OS.pos = e.target.value; redraw(); });
+    $("#osVen").addEventListener("change", (e) => { OS.venue = e.target.value; redraw(); });
+    $("#osLow").addEventListener("change", (e) => { OS.low = e.target.checked; redraw(); });
+    $("#osPm").addEventListener("change", (e) => { OS.pm = e.target.checked; redraw(); });
+    [["osP", "p0", "p1", (v) => `£${(v / 10).toFixed(1)}m`], ["osG", "g0", "g1", (v) => `GW${v}`], ["osF", "f0", "f1", String]].forEach(([id, k0, k1, fmtv]) => {
+      const A = $(`#${id}A`), B = $(`#${id}B`);
+      const fill = () => { const lo = +A.min, hi = +A.max, f = (v) => ((v - lo) / Math.max(1, hi - lo)) * 100; A.parentNode.style.setProperty("--a", f(+A.value) + "%"); A.parentNode.style.setProperty("--b", f(+B.value) + "%"); };
+      const upd = (final) => { let x = +A.value, y = +B.value; if (x > y) { if (document.activeElement === A) A.value = x = y; else B.value = y = x; } OS[k0] = x; OS[k1] = y; $(`#${id}L`).textContent = fmtv(x); $(`#${id}H`).textContent = fmtv(y); fill(); if (final) redraw(); };
+      [A, B].forEach((el) => { el.addEventListener("input", () => upd(false)); el.addEventListener("change", () => upd(true)); });
+      fill();
+    });
+    if (OS.unit === "teams") ["osPos", "osPA", "osPB", "osPm"].forEach((id) => { const el = $(`#${id}`); if (el) { el.disabled = true; el.closest(".os-sl, label")?.classList.add("off"); } });
+    drawOptaTable();
   }
 
   // ---------- bookmaker odds ----------

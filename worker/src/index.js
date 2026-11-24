@@ -51,6 +51,8 @@ export default {
     if (path === "my-team" || path === "my-team/") return myTeamResponse(env);
     const gpl = /^gwplayers\/(\d+)\/?$/.exec(path);
     if (gpl) return gwPlayers(Number(gpl[1]), url.searchParams.get("ids"));
+    const gws = /^gwstats\/(\d+)\/?$/.exec(path);
+    if (gws) return gwStats(env, Number(gws[1]));
     const gwp = /^gw\/(\d+)\/?$/.exec(path);
     if (gwp) return gwData(env, Number(gwp[1]));
     const lp = /^league-picks\/(\d+)\/(\d+)\/?$/.exec(path);
@@ -282,6 +284,37 @@ async function gwData(env, gw) {
       if (!st.minutes && !st.total_points) continue;
       els[e.id] = [st.minutes || 0, st.total_points || 0, +(+st.expected_goals || 0).toFixed(2), +(+st.expected_assists || 0).toFixed(2),
         +(+st.expected_goals_conceded || 0).toFixed(2), st.saves || 0, st.bonus || 0, st.defensive_contribution || 0, st.starts || 0];
+    }
+    const out = { gw, final, els };
+    if (final && env.ODDS) await env.ODDS.put(key, JSON.stringify(out));
+    return json(out, 200);
+  } catch (e) {
+    return json({ error: "fpl_unreachable", detail: String(e.message || e) }, 502);
+  }
+}
+
+// ---------- full Opta stats for every player in one gameweek (Opta stats tab) ----------
+// Each player: [minutes, starts, goals, assists, xG, xA, xGC, clean sheets, goals conceded, saves, bonus, bps,
+// defensive contribution, CBIT, recoveries, tackles, yellow, red, own goals, pens saved, pens missed,
+// influence, creativity, threat, points, [fixture ids]]. Finished gameweeks are kept in KV.
+async function gwStats(env, gw) {
+  if (gw < 1 || gw > 38) return json({ error: "bad gameweek" }, 400);
+  const key = `gws:${gw}`;
+  const stored = env.ODDS ? await env.ODDS.get(key, "json") : null;
+  if (stored) return json(stored, 200);
+  try {
+    const [live, fx] = await Promise.all([fplJson(`event/${gw}/live/`), fplJson(`fixtures/?event=${gw}`)]);
+    const final = fx.length > 0 && fx.every((f) => f.finished);
+    const n = (v, d = 2) => +(+v || 0).toFixed(d);
+    const els = {};
+    for (const e of live.elements) {
+      const st = e.stats || {};
+      if (!st.minutes) continue;
+      els[e.id] = [st.minutes, st.starts || 0, st.goals_scored || 0, st.assists || 0, n(st.expected_goals), n(st.expected_assists), n(st.expected_goals_conceded),
+        st.clean_sheets || 0, st.goals_conceded || 0, st.saves || 0, st.bonus || 0, st.bps || 0, st.defensive_contribution || 0,
+        st.clearances_blocks_interceptions || 0, st.recoveries || 0, st.tackles || 0, st.yellow_cards || 0, st.red_cards || 0, st.own_goals || 0,
+        st.penalties_saved || 0, st.penalties_missed || 0, n(st.influence, 1), n(st.creativity, 1), n(st.threat, 1), st.total_points || 0,
+        [...new Set((e.explain || []).map((x) => x.fixture))]];
     }
     const out = { gw, final, els };
     if (final && env.ODDS) await env.ODDS.put(key, JSON.stringify(out));
