@@ -178,6 +178,10 @@ bench order, transfers or chip before the deadline?*
   - two cards with the top 4 teams for goals and for clean sheets, each with the model's best 2 players
     by 1-GW xP (`oddsPicks`: 60%+ start chance, and passing `buySecure` unless you own them);
   - the teams to avoid, and the main uncertainty (team news and how old the odds are).
+- **Odds tab: Projected goals & clean sheets:** the main grid in `drawOdds()` (`.og-grid`), one card per
+  fixture in kick-off order: kit, the team's expected goals (GLS, shaded blue) and clean sheet chance (CS%,
+  shaded amber), its win chance and your-player badges. Two columns on desktop, one on phone. The full
+  home/draw/away table sits under it in a collapsible `details.og-more`.
 - **Matches tab:** `renderMatches()`. It shows every fixture of a gameweek from FPL's `fixtures/` data:
   the score, scorers, assists, own goals, penalties, red cards and bonus. A "Your players" panel per
   fixture gives that gameweek's squad, from `myPicksFor(gw)`, with minutes, points and Opta stats

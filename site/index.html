@@ -857,6 +857,22 @@ td.fx2-c { padding: 4px 3px; }
 @media (max-width: 700px) { .st-row { flex-wrap: wrap; } .st-row select { flex: 1 1 100%; } .lr-sum { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
 /* Player predictions: compare */
 .pr-mode button { min-width: 130px; }
+.og-panel { margin-top: 16px; }
+.og-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; }
+.og-heads { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; }
+.og-head { display: grid; grid-template-columns: minmax(0, 1fr) 76px 76px; gap: 6px; padding: 0 11px 6px; font-size: 12px; font-weight: 600; color: var(--muted); letter-spacing: .06em; text-align: center; }
+@media (max-width: 700px) { .og-grid, .og-heads { grid-template-columns: minmax(0, 1fr); } .og-head + .og-head { display: none; }
+  .og-head, .og-row { grid-template-columns: minmax(0, 1fr) 62px 62px; } .og-wl { display: none; } .og-team { font-size: 16px; gap: 6px; } .og-g, .og-c { font-size: 16px; } }
+.og-fx { border: 1px solid var(--line); border-radius: var(--r); overflow: hidden; background: var(--surface); min-width: 0; }
+.og-ko { background: var(--surface-2); padding: 6px 10px; font-size: 12px; font-weight: 600; color: var(--muted); letter-spacing: .04em; }
+.og-row { display: grid; grid-template-columns: minmax(0, 1fr) 76px 76px; gap: 6px; align-items: center; padding: 5px 10px; }
+.og-row + .og-row { border-top: 1px solid var(--line); }
+.og-team { display: flex; align-items: center; gap: 8px; min-width: 0; font-size: 17px; } .og-team img { flex: none; } .og-team small { margin-left: auto; white-space: nowrap; }
+.og-g, .og-c { text-align: center; font-weight: 700; font-size: 17px; font-variant-numeric: tabular-nums; padding: 8px 0; border-radius: 6px; }
+.og-g { background: color-mix(in srgb, var(--c-solid) calc(var(--p) * 75%), var(--surface-2)); }
+.og-c { background: color-mix(in srgb, var(--c-punt) calc(var(--p) * 75%), var(--surface-2)); }
+.og-g.na, .og-c.na { color: var(--muted); }
+.og-more { margin-top: 16px; } .og-more summary { cursor: pointer; font-weight: 600; padding: 8px 0; }
 .od-ins { margin-bottom: 16px; } .od-grid { margin-top: 14px; } .od-grid .cmp-card { margin-top: 0; }
 .od-list { margin: 8px 0 0; padding-left: 20px; display: grid; gap: 10px; } .od-list li { min-width: 0; }
 .od-t { display: flex; flex-wrap: wrap; gap: 4px 8px; align-items: baseline; } .od-v { margin-left: auto; font-weight: 700; font-variant-numeric: tabular-nums; }
@@ -5842,6 +5858,18 @@ td.fx2-c { padding: 4px 3px; }
         <div class="kpi"><span class="k">Best clean sheet chance</span><span class="v">${Math.round(bcs.p * 100)}%</span><span class="s">${esc(T[bcs.team]?.name)}</span></div>
         <div class="kpi"><span class="k">Most likely to score</span><span class="v">${Math.round(bsc.p * 100)}%</span><span class="s">${esc(T[bsc.team]?.name)}</span></div>
       </div>` : ""}
+      <div class="panel og-panel"><div class="panel-head"><h2>Projected goals &amp; clean sheets</h2><span class="note">GW${gwNext} · odds refreshed ${uk(j.fetched)}</span></div>
+        <div class="og-heads" aria-hidden="true">${'<div class="og-head"><span></span><span>GLS</span><span>CS%</span></div>'.repeat(2)}</div>
+        <div class="og-grid">${rows.map((r) => {
+          const kick = r.f[6] ? new Date(r.f[6]).toLocaleString("en-GB", { timeZone: "Europe/London", weekday: "short", day: "numeric", month: "short" }).toUpperCase() + " · " + new Date(r.f[6]).toLocaleString("en-GB", { timeZone: "Europe/London", hour: "2-digit", minute: "2-digit" }) : "TBC";
+          const line = (t, lam, cs, win) => { const c = T[t]?.code; return `<div class="og-row"><span class="og-team">${c != null ? `<img src="kit/${c}.png" alt="" width="28" height="28" loading="lazy" onerror="this.remove()">` : ""}<strong>${esc(T[t]?.short)}</strong>${mineTeams[t] ? ` <span class="pill acc" title="Players you own">${mineTeams[t]}</span>` : ""}${win != null ? `<small class="note">${Math.round(win * 100)}%<span class="og-wl"> win</span></small>` : ""}</span>${lam != null
+            ? `<span class="og-g" style="--p:${Math.max(0, Math.min(1, (lam - 0.9) / 1.2)).toFixed(3)}">${lam.toFixed(2)}</span><span class="og-c" style="--p:${Math.max(0, Math.min(1, (cs - 0.1) / 0.3)).toFixed(3)}">${Math.round(cs * 100)}%</span>`
+            : `<span class="og-g na">–</span><span class="og-c na">–</span>`}</div>`; };
+          return `<div class="og-fx"><div class="og-ko">${kick}</div>${line(r.f[2], r.o ? r.lh : null, r.csH, r.pH)}${line(r.f[3], r.o ? r.la : null, r.csA, r.pA)}</div>`;
+        }).join("")}</div>
+        <p class="note">GLS: expected goals for the team. CS%: chance of a clean sheet. The small % by each team is its chance to win. GLS and CS% come from a goals model fitted to the margin-free result and over/under 2.5 prices; darker means a better target. Numbered badges mark teams you own players from.</p>
+      </div>
+      <details class="og-more"><summary>Full result odds (home, draw, away)</summary>
       <div class="tbl-wrap"><table class="odds-tbl cards-sm">
         <thead>
           <tr><th rowspan="2">Match</th><th class="grp" colspan="3">Result</th><th class="grp" colspan="2">Clean sheet</th><th class="grp" colspan="2">To score</th></tr>
@@ -5851,6 +5879,7 @@ td.fx2-c { padding: 4px 3px; }
           ? `${op(r.pH, "bl")}${op(r.pD)}${op(r.pA)}${op(r.csH, "bl")}${op(r.csA)}${op(r.scH, "bl")}${op(r.scA)}`
           : `<td class="bl" colspan="7"><span class="note">${j.nextRefresh ? `Odds arrive at the next refresh, ${uk(j.nextRefresh.at)}` : "No odds published yet"}</span></td>`}</tr>`).join("")}</tbody>
       </table></div>
+      </details>
       <p class="note">Result chances come straight from bookmaker prices (average of ${got.length ? Math.round(got.reduce((a, r) => a + r.o.books, 0) / got.length) : 0} UK bookmakers per match). Clean sheet and to-score chances are worked out from the same prices plus the over/under 2.5 goals line, using a standard goals model. Numbered badges mark teams you own players from. Odds refresh every day at about 11am UK time, and 3 days and 1 day before each gameweek deadline.</p>
     </section>`;
     if (got.length) {
