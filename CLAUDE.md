@@ -317,6 +317,12 @@ bench order, transfers or chip before the deadline?*
     conference day (kick-off minus 2 days, an Assumption), FPL availability flags for key players, relevant
     articles (yours first) and other club news collapsed.
   - Key players: your squad, 10%+ owned overall or 20%+ in the league, and each club's top 3 scorers.
+  - Possibly dropped or rotated (`newsDropped()`): players you own, 3%+ owned overall or 10%+ in the league, who had
+    3+ starts in their club's previous 5 games but in the club's latest finished match didn't play, came off the
+    bench, were sent off or were taken off before 45'. Data comes from `OS.gw`. Each shows the FPL flag (or "no flag:
+    a selection call"), recent minutes, the GW start chance (`minutesProfile().pStart`, as likely, in doubt or
+    unlikely), matching articles and, for your players, a decision with bench cover. Each club card lists its
+    players too.
 - **Transfers to make (Current gameweek, bottom):** `gwXfersHTML(st)` (`#gwXfers`), cached in `GWE.xs`. Four plans for
   the team as edited:
   - **Model's pick:** `gwBuys()` unchanged.

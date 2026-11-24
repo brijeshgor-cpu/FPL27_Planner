@@ -6447,11 +6447,29 @@ td.fx2-c { padding: 4px 3px; }
   // Press conference and team news: injuries, fitness, availability, selection and manager updates (not match reports)
   const PRESS_RE = /press conference|presser|team news|injur|fitness|fit for|fit to|ruled out|out for|doubt|knock|scan|setback|return(s|ing)? (to|from)|available|unavailable|to miss|will miss|misses|suspen|\bban\b|confirms|update on|blow|sidelined|surgery|operation|hamstring|groin|ankle|knee|calf|thigh|shoulder|concussion|illness|rested|rotate|rotation|line-?up|starting xi|selection|boss|manager|head coach/i;
   const REPORT_RE = /as it happened|\b\d+-\d+\b|player ratings|match report|highlights|team of the week|fan /i;
+  // Possibly dropped or rotated: regular starters (3+ starts in their club's previous 5 games) who, in the club's
+  // latest finished match, didn't play, came off the bench or were taken off before 45 minutes.
+  function newsDropped() {
+    const done = {}; D.fixtures.forEach((f) => { if (f[7]) [f[2], f[3]].forEach((t) => { if (!done[t] || f[1] > done[t]) done[t] = f[1]; }); });
+    const mine = new Set(baseSquad().map((p) => p[0])), out = [];
+    Object.values(E).forEach((e) => {
+      if (!(mine.has(e.id) || +e.selected_by_percent >= 3 || (own[e.id] || 0) >= 0.1)) return;
+      const last = done[e.team]; if (!last || !OS.gw[last]) return;
+      const prev = []; for (let g = last - 1; g >= 1 && prev.length < 5; g--) if (OS.gw[g] && D.fixtures.some((f) => f[1] === g && f[7] && (f[2] === e.team || f[3] === e.team))) prev.push(OS.gw[g].els[e.id] || null);
+      const starts = prev.filter((r) => r && r[OI.ST]).length; if (prev.length < 3 || starts < 3) return;
+      const r = OS.gw[last].els[e.id], mins = r ? r[OI.M] : 0, started = r ? r[OI.ST] : 0;
+      const kind = !r ? "out" : r[OI.RC] ? "red" : !started ? "bench" : mins < 45 ? "hooked" : null; if (!kind) return;
+      out.push({ e, last, mins, kind, starts, n: prev.length, mine: mine.has(e.id) });
+    });
+    return out.sort((a, b) => (b.mine - a.mine) || (+b.e.selected_by_percent - +a.e.selected_by_percent));
+  }
   async function renderNews() {
     const app = $("#app");
     app.innerHTML = `<section class="view"><div class="panel-head"><h2>News for GW${gwNext}</h2></div><p class="empty">Loading the latest club news and press conference updates…</p></section>`;
     if (OFF === undefined) await loadOfficial().catch(() => null);
     const j = await fetch("api/teamnews", { cache: "no-store" }).then((r) => (r.ok && (r.headers.get("content-type") || "").includes("json") ? r.json() : null)).catch(() => null);
+    try { await loadOptaGws(); } catch (e) { /* the dropped check needs the gameweek stats */ }
+    if (j) { try { const ids = newsDropped().map((d) => d.e.id).filter((id) => !(id in FA.summ)); if (ids.length) await fetchSumm(ids); } catch (e) { /* season rates used */ } }
     if (view !== "news") return;
     if (!j) { app.innerHTML = `<section class="view"><div class="panel-head"><h2>News for GW${gwNext}</h2></div><div class="err">News loads on the live site. Try again in a minute.</div></section>`; return; }
     NW.j = j; drawNews();
@@ -6490,6 +6508,18 @@ td.fx2-c { padding: 4px 3px; }
     const ids = slots, myFlags = ids.map((id) => E[id]).filter((e) => e && (e.status !== "a" || (e.chance_of_playing_next_round != null && e.chance_of_playing_next_round < 100)));
     const alerts = myFlags.map((e) => { const slot = ids.indexOf(e.id), starter = slot < 11, cover = starter ? autoSub({ ids }, e.id) : null;
       return `<li class="${e.status === "d" || e.status === "a" ? "warn" : "bad"}"><div><div class="t">${esc(e.web_name)} (${tShort(e.team)}): ${flagTxt(e)} <span class="lab lab-fact">Fact</span></div><div class="d">${esc(e.news || "Flagged by FPL")}${e.news_added ? ` · updated ${ukT(e.news_added)}` : ""}. ${starter ? (cover ? `If he misses out, ${esc(E[cover].web_name)} comes in from your bench.` : "Your bench has no playing cover for him: consider a transfer or reshuffle.") : "He's on your bench, so he only matters if a starter drops out."}</div></div></li>`; }).join("");
+    const dropped = newsDropped();
+    const dropRow = (d) => { const e = d.e, mp = minutesProfile(e), slot = slots.indexOf(e.id), cover = d.mine && slot > -1 && slot < 11 ? autoSub({ ids: slots }, e.id) : null;
+      const what = d.kind === "out" ? `Didn't play in GW${d.last}` : d.kind === "red" ? `Sent off after ${d.mins}' in GW${d.last}` : d.kind === "bench" ? `Came off the bench in GW${d.last} (${d.mins}')` : `Taken off after ${d.mins}' in GW${d.last}`;
+      const flag = e.status !== "a" || (e.chance_of_playing_next_round != null && e.chance_of_playing_next_round < 100);
+      const why = flag ? `FPL flag: ${esc(e.news || flagTxt(e))}` : d.kind === "hooked" ? "No FPL flag: check whether it was an injury or a tactical change" : "No FPL flag, so it looks like a selection decision";
+      const arts = (byTeam[e.team] || []).filter((x) => x.pl.some((p) => p.id === e.id)).slice(0, 2);
+      const p = mp.pStart, verdict = p >= 0.7 ? ["ok", "Likely to start"] : p >= 0.45 ? ["warn", "In doubt"] : ["bad", "Unlikely to start"];
+      const dec = d.mine ? (p < 0.45 ? (slot < 11 ? ` Decision: bench him or sell${cover ? `; ${esc(E[cover].web_name)} covers from your bench` : "; you have no playing cover on the bench"}.` : " Decision: keep him on your bench until the team news is clear.") : p < 0.7 ? " Decision: wait for the press conference before you set your team." : " Decision: keep him; it looks like a one-off.") : "";
+      return `<li class="${d.mine ? (p < 0.45 ? "bad" : "warn") : ""}"><div><div class="t">${esc(e.web_name)} (${tShort(e.team)}, ${POSN(e)})${d.mine ? ` <span class="pill acc">Yours</span>` : ""}: ${what} <span class="pill ${verdict[0]}">${verdict[1]} · ${pct(p)}</span> <span class="lab lab-proj">Projection</span></div>
+        <div class="d">He'd started ${d.starts} of his club's previous ${d.n} games. ${why}. GW${gwNext} start chance ${pct(p)} from his last 5 matches${mp.mins && mp.mins.length ? ` (${mp.mins.join(", ")})` : ""}, his season rate and any flag. ${(own[e.id] || 0) ? `${Math.round((own[e.id] || 0) * 100)}% of your league own him.` : ""}${dec}${arts.length ? `<br>${arts.map((x) => `<a href="${esc(x.link)}" target="_blank" rel="noopener">${esc(x.title)}</a> <span class="note">${ago(x.date)}</span>`).join("<br>")}` : ""}</div></div></li>`; };
+    const dropHTML = dropped.length ? `<div class="panel"><div class="panel-head"><h3>Possibly dropped or rotated</h3><span class="note">Regular starters who missed out, came off the bench, were sent off or were taken off early in their club's last match</span></div><ul class="insights">${dropped.slice(0, NW.dropAll ? 99 : 10).map(dropRow).join("")}</ul>${dropped.length > 10 ? `<button class="btn sm" id="nwDropMore">${NW.dropAll ? "Show fewer" : `Show all ${dropped.length}`}</button>` : ""}<p class="note">"Start chance" is the model's chance he starts in GW${gwNext}. A missed game with no FPL flag usually means a selection call; the manager's press conference is the best check before the deadline.</p></div>` : "";
+    const dropByTeam = {}; dropped.forEach((d) => (dropByTeam[d.e.team] ||= []).push(d));
     const pressAll = Object.entries(byTeam).flatMap(([tid, l]) => l.filter((x) => x.press && x.pl.length).map((x) => ({ ...x, tid: +tid }))).filter((x, i, a) => a.findIndex((y) => y.link === x.link) === i).sort((a, b) => (b.mineP.length - a.mineP.length) || (b.date - a.date)).slice(0, 8);
     const item = (x) => `<li class="nw-it"><a href="${esc(x.link)}" target="_blank" rel="noopener">${esc(x.title)}</a><div class="nw-meta"><span class="note">${esc(x.source)} · ${ago(x.date)}</span>${x.press ? `<span class="pill">Team news</span>` : ""}${x.mineP.map((e) => `<span class="pill acc">Your player: ${esc(e.web_name)}</span>`).join("")}${x.pl.filter((e) => !mine.has(e.id)).slice(0, 2).map((e) => `<span class="pill">${esc(e.web_name)}</span>`).join("")}</div>${x.desc ? `<p class="note">${esc(x.desc.slice(0, 180))}${x.desc.length > 180 ? "…" : ""}</p>` : ""}</li>`;
     const myCount = (tid) => slots.filter((id) => E[id]?.team === tid).length;
@@ -6504,6 +6534,7 @@ td.fx2-c { padding: 4px 3px; }
       const shownRel = NW.open[tid] ? rel : rel.slice(0, 4);
       return `<div class="cmp-card nw-card" id="nw-${tid}"><div class="nw-h">${T[tid]?.code != null ? `<img src="kit/${T[tid].code}.png" alt="" width="34" height="34" loading="lazy" onerror="this.remove()">` : ""}<div><h3>${esc(T[tid].name)}${myCount(tid) ? ` <span class="pill acc">${myCount(tid)} yours</span>` : ""}</h3><span class="note">${nextFx(tid)}</span></div></div>
         ${presser(tid) ? `<p class="note nw-press">${presser(tid)} <span class="lab lab-asm">Assumption</span> managers usually speak 1–2 days before kick-off; FPL's flags below update after it.</p>` : ""}
+        ${dropByTeam[tid] ? `<div class="nw-flags nw-drop"><span class="k">Missed out or benched in GW${dropByTeam[tid][0].last}</span>${dropByTeam[tid].map((d) => `<div class="nw-flag ${d.mine ? "mine" : ""}"><span class="pill ${minutesProfile(d.e).pStart >= 0.7 ? "ok" : minutesProfile(d.e).pStart >= 0.45 ? "warn" : "bad"}">${pct(minutesProfile(d.e).pStart)} to start</span> <strong>${esc(d.e.web_name)}</strong>${d.mine ? ` <span class="pill acc">Yours</span>` : ""} <span class="note">${d.kind === "out" ? "didn't play" : d.kind === "red" ? `sent off (${d.mins}')` : d.kind === "bench" ? `came off the bench (${d.mins}')` : `taken off after ${d.mins}'`}</span></div>`).join("")}</div>` : ""}
         ${fl.length ? `<div class="nw-flags"><span class="k">FPL availability</span>${fl.map((e) => `<div class="nw-flag ${mine.has(e.id) ? "mine" : ""}"><span class="pill ${stCls(e)}">${flagTxt(e)}</span> <strong>${esc(e.web_name)}</strong>${mine.has(e.id) ? ` <span class="pill acc">Yours</span>` : ""} <span class="note">${esc(e.news)}${e.news_added ? ` · ${ago(Date.parse(e.news_added))}` : ""}</span></div>`).join("")}</div>` : `<div class="nw-flags"><span class="k">FPL availability</span><span class="note">No flags on key players.</span></div>`}
         ${shownRel.length ? `<ul class="nw-list">${shownRel.map(item).join("")}</ul>` : `<p class="note">${NW.pressOnly ? "No press conference or team news yet this gameweek." : "No news about key players since the gameweek started."}</p>`}
         ${rel.length > 4 ? `<button class="btn sm" data-nwmore="${tid}">${NW.open[tid] ? "Show fewer" : `Show ${rel.length - 4} more`}</button>` : ""}
@@ -6512,6 +6543,7 @@ td.fx2-c { padding: 4px 3px; }
     app.innerHTML = `<section class="view">
       <div class="panel-head"><h2>News for GW${gwNext}</h2><span class="note">Refreshed ${ukT(j.fetched)} · news from before the GW${started ? started.id : gwCur} deadline (${ukT(cutoff)}) is removed</span></div>
       ${alerts ? `<div class="panel"><div class="panel-head"><h3>Your players: availability</h3><span class="note">FPL's official flags, which update after press conferences</span></div><ul class="insights">${alerts}</ul></div>` : `<div class="panel"><p class="note"><strong>Your players:</strong> none of your 15 is flagged by FPL right now.</p></div>`}
+      ${dropHTML}
       ${pressAll.length ? `<div class="panel"><div class="panel-head"><h3>Latest press conference and team news</h3></div><ul class="nw-list">${pressAll.map((x) => `<li class="nw-it"><span class="pill nw-team">${esc(T[x.tid].short)}</span> <a href="${esc(x.link)}" target="_blank" rel="noopener">${esc(x.title)}</a><div class="nw-meta"><span class="note">${esc(x.source)} · ${ago(x.date)}</span>${x.mineP.map((e) => `<span class="pill acc">Your player: ${esc(e.web_name)}</span>`).join("")}</div></li>`).join("")}</ul></div>` : ""}
       <div class="panel nw-ctl"><div class="seg" role="group">${[["mine", "Your teams"], ["all", "All teams"]].map(([k, l]) => `<button data-nwscope="${k}" aria-pressed="${NW.scope === k}">${l}</button>`).join("")}</div>
         <label class="fx-toggle"><input type="checkbox" id="nwPress" ${NW.pressOnly ? "checked" : ""}><span class="sw"></span>Press conferences &amp; team news only</label>
@@ -6520,6 +6552,7 @@ td.fx2-c { padding: 4px 3px; }
       <p class="note">Sources: BBC Sport club feeds, BBC Sport and The Guardian Premier League feeds, and FPL's player flags, all fetched on every visit. Articles are matched to clubs by feed, club name or player name, and to players by their FPL name. Exact press conference times aren't in any free feed, so the expected day is an estimate. ${j.failed && j.failed.length ? `Couldn't reach the feed for ${j.failed.join(", ")} this time.` : ""}</p>
     </section>`;
     app.querySelectorAll("[data-nwscope]").forEach((b) => b.addEventListener("click", () => { NW.scope = b.dataset.nwscope; drawNews(); }));
+    $("#nwDropMore")?.addEventListener("click", () => { NW.dropAll = !NW.dropAll; drawNews(); });
     $("#nwPress").addEventListener("change", (e) => { NW.pressOnly = e.target.checked; drawNews(); });
     $("#nwJump").addEventListener("change", (e) => { const el = $(`#nw-${e.target.value}`); if (el) el.scrollIntoView({ behavior: "smooth", block: "start" }); });
     app.querySelectorAll("[data-nwmore]").forEach((b) => b.addEventListener("click", () => { const t = b.dataset.nwmore; NW.open[t] = !NW.open[t]; drawNews(); $(`#nw-${t}`)?.scrollIntoView({ block: "start" }); }));
