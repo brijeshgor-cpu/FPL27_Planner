@@ -275,5 +275,5 @@ bench order, transfers or chip before the deadline?*
   desktop, iPad and iPhone in light and dark mode.
 - Commit and push to the development branch, then republish the claude.ai snapshot artifact
   (https://claude.ai/artifact/VtRnD4EKUNtXr9d6Xc35si) with `files: {"data.json": "site/data.json"}`.
-- Everything refreshes on every reload except the bookmaker odds, which refresh 3 days and 1 day
+- Everything refreshes on every reload except the bookmaker odds, which refresh daily at about 11am UK time and 3 days and 1 day
   before each deadline.

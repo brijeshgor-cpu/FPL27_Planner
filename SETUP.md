@@ -65,7 +65,7 @@ Don't paste the key into the Name box.
 - **Cloudflare account ID:** `32d4d4bcdb3511c48210e711f67006e0`
 - **Worker:** `fc27-planner`, configured in `wrangler.toml`
 - **KV store:** `ODDS` (id `1612f48a342645ad8d40ddcb5b9303dc`). It caches odds, deadlines, league picks and gameweek stats.
-- **Hourly cron** `7 * * * *`: refreshes the odds 3 days and 1 day before each deadline.
+- **Hourly cron** `7 * * * *`: refreshes the odds every day at about 11:07 UK time, and 3 days and 1 day before each deadline.
 - **Secrets:** `ODDS_API_KEY`, and `FPL_LOGIN`. FPL_LOGIN is your FPL sign-in token, used to read Pick Team for the Current gameweek tab. To create it, follow the steps in that tab: copy a line from the browser console on fantasy.premierleague.com, then paste it into Cloudflare as the secret's value. No password is stored. The token renews itself hourly and is saved in KV as `fpl_auth`.
 - **Development branch:** `claude/lucid-lamport-bu8fxu`
 
@@ -78,4 +78,4 @@ If the Cloudflare token was saved on a different cloud environment, Claude will 
 
 ## Things to remember
 - **The link is public.** Anyone with it can open the site. Cloudflare Access (free) can restrict it to chosen email addresses.
-- **Free API plans have limits.** The odds plan allows 500 requests a month, which is why odds refresh only twice per gameweek.
+- **Free API plans have limits.** The odds plan allows 500 requests a month, Each refresh costs 2, so the daily refresh uses about 62 a month.

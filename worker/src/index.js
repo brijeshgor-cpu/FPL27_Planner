@@ -93,8 +93,9 @@ function serveStatic(path) {
 
 // ---------- bookmaker odds ----------
 // Source: The Odds API (the-odds-api.com), Premier League, UK bookmakers, 1X2 + over/under totals.
-// Odds are refreshed twice per gameweek: 3 days and 1 day before the next deadline
-// (each refresh costs 2 credits, so about 4 credits a gameweek). Results are kept in KV.
+// Odds are refreshed every day at 11:00 UK time, plus 3 days and 1 day before the next deadline
+// (each refresh costs 2 credits: about 62 a month for the daily refresh, out of the free plan's 500).
+// The hourly cron runs at :07, so the daily refresh lands at about 11:07. Results are kept in KV.
 const ODDS_URL = "https://api.the-odds-api.com/v4/sports/soccer_epl/odds/";
 const DAY = 24 * 3600 * 1000;
 const REFRESH_POINTS = [3, 1]; // days before the deadline
@@ -119,12 +120,22 @@ async function nextDeadline(env) {
   return n ? { gw: n[0], deadline: n[1] } : null;
 }
 
+const DAILY_HOUR = 11; // UK time
+// 11:00 Europe/London on the London calendar day of t, plus `days`, as a UTC timestamp (handles BST).
+function londonAt(t, days) {
+  const parts = (x) => Object.fromEntries(new Intl.DateTimeFormat("en-GB", { timeZone: "Europe/London", year: "numeric", month: "numeric", day: "numeric", hour: "numeric", minute: "numeric", hourCycle: "h23" }).formatToParts(new Date(x)).map((p) => [p.type, Number(p.value)]));
+  const d = parts(t), guess = Date.UTC(d.year, d.month - 1, d.day + days, DAILY_HOUR, 0);
+  const g = parts(guess), offset = Date.UTC(g.year, g.month - 1, g.day, g.hour, g.minute) - guess; // London minus UTC
+  return guess - offset;
+}
+
 function refreshPlan(dl) {
-  if (!dl) return { due: null, next: null };
   const now = Date.now();
-  const points = REFRESH_POINTS.map((days) => ({ days, at: dl.deadline - days * DAY }));
-  const passed = points.filter((p) => p.at <= now);
-  return { due: passed.length ? passed[passed.length - 1].at : null, next: points.find((p) => p.at > now) || null };
+  const points = [londonAt(now, -1), londonAt(now, 0), londonAt(now, 1)].map((at) => ({ daily: true, at }));
+  if (dl) REFRESH_POINTS.forEach((days) => points.push({ days, at: dl.deadline - days * DAY }));
+  const passed = points.filter((p) => p.at <= now).sort((a, b) => a.at - b.at);
+  const next = points.filter((p) => p.at > now).sort((a, b) => a.at - b.at)[0] || null;
+  return { due: passed.length ? passed[passed.length - 1].at : null, next };
 }
 
 async function odds(env) {

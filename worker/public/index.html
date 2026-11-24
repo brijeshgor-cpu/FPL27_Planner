@@ -5831,7 +5831,7 @@ td.fx2-c { padding: 4px 3px; }
     const bcs = bestOf("cs"), bsc = bestOf("sc");
     const fav = got.map((r) => (r.pH >= r.pA ? { p: r.pH, team: r.f[2] } : { p: r.pA, team: r.f[3] })).sort((a, b) => b.p - a.p)[0];
     const uk = (t) => new Date(t).toLocaleString("en-GB", { timeZone: "Europe/London", day: "2-digit", month: "2-digit", year: "numeric", hour: "2-digit", minute: "2-digit" });
-    const nextTxt = j.nextRefresh ? `Next refresh ${uk(j.nextRefresh.at)}, ${j.nextRefresh.days} day${j.nextRefresh.days > 1 ? "s" : ""} before the GW${j.gw} deadline.` : j.gw ? `No more refreshes before the GW${j.gw} deadline.` : "";
+    const nextTxt = j.nextRefresh ? `Next refresh ${uk(j.nextRefresh.at)}${j.nextRefresh.daily ? " (daily 11am refresh)" : `, ${j.nextRefresh.days} day${j.nextRefresh.days > 1 ? "s" : ""} before the GW${j.gw} deadline`}.` : j.gw ? `No more refreshes before the GW${j.gw} deadline.` : "";
     $("#app").innerHTML = `
     <section class="view">
       <div class="panel-head"><h2>GW${gwNext} bookmaker odds</h2><span class="note">Chances implied by UK bookmaker prices, bookmaker margin removed</span></div>
@@ -5851,7 +5851,7 @@ td.fx2-c { padding: 4px 3px; }
           ? `${op(r.pH, "bl")}${op(r.pD)}${op(r.pA)}${op(r.csH, "bl")}${op(r.csA)}${op(r.scH, "bl")}${op(r.scA)}`
           : `<td class="bl" colspan="7"><span class="note">${j.nextRefresh ? `Odds arrive at the next refresh, ${uk(j.nextRefresh.at)}` : "No odds published yet"}</span></td>`}</tr>`).join("")}</tbody>
       </table></div>
-      <p class="note">Result chances come straight from bookmaker prices (average of ${got.length ? Math.round(got.reduce((a, r) => a + r.o.books, 0) / got.length) : 0} UK bookmakers per match). Clean sheet and to-score chances are worked out from the same prices plus the over/under 2.5 goals line, using a standard goals model. Numbered badges mark teams you own players from. Odds refresh 3 days and 1 day before each gameweek deadline.</p>
+      <p class="note">Result chances come straight from bookmaker prices (average of ${got.length ? Math.round(got.reduce((a, r) => a + r.o.books, 0) / got.length) : 0} UK bookmakers per match). Clean sheet and to-score chances are worked out from the same prices plus the over/under 2.5 goals line, using a standard goals model. Numbered badges mark teams you own players from. Odds refresh every day at about 11am UK time, and 3 days and 1 day before each gameweek deadline.</p>
     </section>`;
     if (got.length) {
       if (FA.odds === undefined || !FA.odds) FA.odds = j;
