@@ -169,6 +169,15 @@ bench order, transfers or chip before the deadline?*
   include a Decision (which team to take attackers and defenders from), xG over- or underperformance,
   the easier run and the best asset that passes `buySecure`. `wireRotation()`'s redraw also redraws
   the comparison.
+- **Odds tab: Who to target this gameweek:** `oddsInsightsHTML(rows, j)`, drawn into `#oddsIns` at the top of
+  `drawOdds()` after `ensureFA` loads match histories. `oddsTargets()` gives each team's expected goals (λ from
+  `fitGoals`), clean sheet and scoring chances (summed over a double gameweek). It shows:
+  - insights: the top goal and clean-sheet targets; your players in the 4 worst fixtures (attackers by
+    λ, defenders and keepers by clean sheet chance); the target slots you already cover; and the best-odds
+    captain;
+  - two cards with the top 4 teams for goals and for clean sheets, each with the model's best 2 players
+    by 1-GW xP (`oddsPicks`: 60%+ start chance, and passing `buySecure` unless you own them);
+  - the teams to avoid, and the main uncertainty (team news and how old the odds are).
 - **Matches tab:** `renderMatches()`. It shows every fixture of a gameweek from FPL's `fixtures/` data:
   the score, scorers, assists, own goals, penalties, red cards and bonus. A "Your players" panel per
   fixture gives that gameweek's squad, from `myPicksFor(gw)`, with minutes, points and Opta stats

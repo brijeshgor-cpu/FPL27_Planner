@@ -857,6 +857,11 @@ td.fx2-c { padding: 4px 3px; }
 @media (max-width: 700px) { .st-row { flex-wrap: wrap; } .st-row select { flex: 1 1 100%; } .lr-sum { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
 /* Player predictions: compare */
 .pr-mode button { min-width: 130px; }
+.od-ins { margin-bottom: 16px; } .od-grid { margin-top: 14px; } .od-grid .cmp-card { margin-top: 0; }
+.od-list { margin: 8px 0 0; padding-left: 20px; display: grid; gap: 10px; } .od-list li { min-width: 0; }
+.od-t { display: flex; flex-wrap: wrap; gap: 4px 8px; align-items: baseline; } .od-v { margin-left: auto; font-weight: 700; font-variant-numeric: tabular-nums; }
+.od-p { margin-top: 3px; font-size: 14px; line-height: 1.5; }
+.od-g h3 { color: var(--c-solid); } .od-c h3 { color: var(--good); }
 .tc-tbl td:first-child { white-space: normal; }
 .tc-tbl .tc-sec td { font-weight: 600; color: var(--muted); font-size: 12px; text-transform: uppercase; letter-spacing: .04em; padding-top: 12px; }
 .tc-tbl td.win { font-weight: 700; color: var(--good); }
@@ -5748,6 +5753,65 @@ td.fx2-c { padding: 4px 3px; }
       $("#app").innerHTML = `<section class="view"><div class="panel-head"><h2>GW${gwNext} bookmaker odds</h2></div><div class="err">${msg}</div></section>`;
     });
   }
+  // ---------- Odds tab: targets for goals and clean sheets this gameweek ----------
+  function oddsTargets(rows) {
+    const by = {};
+    rows.filter((r) => r.o).forEach((r) => [[r.f[2], r.f[3], true, r.lh, r.la, r.pH, r.csH, r.scH], [r.f[3], r.f[2], false, r.la, r.lh, r.pA, r.csA, r.scA]].forEach(([t, opp, home, lam, oLam, win, cs, sc]) => {
+      const x = (by[t] ||= { team: t, fx: [], lam: 0, cs: 0, win: 0, sc: 0 });
+      x.fx.push({ opp, home }); x.lam += lam; x.cs += cs; x.win = Math.max(x.win, win); x.sc = 1 - (1 - x.sc) * (1 - sc);
+    }));
+    return Object.values(by);
+  }
+  function oddsPicks(team, pos, TO, mine) {
+    return Object.values(E).filter((e) => e.team === team && pos.includes(e.element_type) && e.minutes >= 180)
+      .map((e) => ({ e, xp: expertScore(e, 1, TO), mp: minutesProfile(e), bs: buySecure(e), mine: mine.has(e.id) }))
+      .filter((x) => x.mp.pStart >= 0.6 && (x.mine || x.bs.ok)).sort((a, b) => b.xp - a.xp).slice(0, 2);
+  }
+  function oddsInsightsHTML(rows, j) {
+    const teams = oddsTargets(rows); if (teams.length < 6) return "";
+    const TO = teamOdds(), mine = new Set(baseSquad().map((p) => p[0])), N = 4;
+    const fxTxt = (x) => x.fx.map((f) => `${f.home ? "v" : "@"} ${esc(T[f.opp].short)}`).join(" + ");
+    const dbl = (x) => (x.fx.length > 1 ? ` <span class="pill acc">${x.fx.length} games</span>` : "");
+    const pl = (x) => `${esc(x.e.web_name)}${x.mine ? ` <span class="pill acc" title="In your squad">Yours</span>` : ""} <span class="note">${POSN(x.e)} · £${price(x.e.now_cost)}m · ${x.xp.toFixed(1)} xP · ${pct(x.mp.pStart)} start · ${Math.round((own[x.e.id] || 0) * 100)}% league</span>`;
+    const goals = [...teams].sort((a, b) => b.lam - a.lam), sheets = [...teams].sort((a, b) => b.cs - a.cs);
+    const card = (title, list, val, pos, cls) => `<div class="cmp-card od-card ${cls}"><h3>${title}</h3><ol class="od-list">${list.slice(0, N).map((x) => {
+      const ps = oddsPicks(x.team, pos, TO, mine);
+      return `<li><div class="od-t"><strong>${esc(T[x.team].name)}</strong> <span class="note">${fxTxt(x)}</span>${dbl(x)}<span class="od-v">${val(x)}</span></div>
+        <div class="od-p">${ps.length ? ps.map(pl).join("<br>") : `<span class="note">No nailed option who passes the buy checks</span>`}</div></li>`;
+    }).join("")}</ol></div>`;
+    // the analyst read
+    const ins = [], g1 = goals[0], c1 = sheets[0];
+    const myAtt = (t) => baseSquad().map((p) => E[p[0]]).filter((e) => e && e.team === t && e.element_type >= 3);
+    const myDef = (t) => baseSquad().map((p) => E[p[0]]).filter((e) => e && e.team === t && e.element_type <= 2);
+    ins.push({ k: "good", lab: "Projection", t: `Goals: target ${listAnd(goals.slice(0, 3).map((x) => esc(T[x.team].name)))}`,
+      d: `${esc(T[g1.team].name)} ${fxTxt(g1)} are expected to score ${g1.lam.toFixed(2)} goals (${pct(g1.sc)} to score), the most this gameweek. Then ${goals.slice(1, 3).map((x) => `${esc(T[x.team].short)} ${x.lam.toFixed(2)}`).join(", ")}.` });
+    ins.push({ k: "good", lab: "Projection", t: `Clean sheets: target ${listAnd(sheets.slice(0, 3).map((x) => esc(T[x.team].name)))}`,
+      d: `${esc(T[c1.team].name)} ${fxTxt(c1)} have a ${pct(Math.min(1, c1.cs))} clean sheet chance, the best this gameweek. Then ${sheets.slice(1, 3).map((x) => `${esc(T[x.team].short)} ${pct(Math.min(1, x.cs))}`).join(", ")}.` });
+    // your squad against the odds
+    const lowG = goals.slice(-4), lowC = sheets.slice(-4);
+    const attRisk = lowG.flatMap((x) => myAtt(x.team).map((e) => [e, x])), defRisk = lowC.flatMap((x) => myDef(x.team).map((e) => [e, x]));
+    if (attRisk.length || defRisk.length) ins.push({ k: "warn", lab: "Projection", t: "Your players in the toughest fixtures",
+      d: [attRisk.length ? `Attack: ${attRisk.map(([e, x]) => `${esc(e.web_name)} (${esc(T[x.team].short)} ${POSN(e)}, ${x.lam.toFixed(2)} expected goals, ${pct(x.sc)} to score)`).join(", ")}.` : "",
+        defRisk.length ? `Defence: ${defRisk.map(([e, x]) => `${esc(e.web_name)} (${esc(T[x.team].short)} ${POSN(e)}, ${pct(Math.min(1, x.cs))} clean sheet)`).join(", ")}.` : "",
+        "Bench them if you have a close alternative, or make them the first to go if a transfer is on the table."].filter(Boolean).join(" ") });
+    const hitA = goals.slice(0, N).flatMap((x) => myAtt(x.team)), hitD = sheets.slice(0, N).flatMap((x) => myDef(x.team));
+    ins.push({ k: hitA.length + hitD.length ? "good" : "info", lab: "Fact", t: `You already cover ${hitA.length + hitD.length} of the target slots`,
+      d: hitA.length + hitD.length ? `${[...hitA, ...hitD].map((e) => esc(e.web_name)).join(", ")} ${hitA.length + hitD.length > 1 ? "are" : "is"} in a top-${N} fixture for ${hitA.length && hitD.length ? "goals or clean sheets" : hitA.length ? "goals" : "clean sheets"}: start them.` : `None of your players is in a top-${N} fixture for goals or clean sheets. The cards below show who to bring in if you're making a transfer.` });
+    // captain pointer
+    const capPool = goals.slice(0, 6).flatMap((x) => oddsPicks(x.team, [3, 4], TO, mine)).sort((a, b) => b.xp - a.xp);
+    if (capPool[0]) { const c = capPool[0], mc = capPool.find((x) => x.mine);
+      ins.push({ k: "info", lab: "Projection", t: `Best-odds captain: ${esc(c.e.web_name)}${c.mine ? " (yours)" : ""}`, d: `${c.xp.toFixed(1)} xP in the ${esc(T[c.e.team].short)} fixture.${mc && mc !== c ? ` Your best option from a top fixture is ${esc(mc.e.web_name)} at ${mc.xp.toFixed(1)} xP.` : ""} Check the Current gameweek tab for the full captain call with minutes and haul potential.` }); }
+    const unc = `Main uncertainty: team news. These are the odds from ${new Date(j.fetched).toLocaleString("en-GB", { timeZone: "Europe/London", weekday: "short", day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" })}, and a rested striker or a change of keeper moves them, so check line-ups before the deadline.`;
+    const LB = { Fact: "lab-fact", Projection: "lab-proj", Assumption: "lab-asm" };
+    return `<div class="panel od-ins"><div class="panel-head"><h2>Who to target this gameweek</h2><span class="note">From the bookmaker odds below, with the model's best player in each fixture</span></div>
+      <ul class="insights">${ins.map((i) => `<li class="${i.k}"><div><div class="t">${i.t} <span class="lab ${LB[i.lab]}">${i.lab}</span></div><div class="d">${i.d}</div></div></li>`).join("")}</ul>
+      <div class="grid-2 od-grid">
+        ${card("For goals: attack these", goals, (x) => `${x.lam.toFixed(2)} xG · ${pct(x.sc)}`, [3, 4], "od-g")}
+        ${card("For clean sheets: defend with these", sheets, (x) => `${pct(Math.min(1, x.cs))} CS`, [1, 2], "od-c")}
+      </div>
+      <p class="note">Expected goals and clean sheet chances come from a Poisson fit to the margin-free result and over/under 2.5 prices. Players are the model's best 1-gameweek xP from each team, with a 60%+ start chance and passing the buy checks (fit, regular starter, 45+ minutes last match) unless you already own them. ${unc}</p>
+      <p class="note">Avoid for goals: ${lowG.map((x) => `${esc(T[x.team].short)} ${x.lam.toFixed(2)}`).join(", ")}. Avoid for clean sheets: ${lowC.map((x) => `${esc(T[x.team].short)} ${pct(Math.min(1, x.cs))}`).join(", ")}.</p></div>`;
+  }
   function drawOdds(j) {
     const fx = D.fixtures.filter((f) => f[1] === gwNext).sort((a, b) => String(a[6]).localeCompare(String(b[6])));
     const ev = j.events.map((e) => ({ ...e, h: oddsTeamId(e.home), a: oddsTeamId(e.away) }));
@@ -5772,6 +5836,7 @@ td.fx2-c { padding: 4px 3px; }
     <section class="view">
       <div class="panel-head"><h2>GW${gwNext} bookmaker odds</h2><span class="note">Chances implied by UK bookmaker prices, bookmaker margin removed</span></div>
       <div class="odds-stamp"><span><span class="k">Odds last refreshed</span> <strong>${uk(j.fetched)}</strong> <span class="note">UK time</span></span>${nextTxt ? `<span class="note">${nextTxt}</span>` : ""}${j.stale ? `<span class="note down">The last refresh attempt failed, so these are the most recent odds available.</span>` : ""}</div>
+      <div id="oddsIns">${got.length ? `<div class="panel"><p class="note">Working out this gameweek's targets…</p></div>` : ""}</div>
       ${got.length ? `<div class="kpis">
         <div class="kpi"><span class="k">Biggest favourite</span><span class="v">${Math.round(fav.p * 100)}%</span><span class="s">${esc(T[fav.team]?.name)} to win</span></div>
         <div class="kpi"><span class="k">Best clean sheet chance</span><span class="v">${Math.round(bcs.p * 100)}%</span><span class="s">${esc(T[bcs.team]?.name)}</span></div>
@@ -5788,6 +5853,12 @@ td.fx2-c { padding: 4px 3px; }
       </table></div>
       <p class="note">Result chances come straight from bookmaker prices (average of ${got.length ? Math.round(got.reduce((a, r) => a + r.o.books, 0) / got.length) : 0} UK bookmakers per match). Clean sheet and to-score chances are worked out from the same prices plus the over/under 2.5 goals line, using a standard goals model. Numbered badges mark teams you own players from. Odds refresh 3 days and 1 day before each gameweek deadline.</p>
     </section>`;
+    if (got.length) {
+      if (FA.odds === undefined || !FA.odds) FA.odds = j;
+      const TO = teamOdds();
+      const ids = got.flatMap((r) => [r.f[2], r.f[3]]).flatMap((t) => Object.values(E).filter((e) => e.team === t && e.minutes >= 180).sort((a, b) => expertScore(b, 1, TO) - expertScore(a, 1, TO)).slice(0, 6).map((e) => e.id));
+      ensureFA(ids).catch(() => null).then(() => { const box = $("#oddsIns"); if (box && view === "odds") { try { box.innerHTML = oddsInsightsHTML(rows, j); } catch (err) { console.error(err); box.innerHTML = ""; } } });
+    }
   }
 })();
 </script>
