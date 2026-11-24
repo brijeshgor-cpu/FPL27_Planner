@@ -313,7 +313,7 @@ bench order, transfers or chip before the deadline?*
     a name are only matched to the article's club. "Team news" (`PRESS_RE`, excluding match reports via
     `REPORT_RE`) covers injuries, fitness, availability and manager comments.
   - Sections: Your players' availability (FPL flags, with bench cover from `autoSub`), then a card per club in
-    alphabetical order (your teams, or all). The owner removed the press-conference and possibly-dropped lists. Each card has the next fixture, the expected press
+    alphabetical order (all teams by default, or just yours). The owner removed the press-conference and possibly-dropped lists. Each card has the next fixture, the expected press
     conference day (kick-off minus 2 days, an Assumption) and, with no article lists (the owner's preference), a
     one-line outlook for each injured, suspended or possibly dropped key player: `outlook()` gives Likely to start,
     Doubt leaning yes, Doubt, Unlikely or Out. It uses the strongest source available: news since the flag

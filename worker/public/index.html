@@ -6447,7 +6447,7 @@ td.fx2-c { padding: 4px 3px; }
   // Articles come from /api/teamnews (BBC club feeds plus the general BBC and Guardian feeds), fetched fresh on
   // every visit. Anything published before the start of the current gameweek (the last deadline that has passed)
   // is dropped. Availability comes from FPL's own player flags, which change as press conferences happen.
-  const NW = { scope: "mine", pressOnly: false, open: {} };
+  const NW = { scope: "all", pressOnly: false, open: {} };
   // Press conference and team news: injuries, fitness, availability, selection and manager updates (not match reports)
   const PRESS_RE = /press conference|presser|team news|injur|fitness|fit for|fit to|ruled out|out for|doubt|knock|scan|setback|return(s|ing)? (to|from)|available|unavailable|to miss|will miss|misses|suspen|\bban\b|confirms|update on|blow|sidelined|surgery|operation|hamstring|groin|ankle|knee|calf|thigh|shoulder|concussion|illness|rested|rotate|rotation|line-?up|starting xi|selection|boss|manager|head coach/i;
   const REPORT_RE = /as it happened|\b\d+-\d+\b|player ratings|match report|highlights|team of the week|fan /i;
