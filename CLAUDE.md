@@ -312,15 +312,15 @@ bench order, transfers or chip before the deadline?*
   - Articles are matched to clubs by feed, club name or player name, and to players by FPL name. Players who share
     a name are only matched to the article's club. "Team news" (`PRESS_RE`, excluding match reports via
     `REPORT_RE`) covers injuries, fitness, availability and manager comments.
-  - Sections: Your players' availability (FPL flags, with bench cover from `autoSub`), Latest press conference and
-    team news, then a card per club (your teams first, or all). Each card has the next fixture, the expected press
+  - Sections: Your players' availability (FPL flags, with bench cover from `autoSub`), then a card per club in
+    alphabetical order (your teams, or all). The owner removed the press-conference and possibly-dropped lists. Each card has the next fixture, the expected press
     conference day (kick-off minus 2 days, an Assumption) and, with no article lists (the owner's preference), a
     one-line outlook for each injured, suspended or possibly dropped key player: `outlook()` gives Likely to start,
     Doubt leaning yes, Doubt, Unlikely or Out. It uses the strongest source available: news since the flag
     (`POS_RE`/`NEG_RE` on articles naming him, quoted, labelled Assumption), then FPL's flag (Fact), then
     `minutesProfile().pStart` (Projection).
   - Key players: your squad, 10%+ owned overall or 20%+ in the league, and each club's top 3 scorers.
-  - Possibly dropped or rotated (`newsDropped()`): players you own, 3%+ owned overall or 10%+ in the league, who had
+  - Possibly dropped or rotated (`newsDropped()`, now shown only inside the club cards): players you own, 3%+ owned overall or 10%+ in the league, who had
     3+ starts in their club's previous 5 games but in the club's latest finished match didn't play, came off the
     bench, were sent off or were taken off before 45'. Data comes from `OS.gw`. Each shows the FPL flag (or "no flag:
     a selection call"), recent minutes, the GW start chance (`minutesProfile().pStart`, as likely, in doubt or

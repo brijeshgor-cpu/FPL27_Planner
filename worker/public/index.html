@@ -6531,7 +6531,7 @@ td.fx2-c { padding: 4px 3px; }
     const nextFx = (tid) => { const fx = teamFx[tid][gwNext] || [], f = D.fixtures.find((x) => x[1] === gwNext && (x[2] === tid || x[3] === tid)); return fx.length ? `GW${gwNext}: ${fx.map(fxLabel).join(" + ")}${f && f[6] ? ` · ${ukT(f[6])}` : ""}` : `No GW${gwNext} match`; };
     const presser = (tid) => { const f = D.fixtures.find((x) => x[1] === gwNext && (x[2] === tid || x[3] === tid)); if (!f || !f[6]) return ""; const d = new Date(Date.parse(f[6]) - 2 * 864e5); return d > now ? `Press conference expected around ${d.toLocaleDateString("en-GB", { timeZone: "Europe/London", weekday: "short", day: "numeric", month: "short" })}` : "Pre-match press conference should be out"; };
     let teams = D.teams.map((t) => t.id).filter((tid) => NW.scope === "all" || myCount(tid) > 0);
-    teams.sort((a, b) => (myCount(b) - myCount(a)) || ((kick(a) ? 0 : 1) - (kick(b) ? 0 : 1)) || T[a].name.localeCompare(T[b].name));
+    teams.sort((a, b) => T[a].name.localeCompare(T[b].name));
     // Will he start the next game? Strongest source first: what the manager or the news has said since the
     // gameweek started (Assumption, quoted), then FPL's flag (Fact), then the model's start chance (Projection).
     const NEG_RE = /ruled out|out for|will miss|set to miss|faces? (a )?(spell|lay-?off)|sidelined|surgery|operation|\bweeks\b|\bmonths\b|setback|suspended|suspension|\bban\b|not (be )?available|won't (be fit|play|feature)/i;
@@ -6572,15 +6572,12 @@ td.fx2-c { padding: 4px 3px; }
     app.innerHTML = `<section class="view">
       <div class="panel-head"><h2>News for GW${gwNext}</h2><span class="note">Refreshed ${ukT(j.fetched)} · news from before the GW${started ? started.id : gwCur} deadline (${ukT(cutoff)}) is removed</span></div>
       ${alerts ? `<div class="panel"><div class="panel-head"><h3>Your players: availability</h3><span class="note">FPL's official flags, which update after press conferences</span></div><ul class="insights">${alerts}</ul></div>` : `<div class="panel"><p class="note"><strong>Your players:</strong> none of your 15 is flagged by FPL right now.</p></div>`}
-      ${dropHTML}
-      ${pressAll.length ? `<div class="panel"><div class="panel-head"><h3>Latest press conference and team news</h3></div><ul class="nw-list">${pressAll.map((x) => `<li class="nw-it"><span class="pill nw-team">${esc(T[x.tid].short)}</span> <a href="${esc(x.link)}" target="_blank" rel="noopener">${esc(x.title)}</a><div class="nw-meta"><span class="note">${esc(x.source)} · ${ago(x.date)}</span>${x.mineP.map((e) => `<span class="pill acc">Your player: ${esc(e.web_name)}</span>`).join("")}</div></li>`).join("")}</ul></div>` : ""}
       <div class="panel nw-ctl"><div class="seg" role="group">${[["mine", "Your teams"], ["all", "All teams"]].map(([k, l]) => `<button data-nwscope="${k}" aria-pressed="${NW.scope === k}">${l}</button>`).join("")}</div>
         <label class="nw-jump"><span class="k">Jump to</span><select id="nwJump"><option value="">Choose a team</option>${teams.map((tid) => `<option value="${tid}">${esc(T[tid].name)}</option>`).join("")}</select></label></div>
       <div class="nw-grid">${teams.map(card).join("")}</div>
       <p class="note">Sources: BBC Sport club feeds, BBC Sport and The Guardian Premier League feeds, and FPL's player flags, all fetched on every visit. Articles are matched to clubs by feed, club name or player name, and to players by their FPL name. Exact press conference times aren't in any free feed, so the expected day is an estimate. ${j.failed && j.failed.length ? `Couldn't reach the feed for ${j.failed.join(", ")} this time.` : ""}</p>
     </section>`;
     app.querySelectorAll("[data-nwscope]").forEach((b) => b.addEventListener("click", () => { NW.scope = b.dataset.nwscope; drawNews(); }));
-    $("#nwDropMore")?.addEventListener("click", () => { NW.dropAll = !NW.dropAll; drawNews(); });
     $("#nwJump").addEventListener("change", (e) => { const el = $(`#nw-${e.target.value}`); if (el) el.scrollIntoView({ behavior: "smooth", block: "start" }); });
     app.querySelectorAll("[data-nwmore]").forEach((b) => b.addEventListener("click", () => { const t = b.dataset.nwmore; NW.open[t] = !NW.open[t]; drawNews(); $(`#nw-${t}`)?.scrollIntoView({ block: "start" }); }));
   }
