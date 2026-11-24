@@ -291,6 +291,21 @@ bench order, transfers or chip before the deadline?*
   transfers roll and the money freed is carried forward.
 - **Current gameweek tab:** `gwAdvice()` for the recommendations, `gwBuys()` for transfers,
   `gwChips()` for chips, `bestXI()`, `autoSub()` and `squadHealth()`.
+- **Transfers to make (Current gameweek, bottom):** `gwXfersHTML(st)` (`#gwXfers`), cached in `GWE.xs`. Four plans for
+  the team as edited:
+  - **Model's pick:** `gwBuys()` unchanged.
+  - **Low risk (`SCEN`):** xP × 70+-minute security plus 6 × league ownership, so it avoids selling template players.
+    Buys must be 85%+ to start and 60%+ to play 70+. No hits.
+  - **High risk:** (gp5 + 1.5 × gp1) × (1 − 0.55 × league ownership). Buys are owned by 20% or less of the league.
+    One −4 is allowed.
+  - **Optimistic:** xP if he starts, blended with form × fixtures. One −4 is allowed.
+
+  `scenPlan()` runs the greedy best-XI search (like `gwBuys`) with each strategy's value function. All buys pass
+  `buySecure`; momentum holds and hold notes are respected. Guard rails: a free move may cost at most 1.5 model xP
+  (gp5), and a −4 must gain 4+ on the model. Each card shows the decision, the moves with `sellCase` and the
+  template-sale risk, the model's xP, GW gain, hits, the league ownership of buys, the bank, and the cost against the
+  Model's pick. It also gives the main uncertainty, the Money freed next step (`scenNext`, excluding players just
+  sold) and Apply (`gwTransfer` for each move). `leagueCtx()` says which strategy to lean to.
 - **Data you can't get for free:** penalty-box touches, shots, chances created, duels and manager
   comments aren't in FPL's free data, so say so instead of guessing. FPL's xG includes penalties;
   non-penalty xG is estimated by taking about 0.76 xG off per penalty for the first-choice taker.

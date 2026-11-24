@@ -857,6 +857,21 @@ td.fx2-c { padding: 4px 3px; }
 @media (max-width: 700px) { .st-row { flex-wrap: wrap; } .st-row select { flex: 1 1 100%; } .lr-sum { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
 /* Player predictions: compare */
 .pr-mode button { min-width: 130px; }
+.xs-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 14px; margin-top: 10px; }
+@media (max-width: 800px) { .xs-grid { grid-template-columns: minmax(0, 1fr); } }
+.xs-card { margin-top: 0 !important; display: flex; flex-direction: column; gap: 8px; }
+.xs-card.xs-model { border-color: var(--accent); }
+.xs-h { display: flex; align-items: center; justify-content: space-between; gap: 8px; } .xs-h h4 { margin: 0; font-size: 1.05rem; }
+.xs-dec .k, .xs-ev .k { display: block; font-size: .68rem; text-transform: uppercase; letter-spacing: .06em; color: var(--muted); font-weight: 600; }
+.xs-list { list-style: none; padding: 0; margin: 0; display: grid; gap: 10px; }
+.xs-list li { border-top: 1px solid var(--line); padding-top: 8px; }
+.xs-mv { display: flex; flex-wrap: wrap; align-items: baseline; gap: 4px 8px; } .xs-ar { color: var(--muted); }
+.xs-out { color: var(--muted); }
+.xs-ev { display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 8px; border-top: 1px solid var(--line); padding-top: 8px; }
+@media (max-width: 500px) { .xs-ev { grid-template-columns: repeat(3, minmax(0, 1fr)); } }
+.xs-ev .up { color: var(--good); } .xs-ev .down { color: var(--bad); }
+.xs-card .btn { align-self: flex-start; margin-top: auto; }
+.xs-stance { margin-top: 4px; }
 .trm-kpis { margin-bottom: 14px; }
 .pill.warn { background: color-mix(in srgb, var(--warn) 18%, transparent); color: var(--warn); }
 .trm-p { display: inline-flex; flex-direction: column; } .trm-p small { white-space: nowrap; }
@@ -2702,6 +2717,113 @@ td.fx2-c { padding: 4px 3px; }
     return best;
   }
 
+  // ---- Transfers to make: four strategies on the team as edited (model, low risk, high risk, optimistic) ----
+  // Each strategy values players its own way, then runs the same greedy search as gwBuys: the best single move,
+  // then the next, within your free transfers (and one −4 where the strategy allows it). Every buy passes
+  // buySecure, momentum holds and "hold" notes are respected, and each move is also scored by the model (gp5).
+  const SCEN = [
+    { k: "low", name: "Low risk", tag: "Protect", lab: "Projection",
+      how: "Values players by expected points × minutes security (chance of 70+ minutes), plus a large bonus for players your league owns (selling a template player who then hauls costs you on almost every rival). Buys must be nailed starters. Free transfers only.",
+      f: (e) => { const m = minutesProfile(e); return gp5(e) * (0.55 + 0.45 * m.p70) * (availability(e) < 1 ? 0.8 : 1) + 6 * (own[e.id] || 0); },
+      ok: (e) => { const m = minutesProfile(e); return m.pStart >= 0.85 && m.p70 >= 0.6 && availability(e) >= 1; }, hit: false, need: 3 },
+    { k: "high", name: "High risk", tag: "Differential", lab: "Assumption",
+      how: "Values players by the points they can gain you on your rivals: expected points × how few in your league own them, weighted towards this gameweek. Buys are owned by 20% or fewer of your league. One −4 allowed if it clearly pays.",
+      f: (e) => (gp5(e) + 1.5 * gp1(e)) * (1 - 0.55 * (own[e.id] || 0)),
+      ok: (e) => (own[e.id] || 0) <= 0.2, hit: true, need: 2, hitNeed: 1.5 },
+    { k: "opt", name: "Optimistic", tag: "Best case", lab: "Assumption",
+      how: "Assumes things break right: every player starts, and his current form carries on. It values players on expected points if they start, blended with recent form. One −4 allowed if it clearly pays.",
+      f: (e) => { const m = minutesProfile(e); let n = 0; for (let k = 0; k < 5 && gwNext + k <= 38; k++) n += (teamFx[e.team][gwNext + k] || []).length; return 0.55 * gp5(e) / Math.max(0.6, m.pPlay) + 0.45 * (parseFloat(e.form) || 0) * n * (availability(e) < 1 ? 0.6 : 1); },
+      ok: () => true, hit: true, need: 2, hitNeed: 2 },
+  ];
+  // Where freed money should go next (owner's rule): the best affordable upgrade for next week by a strategy's
+  // own measure, never a player the plan has just sold.
+  function scenNext(cur, bank, f, ok, sold, sellFor) {
+    if (bank < 20) return null;
+    const tc = {}; cur.forEach((id) => (tc[E[id].team] = (tc[E[id].team] || 0) + 1));
+    const cands = Object.values(E).filter((x) => x.now_cost >= 75 && !cur.includes(x.id) && !sold.has(x.id) && isFit(x) && x.minutes >= 270 && ok(x) && buySecure(x).ok);
+    const base = bestXI(cur, f).sum; let next = null;
+    cur.forEach((id) => { const e = E[id]; cands.filter((x) => x.element_type === e.element_type && x.now_cost <= bank + sellFor(id) && x.now_cost > e.now_cost && ((tc[x.team] || 0) - (x.team === e.team ? 1 : 0)) < 3).forEach((x) => {
+      const g = bestXI(cur.map((y) => (y === id ? x.id : y)), f).sum - base; if (g > 0 && (!next || g > next.g)) next = { out: e, inn: x, g }; }); });
+    return next;
+  }
+  function scenPlan(st, sc) {
+    const B = GWE.base, c = gwCalc(st), TO = gwTO();
+    const ftLeft = B.unlimited ? 15 : Math.max(0, B.ft - c.n);
+    const memo = new Map(), f = (e) => { let v = memo.get(e.id); if (v === undefined) memo.set(e.id, (v = sc.f(e))); return v; };
+    const sellFor = (id) => (st.xf.some((t) => t.inn === id) ? E[id].now_cost : B.sell[id] ?? E[id].now_cost);
+    const pool = {}; [1, 2, 3, 4].forEach((t) => (pool[t] = Object.values(E).filter((e) => e.element_type === t && isFit(e) && e.minutes >= 270 && sc.ok(e) && buySecure(e).ok).sort((a, b) => f(b) - f(a)).slice(0, 14)));
+    let bank = c.bank, cur = [...st.ids]; const tc = {}; cur.forEach((id) => (tc[E[id].team] = (tc[E[id].team] || 0) + 1));
+    const moves = [], maxFree = Math.min(ftLeft, 3);
+    for (let round = 0; round < maxFree + (sc.hit ? 1 : 0); round++) {
+      const base = bestXI(cur, f).sum, base5 = bestXI(cur, gp5).sum, free = round < ftLeft; let best = null;
+      cur.forEach((id, slot) => {
+        const e = E[id];
+        if (e.element_type === 1 && slot === 11 && availability(e) > 0) return; // backup keeper
+        if (hasTag(id, "hold") || (momentum(e).hold && STR("history") < 4)) return;
+        const budget = bank + sellFor(id);
+        pool[e.element_type].forEach((cd) => {
+          if (cur.includes(cd.id) || cd.now_cost > budget || ((tc[cd.team] || 0) - (cd.team === e.team ? 1 : 0)) >= 3) return;
+          const nid = cur.map((x) => (x === id ? cd.id : x)), g = bestXI(nid, f).sum - base;
+          if (best && g <= best.g) return;
+          // guard rails: a free move may cost at most 1.5 model xP; a −4 must pay for itself on the model too
+          const m5 = bestXI(nid, gp5).sum - base5;
+          if (free ? m5 < -1.5 : m5 < 4) return;
+          best = { out: e, inn: cd, g, nid, budget, m5 };
+        });
+      });
+      if (!best) break;
+      if (free ? best.g < sc.need : best.g - 4 < sc.hitNeed) break;
+      const m1 = bestXI(best.nid, gp1).sum - bestXI(cur, gp1).sum;
+      moves.push({ ...best, free, m1, sellP: sellFor(best.out.id), bankAfter: best.budget - best.inn.now_cost });
+      bank = best.budget - best.inn.now_cost; tc[best.out.team]--; tc[best.inn.team] = (tc[best.inn.team] || 0) + 1; cur = best.nid;
+      if (!free) break;
+    }
+    const next = moves.length ? scenNext(cur, bank, f, sc.ok, new Set(moves.map((m) => m.out.id)), sellFor) : null;
+    return { moves, ftLeft, cur, bank, next };
+  }
+  function gwXfersHTML(st) {
+    const key = st.ids.join() + "|" + gwCalc(st).bank + "|" + gwCalc(st).n;
+    if (GWE.xs && GWE.xs.key === key) return GWE.xs.html;
+    const nm = (e) => esc(e.web_name), sg = (v) => (v >= 0 ? "+" : "−") + Math.abs(v).toFixed(1), L = leagueCtx();
+    const model = gwBuys(st).filter((x) => x.act && x.act.a === "xfer");
+    const plans = [{ k: "model", name: "Model's pick", tag: "Recommended", lab: "Projection", how: "The site's main recommendation: the biggest gain to your best XI's expected points over the next 5 gameweeks, after the value of rolling a transfer.",
+      moves: model.map((x) => { const out = E[x.act.out], inn = E[x.act.inn]; const nid = st.ids.map((id) => (id === out.id ? inn.id : id)); return { out, inn, free: !x.act.hit, m5: x.act.gain, m1: bestXI(nid, gp1).sum - bestXI(st.ids, gp1).sum, bankAfter: x.act.bankAfter, sellP: GWE.base.sell[out.id] ?? out.now_cost }; }) },
+      ...SCEN.map((sc) => ({ ...sc, ...scenPlan(st, sc) }))];
+    { const p = plans[0], last = model.filter((x) => x.act).slice(-1)[0];
+      if (p.moves.length && last) { let cur = [...st.ids]; p.moves.forEach((m) => (cur = cur.map((id) => (id === m.out.id ? m.inn.id : id))));
+        const sold = new Set(p.moves.map((m) => m.out.id)), sf = (id) => GWE.base.sell[id] ?? E[id].now_cost;
+        p.bank = last.act.bankAfter; p.next = scenNext(cur, p.bank, gp5, () => true, sold, sf); } }
+    const modelGain = plans[0].moves.reduce((a, m) => a + m.m5 - (m.free ? 0 : 4), 0);
+    const card = (p, i) => {
+      const hits = p.moves.filter((m) => !m.free).length, net5 = p.moves.reduce((a, m) => a + m.m5, 0) - 4 * hits, net1 = p.moves.reduce((a, m) => a + m.m1, 0) - 4 * hits;
+      const ownAvg = p.moves.length ? p.moves.reduce((a, m) => a + (own[m.inn.id] || 0), 0) / p.moves.length : 0;
+      const head = p.moves.length ? p.moves.map((m) => `${m.free ? "" : "−4: "}${nm(m.out)} → ${nm(m.inn)}`).join(", ") : "Roll your transfer";
+      const mv = p.moves.map((m) => { const mp = minutesProfile(m.inn), sc = sellCase(m.out), lo = own[m.out.id] || 0;
+        return `<li><div class="xs-mv"><span class="xs-out">${nm(m.out)} <small class="note">${tShort(m.out.team)} · £${price(m.sellP)}m</small></span><span class="xs-ar">→</span><span class="xs-in"><strong>${nm(m.inn)}</strong> <small class="note">${tShort(m.inn.team)} · ${POSN(m.inn)} · £${price(m.inn.now_cost)}m</small></span>${m.free ? "" : `<span class="pill warn">−4</span>`}</div>
+          <div class="note">${sg(m.m5)} xP over 5 GWs · ${sg(m.m1)} in GW${gwNext} · ${pct(mp.pStart)} start · ${pct(mp.p70)} 70+ mins · ${Math.round((own[m.inn.id] || 0) * 100)}% of league own · next: ${[0, 1, 2].map((k) => (teamFx[m.inn.team][gwNext + k] || []).map(fxLabel).join(" + ") || "blank").join(", ")}</div>
+          ${sc.txt ? `<div class="note">Why sell ${nm(m.out)}: ${sc.txt}.${lo >= 0.6 ? ` ${Math.round(lo * 100)}% of your league own him: if he hauls you lose ground on most rivals.` : ""}</div>` : ""}</li>`; }).join("");
+      const cost = p.k === "model" ? "" : p.moves.length || plans[0].moves.length ? `<div class="note xs-cost">Against the model's pick: ${sg(net5 - modelGain)} xP over 5 gameweeks${Math.abs(net5 - modelGain) < 0.5 ? " (a close call)" : ""}.</div>` : "";
+      const unc = { model: "The 5-gameweek gain is a projection; fixtures after GW" + gwNext + " use FDR, not odds. Check team news before the deadline.",
+        low: "You give up some upside for security. If you're behind in the league, safe moves alone won't close the gap.",
+        high: `Low ownership cuts both ways: a blank costs you nothing on rivals, but a haul from the template player you sold costs you on most of them. ${L.stance === "chase" ? "You're chasing, so this is the kind of risk worth taking." : L.stance === "protect" ? "You're protecting a position, so take this only when the xP cost is small." : "Take it when the xP cost is small."}`,
+        opt: "It assumes good team news and that form holds. If a player's minutes or form drop, the expected-points model (Model's pick) is the safer guide." }[p.k];
+      return `<div class="cmp-card xs-card xs-${p.k}"><div class="xs-h"><h4>${p.name}</h4><span class="pill ${p.k === "model" ? "acc" : ""}">${p.tag}</span></div>
+        <p class="note">${p.how}</p>
+        <div class="xs-dec"><span class="k">Decision</span><strong>${head}</strong> <span class="lab ${{ Projection: "lab-proj", Assumption: "lab-asm" }[p.lab]}">${p.lab}</span></div>
+        ${p.moves.length ? `<ul class="xs-list">${mv}</ul>
+        <div class="xs-ev"><span><span class="k">Model xP, 5 GWs</span><strong class="${net5 >= 0 ? "up" : "down"}">${sg(net5)}</strong></span><span><span class="k">GW${gwNext}</span><strong>${sg(net1)}</strong></span><span><span class="k">Hits</span><strong>${hits ? "−" + 4 * hits : "0"}</strong></span><span><span class="k">League owns buys</span><strong>${Math.round(ownAvg * 100)}%</strong></span><span><span class="k">Bank after</span><strong>£${price(p.moves[p.moves.length - 1].bankAfter)}m</strong></span></div>` : `<p class="note">No move clears this strategy's bar${p.ftLeft != null ? ` with ${p.ftLeft} free transfer${p.ftLeft === 1 ? "" : "s"}` : ""}, so rolling is the call.</p>`}
+        ${p.next ? `<div class="note xs-next"><strong>Money freed:</strong> £${price(p.bank)}m left in the bank. Best next use for this strategy: ${nm(p.next.out)} → ${nm(p.next.inn)} (${tShort(p.next.inn.team)}, £${price(p.next.inn.now_cost)}m) with next week's free transfer.</div>` : ""}
+        ${cost}<div class="note xs-unc"><strong>Main uncertainty:</strong> ${unc}</div>
+        ${p.moves.length ? `<button class="btn sm pri" data-xs="${i}">Apply in the team editor</button>` : ""}</div>`;
+    };
+    const html = `<div class="panel-head"><h3>Transfers to make</h3><span class="note">Four strategies for GW${gwNext} on your team as edited: pick the one that fits your league position</span></div>
+      <div class="xs-stance note">${L.text} ${L.stance === "chase" ? "Lean to High risk when its cost against the model is small." : L.stance === "protect" ? "Lean to Low risk when its cost against the model is small." : "Go with the Model's pick unless another strategy costs under about 1 xP."}</div>
+      <div class="xs-grid">${plans.map(card).join("")}</div>
+      <p class="note">Every buy passes the buy checks: fit, a regular starter, 45+ minutes last match. Players held on momentum or by your notes aren't sold. "Model xP" scores each strategy's moves with the same expected-points model, so you can see what a different approach costs or gains. Apply puts the moves into the team editor above; nothing changes on FPL until you make them there.</p>`;
+    GWE.xs = { key, html, plans };
+    return html;
+  }
+
   function gwApply(act) {
     if (act.a === "xfer") { gwTransfer(act.out, act.inn); return; }
     const st = GWE.st;
@@ -2793,6 +2915,7 @@ td.fx2-c { padding: 4px 3px; }
       <div class="panel adv"><div class="panel-head"><h3>Recommendations for GW${gwNext}</h3><span class="note">For the team as edited. Only what could change your XI, captain, bench, transfers or chips before the deadline.</span></div>${decHTML}<div class="adv-grid">${advHTML}</div>
         <p class="note">${Object.keys(NOTES).some((id) => noteOf(+id)) ? "Your notes are applied to these recommendations. " : ""}xP is minutes-adjusted expected points (appearance, goals, assists, clean sheets, penalties, bonus and defensive contributions under this season's rules). Minutes come from each player's last 5 matches (a start counts at 50+ minutes), blended with his season rate and FPL's chance of playing. Penalty-box touches, shots, chances created and manager comments aren't in FPL's free data, so they aren't used. Tap Why? for the stats and odds behind a call.</p></div>
       <p class="note">${Object.keys(NOTES).some((id) => noteOf(+id)) ? `${Object.keys(NOTES).filter((id) => noteOf(+id)).length} of your notes are applied to this plan. ` : ""}Add your own judgement on players in <a href="#train">Train the model</a>.</p>
+      <div class="panel xs-panel" id="gwXfers">${(() => { try { return gwXfersHTML(st); } catch (e) { return `<div class="panel-head"><h3>Transfers to make</h3></div><div class="err">Couldn't build the strategies (${esc(e.message)}).</div>`; } })()}</div>
       <p class="note">Changes here are a sandbox saved in this browser only: make them on the FPL site to make them real. Projected points use the site's expert score (xG, xA, clean sheet odds, defensive contributions, bonus, fixtures and bookmaker odds, minutes, injuries and news). Sale prices follow FPL's rule that you keep half of any rise.</p>
       ${freshness()}
     </section>`;
@@ -2806,6 +2929,7 @@ td.fx2-c { padding: 4px 3px; }
     }));
     app.querySelector('[data-act="cap"]')?.addEventListener("click", () => { if (st.vc === GWE.sel) st.vc = st.cap; st.cap = GWE.sel; GWE.sel = null; gwSave(); drawGw(); });
     app.querySelector('[data-act="vc"]')?.addEventListener("click", () => { if (st.cap === GWE.sel) st.cap = st.vc; st.vc = GWE.sel; GWE.sel = null; gwSave(); drawGw(); });
+    app.querySelectorAll("[data-xs]").forEach((b) => b.addEventListener("click", () => { const p = GWE.xs?.plans[Number(b.dataset.xs)]; if (!p) return; p.moves.forEach((m) => gwTransfer(m.out.id, m.inn.id)); GWE.msg = GWE.msg || `${p.name}: ${p.moves.length} transfer${p.moves.length > 1 ? "s" : ""} applied in the editor.`; drawGw(); window.scrollTo({ top: 0, behavior: "smooth" }); }));
     app.querySelectorAll("[data-adv]").forEach((b) => b.addEventListener("click", () => { const x = GWE.adv[Number(b.dataset.adv)]; if (x && x.act) { gwApply(x.act); drawGw(); } }));
     $("#gwCap")?.addEventListener("change", (ev) => { const v = Number(ev.target.value); if (st.vc === v) st.vc = st.cap; st.cap = v; gwSave(); drawGw(); });
     $("#gwVc")?.addEventListener("change", (ev) => { const v = Number(ev.target.value); if (st.cap === v) st.cap = st.vc; st.vc = v; gwSave(); drawGw(); });
