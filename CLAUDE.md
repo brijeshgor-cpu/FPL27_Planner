@@ -167,6 +167,20 @@ bench order, transfers or chip before the deadline?*
     `buySecure`), your player running hot, and your weakest underlying numbers.
   - Not in FPL's free data: shots, shots on target, shots in the box, big chances, key passes, big chances created
     and passing. Non-penalty xG needs penalty xG per match, which FPL doesn't publish.
+- **Opta stats: player page:** click a player row (`[data-opid]`) to open `renderOptaPlayer(id)`, state in `OP`.
+  - Header: photo (Worker `/photo/{code}.png`, falling back to the kit), tags, season points, points per game,
+    ownership (overall and league) and minutes per start.
+  - Filters: Season (2026/27, or last season's totals from `history_past`), Venue, Window (season, last 6, last 3)
+    and Basis (per 90, per game, total). `opRecs()` and `opAgg()` build the records from `OS.gw`.
+  - An analyst verdict (rank by 5-GW xP in his position, `buySecure`, momentum or sell case) and a running
+    hot/due note.
+  - Points vs xPts bars (last 5, last 10 or all), over/underperformance (points, goals, assists and goals
+    conceded against expected), and Attacking and Defending percentile bars against the same position with
+    enough minutes (`OP_METRICS`).
+  - Defensive contribution: hit rate by starts or appearances, per 90, and per-gameweek bars against the
+    threshold (10 for DEF, 12 for MID/FWD).
+  - The next six gameweeks (`predPer`/`predMins`), a gameweek log, and Compare with… (opens Player predictions
+    compare with the best buy-checked alternative).
 - **Fixtures tab:** `renderFixtures()` and `drawFxTable()`. Sort by Overall (FPL FDR × 2, or team
   strength when the toggle is on), Attack, Defence, Goals or Clean sheets, with an Order, a Teams
   filter, a GW range slider with quick-set 3/5/8, and a Team strength toggle. FPL's own strength

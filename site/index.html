@@ -857,6 +857,56 @@ td.fx2-c { padding: 4px 3px; }
 @media (max-width: 700px) { .st-row { flex-wrap: wrap; } .st-row select { flex: 1 1 100%; } .lr-sum { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
 /* Player predictions: compare */
 .pr-mode button { min-width: 130px; }
+.os-click { cursor: pointer; } .os-click:hover td { background: color-mix(in srgb, var(--accent) 8%, transparent); } .os-click:focus-visible { outline: 2px solid var(--accent); }
+.op-backbtn { margin: 4px 0 12px; width: auto !important; display: inline-flex !important; }
+.op-grid { align-items: start; }
+.op-hero { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 20px; align-items: center; margin-bottom: 16px; }
+@media (max-width: 800px) { .op-hero { grid-template-columns: minmax(0, 1fr); } }
+.op-id { display: flex; gap: 18px; align-items: center; min-width: 0; }
+.op-photo { width: 110px; height: 110px; object-fit: cover; object-position: top; border-radius: 50%; background: var(--surface-2); border: 1px solid var(--line); flex: none; }
+.op-photo.kit { object-fit: contain; padding: 10px; }
+.op-name { font-size: 2.2rem; margin: 0; line-height: 1.1; overflow-wrap: anywhere; }
+.op-tags { display: flex; flex-wrap: wrap; gap: 6px; margin: 8px 0; } .op-tags .pill { font-size: .8rem; padding: 3px 10px; }
+.op-btns { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 8px; }
+.op-kpis { display: grid; grid-template-columns: repeat(2, minmax(120px, 1fr)); border: 1px solid var(--line); border-radius: var(--r); background: var(--surface); overflow: hidden; }
+.op-kpis > div { padding: 12px 16px; display: flex; flex-direction: column; gap: 2px; } .op-kpis > div:nth-child(odd) { border-right: 1px solid var(--line); } .op-kpis > div:nth-child(-n+2) { border-bottom: 1px solid var(--line); }
+.op-kpis strong { font-size: 1.6rem; }
+.op-view .k { display: block; font-size: .68rem; text-transform: uppercase; letter-spacing: .08em; color: var(--muted); font-weight: 600; margin-bottom: 4px; }
+.op-filters { display: flex; flex-wrap: wrap; gap: 14px 24px; justify-content: space-between; }
+.op-filters .seg { flex-wrap: wrap; }
+.op-ins { margin-bottom: 16px; }
+.op-grid { display: grid; grid-template-columns: minmax(0, 1.7fr) minmax(0, 1fr); gap: 16px; }
+@media (max-width: 900px) { .op-grid { grid-template-columns: minmax(0, 1fr); } }
+.op-grid .panel { margin: 0; }
+.op-key { display: inline-block; width: 10px; height: 10px; border-radius: 2px; margin: 0 2px 0 6px; vertical-align: -1px; } .op-key.pt { background: var(--c-solid); } .op-key.xp { background: color-mix(in srgb, var(--muted) 45%, transparent); }
+.op-chart { display: flex; gap: 6px; align-items: stretch; overflow-x: auto; padding-top: 6px; }
+.op-col { flex: 1 0 44px; display: flex; flex-direction: column; align-items: center; gap: 3px; font-size: .75rem; }
+.op-col b { font-size: .85rem; } .op-col span { white-space: nowrap; font-weight: 600; } .op-col small { color: var(--muted); }
+.op-pair { height: 160px; width: 100%; display: flex; gap: 3px; align-items: flex-end; justify-content: center; border-bottom: 1px solid var(--line); }
+.op-pair i { width: 40%; max-width: 18px; border-radius: 4px 4px 0 0; } .op-pair .pt { background: var(--c-solid); } .op-pair .xp { background: color-mix(in srgb, var(--muted) 40%, transparent); }
+.op-ov { padding: 12px 0; border-top: 1px solid var(--line); } .op-ov:first-of-type { border-top: 0; }
+.op-ovh { display: flex; justify-content: space-between; align-items: center; font-weight: 600; }
+.op-ovv strong { font-size: 1.7rem; }
+.op-ovbar { position: relative; height: 6px; border-radius: 3px; background: var(--surface-2); margin-top: 6px; } .op-ovbar i { position: absolute; left: 0; top: 0; bottom: 0; border-radius: 3px; background: var(--good); } .op-ovbar b { position: absolute; top: -3px; width: 2px; height: 12px; background: var(--ink); }
+.pill.bad { background: color-mix(in srgb, var(--bad) 18%, transparent); color: var(--bad); }
+.op-m { display: grid; grid-template-columns: minmax(0, 1.3fr) 70px minmax(0, 2fr) 48px; gap: 12px; align-items: center; padding: 10px 0; border-top: 1px solid var(--line); }
+.op-ml small { display: block; color: var(--muted); font-size: .72rem; } .op-mv { font-size: 1.25rem; font-weight: 700; font-variant-numeric: tabular-nums; } .op-mp { text-align: right; font-weight: 600; color: var(--muted); }
+.op-bar { height: 8px; border-radius: 4px; background: var(--surface-2); overflow: hidden; } .op-bar i { display: block; height: 100%; border-radius: 4px; } .op-bar i.hi { background: var(--good); } .op-bar i.mid { background: var(--c-solid); } .op-bar i.lo { background: color-mix(in srgb, var(--muted) 60%, transparent); }
+@media (max-width: 600px) { .op-m { grid-template-columns: minmax(0, 1fr) 56px 40px; } .op-bar { grid-column: 1 / -1; grid-row: 2; } .op-mv { font-size: 1.05rem; } }
+.op-dcw { display: grid; grid-template-columns: 220px minmax(0, 1fr); gap: 20px; } @media (max-width: 700px) { .op-dcw { grid-template-columns: minmax(0, 1fr); } }
+.op-dcs { display: flex; flex-direction: column; gap: 6px; } .op-big { font-size: 2.6rem; line-height: 1; }
+.op-meter { height: 8px; border-radius: 4px; background: var(--surface-2); overflow: hidden; } .op-meter i { display: block; height: 100%; background: var(--warn); }
+.op-dcchart { position: relative; display: flex; gap: 6px; align-items: flex-end; overflow-x: auto; padding-bottom: 34px; min-height: 200px; }
+.op-dc { flex: 1 0 30px; display: flex; flex-direction: column; align-items: center; gap: 2px; font-size: .75rem; position: relative; } .op-dc small { color: var(--muted); }
+.op-dcb { height: 160px; width: 100%; display: flex; align-items: flex-end; justify-content: center; } .op-dcb i { width: 70%; max-width: 40px; border-radius: 4px 4px 0 0; background: color-mix(in srgb, var(--muted) 35%, transparent); } .op-dcb i.hit { background: var(--good); }
+.op-thr { position: absolute; left: 0; right: 0; border-top: 2px dashed var(--bad); margin-bottom: 34px; pointer-events: none; z-index: 1; } .op-thr span { position: absolute; right: 0; top: -18px; font-size: .7rem; color: var(--bad); }
+.op-sixes { display: grid; grid-template-columns: repeat(6, minmax(0, 1fr)); border: 1px solid var(--line); border-radius: var(--r); overflow: hidden; }
+@media (max-width: 800px) { .op-sixes { grid-template-columns: repeat(3, minmax(0, 1fr)); } } @media (max-width: 420px) { .op-sixes { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+.op-six { padding: 12px; border-top: 6px solid var(--line); border-right: 1px solid var(--line); display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+.op-six .op-opp { font-size: 1.1rem; overflow-wrap: anywhere; } .op-pp { font-size: 1.7rem; font-weight: 700; margin-top: 6px; }
+.fdr-top1 { border-top-color: var(--fdr1); } .fdr-top2 { border-top-color: var(--fdr2); } .fdr-top3 { border-top-color: var(--fdr3); } .fdr-top4 { border-top-color: var(--fdr4); } .fdr-top5 { border-top-color: var(--fdr5); }
+.op-log td, .op-log th { white-space: nowrap; }
+.op-panel .panel-head .btn { font-weight: 600; }
 .xs-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 14px; margin-top: 10px; }
 @media (max-width: 800px) { .xs-grid { grid-template-columns: minmax(0, 1fr); } }
 .xs-card { margin-top: 0 !important; display: flex; flex-direction: column; gap: 8px; }
@@ -1026,7 +1076,7 @@ td.fx2-c { padding: 4px 3px; }
     "expected_goals_per_90", "expected_assists_per_90", "saves_per_90", "defensive_contribution",
     "price_change_percent", "price_change_projections", "price_change_locked_until", "price_change_calibrating",
     "expected_goals_conceded", "goals_conceded", "bps",
-    "corners_and_indirect_freekicks_order", "direct_freekicks_order", "penalties_text"];
+    "corners_and_indirect_freekicks_order", "direct_freekicks_order", "penalties_text", "code"];
   const setStatus = (t) => { const a = $("#app"); if (a && !D) a.innerHTML = `<p class="empty">${esc(t)}</p>`; };
 
   async function api(path) {
@@ -6147,12 +6197,142 @@ td.fx2-c { padding: 4px 3px; }
       <div class="tbl-wrap os-wrap"><table class="os-tbl">
         <thead><tr class="os-grp"><th class="os-name"></th>${groups.map((g, i) => `<th colspan="${g.n}" class="${gcls[i]} ${g.g ? "g-start" : ""}">${esc(g.g)}</th>`).join("")}</tr>
         <tr><th class="os-name">${OS.unit === "teams" ? "Team" : "Player"}</th>${cols.map((c, i) => `<th class="n ${colCls[i]} ${OS.sort === c[0] ? "on" : ""}" title="${esc(c[6])}"><button data-ossort="${c[0]}">${OS.unit === "teams" && c[0] === "apps" ? "Games" : c[1]}<span class="ar">${OS.sort === c[0] ? (OS.dir < 0 ? "▼" : "▲") : "↕"}</span></button></th>`).join("")}</tr></thead>
-        <tbody>${shown.map((r) => `<tr class="${r.mine ? "mine" : ""}">${nameCell(r)}${cols.map((c, i) => `<td class="n ${colCls[i]} ${OS.sort === c[0] ? "on" : ""}">${c[0] === "price" ? `£${r.price.toFixed(1)}m` : fmt(optaVal(r, c), c)}</td>`).join("")}</tr>`).join("") || `<tr><td colspan="${cols.length + 1}" class="note">No ${OS.unit} match these filters.</td></tr>`}</tbody>
+        <tbody>${shown.map((r) => `<tr class="${r.mine ? "mine" : ""} ${OS.unit === "players" ? "os-click" : ""}" ${OS.unit === "players" ? `data-opid="${r.e.id}" tabindex="0" title="Open ${esc(r.e.web_name)}'s page"` : ""}>${nameCell(r)}${cols.map((c, i) => `<td class="n ${colCls[i]} ${OS.sort === c[0] ? "on" : ""}">${c[0] === "price" ? `£${r.price.toFixed(1)}m` : fmt(optaVal(r, c), c)}</td>`).join("")}</tr>`).join("") || `<tr><td colspan="${cols.length + 1}" class="note">No ${OS.unit} match these filters.</td></tr>`}</tbody>
       </table></div>
       <div class="os-foot"><span class="note">Showing ${shown.length} of ${list.length} ${OS.unit}</span>${list.length > shown.length ? `<button class="btn sm" id="osMore">Show 50 more</button>` : ""}</div>`;
     box.querySelectorAll("[data-ossort]").forEach((b) => b.addEventListener("click", () => { const k = b.dataset.ossort; if (OS.sort === k) OS.dir *= -1; else { OS.sort = k; OS.dir = ["gc", "xgc", "yc", "rc", "og", "pm", "price"].includes(k) ? 1 : -1; } drawOptaTable(); }));
     $("#osMore")?.addEventListener("click", () => { OS.n += 50; drawOptaTable(); });
+    box.querySelectorAll("[data-opid]").forEach((tr) => { const go = () => renderOptaPlayer(+tr.dataset.opid); tr.addEventListener("click", go); tr.addEventListener("keydown", (ev) => { if (ev.key === "Enter") go(); }); });
   }
+  // ---------- Opta stats: one player's page (opens from a row in the table) ----------
+  const OP = { id: null, season: "cur", venue: "all", win: "season", basis: "90", bars: window.innerWidth < 600 ? 5 : 10, dcBase: "starts" };
+  // One player's (or every player's) gameweek records under the page filters.
+  function opRecs(e, last) {
+    const FX = OP.FX || (OP.FX = Object.fromEntries(D.fixtures.map((f) => [f[0], f])));
+    const g0 = OP.win === "season" ? 1 : Math.max(1, last - (OP.win === "6" ? 5 : 2));
+    const out = [];
+    for (let g = g0; g <= last; g++) {
+      const rec = OS.gw[g]?.els[e.id]; if (!rec) continue;
+      const fx = (rec[OI.FX] || []).map((id) => FX[id]).filter(Boolean).map((f) => ({ home: f[2] === e.team, opp: f[2] === e.team ? f[3] : f[2], fdr: f[2] === e.team ? f[4] : f[5], mine: f[2] === e.team || f[3] === e.team }));
+      if (OP.venue !== "all" && !fx.some((f) => f.mine && (OP.venue === "home") === f.home)) continue;
+      out.push({ g, rec, fx });
+    }
+    return { recs: out, g0, span: last - g0 + 1 };
+  }
+  function opAgg(e, recs) {
+    const s = new Array(25).fill(0); let xpts = 0, xcs = 0, dcHit = 0, dcHitSt = 0;
+    const thr = e.element_type === 2 ? 10 : 12;
+    recs.forEach(({ rec }) => {
+      for (let i = 0; i < 25; i++) s[i] += rec[i];
+      xpts += deservedPts(e.element_type, [rec[OI.M], rec[OI.PTS], rec[OI.XG], rec[OI.XA], rec[OI.XGC], rec[OI.SV], rec[OI.B], rec[OI.DC]]);
+      if (rec[OI.M] >= 60) xcs += Math.exp(-rec[OI.XGC]);
+      if (e.element_type > 1 && rec[OI.DC] >= thr) { dcHit++; if (rec[OI.ST]) dcHitSt++; }
+    });
+    return { s, xpts, xcs, dcHit, dcHitSt, apps: recs.length, starts: s[OI.ST], mins: s[OI.M], thr };
+  }
+  const opDiv = (a) => (OP.basis === "90" ? a.mins / 90 : OP.basis === "game" ? a.apps : 1) || 1;
+  const OP_METRICS = {
+    att: [["xg", "Expected goals", (a) => a.s[OI.XG], "Includes penalties (FPL doesn't publish penalty xG per match)"], ["g", "Goals", (a) => a.s[OI.G]], ["xa", "Expected assists", (a) => a.s[OI.XA]], ["a", "Assists", (a) => a.s[OI.A]],
+      ["xgi", "Expected goal involvements", (a) => a.s[OI.XG] + a.s[OI.XA]], ["thr", "Threat (ICT)", (a) => a.s[OI.THR]], ["cre", "Creativity (ICT)", (a) => a.s[OI.CRE]], ["bps", "Bonus points system", (a) => a.s[OI.BPS]]],
+    def: [["cs", "Clean sheets", (a) => a.s[OI.CS]], ["xcs", "Expected clean sheets", (a) => a.xcs, "From each 60+ minute match's xG conceded"], ["xgc", "Expected goals conceded", (a) => a.s[OI.XGC], "Lower is better", true], ["gc", "Goals conceded", (a) => a.s[OI.GC], "Lower is better", true],
+      ["tk", "Tackles", (a) => a.s[OI.TK]], ["cbi", "Clearances, blocks, interceptions", (a) => a.s[OI.CBI]], ["rec", "Recoveries", (a) => a.s[OI.REC]], ["sv", "Saves", (a) => a.s[OI.SV], "", false, 1]],
+  };
+  const ordinalN = (n) => n + (n % 100 >= 11 && n % 100 <= 13 ? "th" : ["th", "st", "nd", "rd"][n % 10] || "th");
+  async function renderOptaPlayer(id) {
+    OP.id = id; const e = E[id]; if (!e) return;
+    const last = await loadOptaGws(); if (view !== "opta" || OP.id !== id) return;
+    const H = await pcHist(id); if (view !== "opta" || OP.id !== id) return;
+    const app = $("#app"), t = e.element_type, mine = baseSquad().some((p) => p[0] === id);
+    const { recs, span } = opRecs(e, last), A = opAgg(e, recs), div = opDiv(A);
+    const fmt = (v, d = 2) => (OP.basis === "total" && Number.isInteger(v) ? String(v) : v.toFixed(d));
+    // position pool for percentiles: same position, enough minutes in the same window and venue
+    const minM = Math.max(270, span * 90 * 0.3);
+    const pool = Object.values(E).filter((x) => x.element_type === t && x.id !== id).map((x) => opAgg(x, opRecs(x, last).recs)).filter((a) => a.mins >= minM);
+    const pctl = (v, f, low) => { if (!pool.length) return null; const vals = pool.map((a) => f(a) / opDiv(a)); const below = vals.filter((x) => (low ? x > v : x < v)).length, eq = vals.filter((x) => x === v).length; return Math.round(((below + eq / 2) / vals.length) * 100); };
+    const metricRows = (list) => list.filter((m) => !m[5] || t === m[5]).map(([k, l, f, sub, low]) => { const v = f(A) / div, p = pctl(v, f, low);
+      return `<div class="op-m"><div class="op-ml">${l}${sub ? `<small>${sub}</small>` : ""}</div><div class="op-mv">${fmt(v)}</div><div class="op-bar"><i class="${p == null ? "" : p >= 67 ? "hi" : p >= 34 ? "mid" : "lo"}" style="width:${p ?? 0}%"></i></div><div class="op-mp">${p == null ? "–" : ordinalN(p)}</div></div>`; }).join("");
+    const basisTxt = { 90: "per 90 minutes", game: "per game", total: "totals" }[OP.basis];
+    const scope = `2026/27 · ${{ all: "all fixtures", home: "home", away: "away" }[OP.venue]} · ${OP.win === "season" ? `${span} gameweeks` : `last ${OP.win} gameweeks`} · ${basisTxt}`;
+    const oppL = (fx) => fx.filter((f) => f.mine).map((f) => `${tShort(f.opp).toUpperCase()} <small>(${f.home ? "H" : "A"})</small>`).join(" + ") || "–";
+    // points vs xPts bars
+    const shown = OP.bars === "all" ? recs : recs.slice(-OP.bars), maxP = Math.max(4, ...shown.map((r) => Math.max(r.rec[OI.PTS], deservedPts(t, [r.rec[OI.M], 0, r.rec[OI.XG], r.rec[OI.XA], r.rec[OI.XGC], r.rec[OI.SV], r.rec[OI.B], r.rec[OI.DC]]))));
+    const bars = shown.map((r) => { const xp = deservedPts(t, [r.rec[OI.M], 0, r.rec[OI.XG], r.rec[OI.XA], r.rec[OI.XGC], r.rec[OI.SV], r.rec[OI.B], r.rec[OI.DC]]), p = r.rec[OI.PTS];
+      return `<div class="op-col" title="GW${r.g}: ${p} pts, ${xp.toFixed(1)} xPts"><b>${p}</b><div class="op-pair"><i class="pt" style="height:${Math.max(0, p) / maxP * 100}%"></i><i class="xp" style="height:${xp / maxP * 100}%"></i></div><span>${oppL(r.fx)}</span><small>GW${r.g}</small></div>`; }).join("");
+    const ovr = [["Points", A.s[OI.PTS], A.xpts, "xPts"], ["Goals", A.s[OI.G], A.s[OI.XG], "xG"], ["Assists", A.s[OI.A], A.s[OI.XA], "xA"]].concat(t <= 2 ? [["Goals conceded", A.s[OI.GC], A.s[OI.XGC], "xGC", true]] : []).map(([l, act, exp, u, low]) => {
+      const a = act / div, x = exp / div, d = a - x, good = low ? d < 0 : d > 0, scale = Math.max(a, x, 0.01) * 1.25;
+      return `<div class="op-ov"><div class="op-ovh"><span>${l}</span><span class="pill ${Math.abs(d) < 0.005 ? "" : good ? "ok" : "bad"}">${d > 0 ? "↑" : d < 0 ? "↓" : ""} ${d > 0 ? "+" : ""}${d.toFixed(2)}</span></div><div class="op-ovv"><strong>${a.toFixed(2)}</strong> <span class="note">vs ${x.toFixed(2)} ${u}</span></div><div class="op-ovbar"><i style="width:${Math.min(100, (a / scale) * 100)}%"></i><b style="left:${Math.min(100, (x / scale) * 100)}%"></b></div></div>`; }).join("");
+    // defensive contribution
+    const dcRecs = OP.dcBase === "starts" ? recs.filter((r) => r.rec[OI.ST]) : recs, dcHits = dcRecs.filter((r) => r.rec[OI.DC] >= A.thr).length, dcRate = dcRecs.length ? dcHits / dcRecs.length : 0;
+    const dcMax = Math.max(A.thr * 1.5, ...recs.map((r) => r.rec[OI.DC]));
+    const dcBars = recs.map((r) => `<div class="op-dc" title="GW${r.g}: ${r.rec[OI.DC]}"><div class="op-dcb"><i class="${r.rec[OI.DC] >= A.thr ? "hit" : ""}" style="height:${(r.rec[OI.DC] / dcMax) * 100}%"></i></div><b>${r.rec[OI.DC]}</b><small>GW${r.g}</small></div>`).join("");
+    const dc90 = A.mins ? (A.s[OI.DC] / A.mins) * 90 : 0;
+    const rel = dcRate >= 0.5 ? ["ok", "Reliable source"] : dcRate >= 0.25 ? ["", "Occasional"] : ["bad", "Rarely hits"];
+    // next six
+    const six = []; for (let k = 0; k < 6 && gwNext + k <= 38; k++) { const l = teamFx[e.team][gwNext + k] || []; six.push(`<div class="op-six fdr-top${l.length ? Math.max(...l.map((f) => f.fdr)) : 0}"><span class="k">GW ${gwNext + k}</span><strong class="op-opp">${l.length ? l.map((f) => `${tShort(f.opp).toUpperCase()} <small>(${f.home ? "H" : "A"})</small>`).join(" + ") : "Blank"}</strong><span class="op-pp">${predPer(e, k).toFixed(1)}</span><span class="k">Pred pts</span><span class="note">${Math.round(predMins(e, k))} xMins</span></div>`); }
+    // analyst verdict
+    const TO = gwTO(), rankL = Object.values(E).filter((x) => x.element_type === t && isFit(x)).sort((a, b) => expertScore(b, 5, TO) - expertScore(a, 5, TO));
+    const rk = rankL.findIndex((x) => x.id === id) + 1, bs = buySecure(e), mo = momentum(e), sc = sellCase(e), xp5 = expertScore(e, 5, TO);
+    const luck = A.s[OI.PTS] - A.xpts;
+    const verdict = mine
+      ? { k: sc.cold && !mo.hold ? "warn" : "good", t: mo.hold ? `Keep ${esc(e.web_name)} this week` : sc.cold ? `${esc(e.web_name)} is a sell candidate` : `Keep ${esc(e.web_name)}`, d: `${xp5.toFixed(1)} projected points over the next 5 gameweeks, ${ordinalN(rk)} of ${rankL.length} ${POSN(e)}s. ${mo.hold ? `He returned last time (${mo.ret}) and faces ${mo.fxT}. ` : sc.txt ? `${sc.txt.charAt(0).toUpperCase() + sc.txt.slice(1)}. ` : ""}See Current gameweek → Transfers to make for the full call.` }
+      : bs.ok ? { k: rk <= 10 ? "good" : "", t: rk <= 10 ? `Worth buying: ${ordinalN(rk)} best ${POSN(e)} for the next 5 gameweeks` : `A possible buy, ${ordinalN(rk)} of ${rankL.length} ${POSN(e)}s`, d: `${xp5.toFixed(1)} projected points over 5 gameweeks. Passes the buy checks (fit, regular starter, 45+ minutes last match). ${Math.round((own[id] || 0) * 100)}% of your league own him${(own[id] || 0) <= 0.15 ? ", so he's a differential" : ""}.` }
+      : { k: "bad", t: `Not a buy right now`, d: `${esc(e.web_name)} fails the buy checks: ${bs.why}.` };
+    const lucky = Math.abs(luck) >= 6 ? { k: luck > 0 ? "warn" : "good", t: luck > 0 ? "Running hot" : "Due more points", d: `${A.s[OI.PTS]} points from ${A.xpts.toFixed(1)} expected (${luck > 0 ? "+" : ""}${luck.toFixed(1)}) in this window. ${luck > 0 ? "Expect fewer points if the underlying numbers don't improve." : "The underlying numbers deserve more; returns should follow."}` } : null;
+    const st = { a: ["ok", "Fit"], d: ["warn", `Doubt${e.chance_of_playing_next_round != null ? ` ${e.chance_of_playing_next_round}%` : ""}`], i: ["bad", "Injured"], s: ["bad", "Suspended"], u: ["bad", "Unavailable"], n: ["bad", "Not in squad"] }[e.status] || ["", e.status];
+    const seg = (attr, opts, v) => `<div class="seg" role="group">${opts.map(([k, l]) => `<button data-${attr}="${k}" aria-pressed="${String(k) === String(v)}">${l}</button>`).join("")}</div>`;
+    const prev = (H.past || []).slice(-1)[0];
+    const fullName = esc(`${e.first_name || ""} ${e.second_name || ""}`.trim());
+    const posOrder = t >= 3 ? ["att", "def"] : ["def", "att"];
+    const panelM = (k) => `<div class="panel op-panel"><div class="panel-head"><h3>${k === "att" ? "Attacking threat" : "Defending"}</h3><button class="btn sm" data-opback="1">Open in Opta stats →</button></div><p class="note">FPL (Opta) data · ${scope} · percentile against ${pool.length} other ${POSN(e)}s with enough minutes</p>${metricRows(OP_METRICS[k])}</div>`;
+    app.innerHTML = `<section class="view op-view">
+      <button class="btn sm op-backbtn" data-opback="0">← All players</button>
+      <div class="op-hero">
+        <div class="op-id"><img class="op-photo" src="photo/${e.code}.png" alt="" width="110" height="140" onerror="this.replaceWith(Object.assign(document.createElement('img'),{className:'op-photo kit',src:'kit/${T[e.team]?.code}${t === 1 ? "_1" : ""}.png',width:110,height:110}))">
+          <div><h2 class="op-name">${esc(e.web_name)}</h2>${fullName && fullName !== esc(e.web_name) ? `<div class="note">${fullName}</div>` : ""}
+          <div class="op-tags"><span class="pill">${POSN(e)}</span><span class="pill">${esc(T[e.team].name)}</span><span class="pill acc">£${price(e.now_cost)}m</span><span class="pill ${st[0]}">${st[1]}</span>${mine ? `<span class="pill acc">In your squad</span>` : ""}</div>
+          ${e.news ? `<p class="note">${esc(e.news)}</p>` : ""}
+          <div class="op-btns"><button class="btn pri" id="opCmp">Compare with…</button><button class="btn" data-opback="1">Full Opta stats</button></div></div></div>
+        <div class="op-kpis"><div><span class="k">Season points</span><strong>${e.total_points}</strong></div><div><span class="k">Points / game</span><strong>${(+e.points_per_game || 0).toFixed(2)}</strong></div><div><span class="k">Ownership</span><strong>${(+e.selected_by_percent || 0).toFixed(1)}%</strong><small class="note">${Math.round((own[id] || 0) * 100)}% of your league</small></div><div><span class="k">Minutes / start</span><strong>${e.starts ? Math.round(e.minutes / e.starts) : "–"}</strong></div></div>
+      </div>
+      <div class="panel op-filters">
+        <div><span class="k">Season</span>${seg("opseason", [["cur", "2026/27"], ["prev", prev ? prev.season_name : "Last season"]], OP.season)}</div>
+        <div><span class="k">Venue</span>${seg("opven", [["all", "All"], ["home", "Home"], ["away", "Away"]], OP.venue)}</div>
+        <div><span class="k">Window</span>${seg("opwin", [["season", "Season"], ["6", "Last 6"], ["3", "Last 3"]], OP.win)}</div>
+        <div><span class="k">Basis</span>${seg("opbasis", [["90", "Per 90"], ["game", "Per game"], ["total", "Total"]], OP.basis)}</div>
+      </div>
+      ${OP.season === "prev" ? (prev ? `<div class="panel"><div class="panel-head"><h3>${esc(prev.season_name)} season</h3></div><div class="kpis">${[["Points", prev.total_points], ["Minutes", prev.minutes], ["Starts", prev.starts], ["Goals", prev.goals_scored], ["Assists", prev.assists], ["xG", (+prev.expected_goals || 0).toFixed(2)], ["xA", (+prev.expected_assists || 0).toFixed(2)], ["Clean sheets", prev.clean_sheets], ["Def. contributions", prev.defensive_contribution ?? "–"], ["Bonus", prev.bonus]].map(([k, v]) => `<div class="kpi"><span class="k">${k}</span><span class="v">${v}</span>${prev.minutes && typeof v !== "string" && !["Points", "Minutes", "Starts"].includes(k) ? `<span class="s">${((+v / prev.minutes) * 90).toFixed(2)} per 90</span>` : ""}</div>`).join("")}</div><p class="note">FPL only publishes season totals for earlier seasons, so match-by-match charts are for 2026/27.</p></div>` : `<div class="panel"><p class="note">No Premier League season before 2026/27 in FPL's data for this player.</p></div>`) : `
+      <ul class="insights op-ins">${[verdict, lucky].filter(Boolean).map((i) => `<li class="${i.k}"><div><div class="t">${i.t} <span class="lab lab-proj">Projection</span></div><div class="d">${i.d}</div></div></li>`).join("")}</ul>
+      ${recs.length ? `<div class="op-grid">
+        <div class="panel"><div class="panel-head"><h3>Points vs expected points</h3>${seg("opbars", [[5, "Last 5"], [10, "Last 10"], ["all", "All"]], OP.bars)}</div><p class="note">${scope} · <span class="op-key pt"></span> Points <span class="op-key xp"></span> Expected points (what each match's underlying numbers were worth)</p><div class="op-chart">${bars}</div></div>
+        <div class="panel"><div class="panel-head"><h3>Over / underperformance</h3></div><p class="note">Returns against what the underlying numbers expected (${basisTxt})</p>${ovr}</div>
+      </div>
+      ${panelM(posOrder[0])}
+      ${t > 1 ? `<div class="panel"><div class="panel-head"><h3>Defensive contribution</h3><span class="pill ${rel[0]}">${rel[1]}</span></div><p class="note">Needs ${A.thr} or more ${t === 2 ? "clearances, blocks, interceptions and tackles" : "clearances, blocks, interceptions, tackles and recoveries"} in a match to bank 2 points.${t === 2 ? " Recoveries don't count for defenders." : ""}</p>
+        <div class="op-dcw"><div class="op-dcs"><span class="k">Hit rate</span>${seg("opdc", [["starts", "Starts"], ["apps", "Appearances"]], OP.dcBase)}<strong class="op-big">${Math.round(dcRate * 100)}%</strong><span class="note">${dcHits} of ${dcRecs.length} ${OP.dcBase === "starts" ? "starts" : "appearances"} cleared the threshold</span><span class="k">Per 90</span><strong>${dc90.toFixed(2)} <small class="note">/ ${A.thr} needed</small></strong><div class="op-meter"><i style="width:${Math.min(100, (dc90 / A.thr) * 100)}%"></i></div></div>
+        <div class="op-dcchart"><div class="op-thr" style="bottom:${(A.thr / dcMax) * 100}%"><span>${A.thr} threshold</span></div>${dcBars}</div></div></div>` : ""}
+      ${panelM(posOrder[1])}` : `<div class="panel"><p class="note">No appearances in this window${OP.venue !== "all" ? ` at ${OP.venue}` : ""}.</p></div>`}
+      <div class="panel"><div class="panel-head"><h3>Next six gameweeks</h3><a href="#fixtures">Fixtures →</a></div><p class="note">Predicted points and expected minutes from the site's model (bookmaker odds for GW${gwNext}, FDR after).</p><div class="op-sixes">${six.join("")}</div></div>
+      <div class="panel"><div class="panel-head"><h3>Gameweek log</h3></div><p class="note">Every appearance this season with minutes, returns and defensive actions.</p>
+        <div class="tbl-wrap"><table class="op-log"><thead><tr><th>GW</th><th>Opponent</th><th class="n">Mins</th><th class="n">G</th><th class="n">A</th><th class="n">xG</th><th class="n">xA</th><th class="n">${t === 1 ? "Saves" : "DC"}</th><th class="n">BPS</th><th class="n">xPts</th><th class="n">Points</th></tr></thead>
+        <tbody>${opRecs(e, last).recs.slice().reverse().map((r) => `<tr><td><strong>${r.g}</strong></td><td>${oppL(r.fx)}</td><td class="n">${r.rec[OI.M]}</td><td class="n">${r.rec[OI.G]}</td><td class="n">${r.rec[OI.A]}</td><td class="n">${r.rec[OI.XG].toFixed(2)}</td><td class="n">${r.rec[OI.XA].toFixed(2)}</td><td class="n">${t === 1 ? r.rec[OI.SV] : r.rec[OI.DC]}</td><td class="n">${r.rec[OI.BPS]}</td><td class="n">${deservedPts(t, [r.rec[OI.M], 0, r.rec[OI.XG], r.rec[OI.XA], r.rec[OI.XGC], r.rec[OI.SV], r.rec[OI.B], r.rec[OI.DC]]).toFixed(1)}</td><td class="n"><strong>${r.rec[OI.PTS]}</strong></td></tr>`).join("")}</tbody></table></div></div>`}
+      <p class="note">Source: FPL's official Opta data, refreshed on every reload. Shots, shots in the box, big chances, key passes, shots and big chances conceded aren't in FPL's free data, so they aren't shown. xG includes penalties.</p>
+    </section>`;
+    window.scrollTo({ top: 0 });
+    const set = (k, v) => { OP[k] = v; renderOptaPlayer(id); };
+    app.querySelectorAll("[data-opseason]").forEach((b) => b.addEventListener("click", () => set("season", b.dataset.opseason)));
+    app.querySelectorAll("[data-opven]").forEach((b) => b.addEventListener("click", () => set("venue", b.dataset.opven)));
+    app.querySelectorAll("[data-opwin]").forEach((b) => b.addEventListener("click", () => set("win", b.dataset.opwin)));
+    app.querySelectorAll("[data-opbasis]").forEach((b) => b.addEventListener("click", () => set("basis", b.dataset.opbasis)));
+    app.querySelectorAll("[data-opbars]").forEach((b) => b.addEventListener("click", () => set("bars", b.dataset.opbars === "all" ? "all" : +b.dataset.opbars)));
+    app.querySelectorAll("[data-opdc]").forEach((b) => b.addEventListener("click", () => set("dcBase", b.dataset.opdc)));
+    app.querySelectorAll("[data-opback]").forEach((b) => b.addEventListener("click", () => { OP.id = null; if (b.dataset.opback === "1") OS.q = e.web_name; renderOpta(); }));
+    $("#opCmp").addEventListener("click", () => {
+      const alt = Object.values(E).filter((x) => x.element_type === t && x.id !== id && buySecure(x).ok).sort((a, b) => expertScore(b, 5, TO) - expertScore(a, 5, TO))[0];
+      PCX.mode = "compare"; PCX.a = id; PCX.clubA = e.team; if (alt) { PCX.b = alt.id; PCX.clubB = alt.team; }
+      location.hash = "#predict";
+    });
+  }
+
   async function renderOpta() {
     $("#app").innerHTML = `<section class="view"><div class="panel-head"><h2>Opta stats</h2></div><p class="empty">Loading every gameweek's Opta stats from FPL…</p></section>`;
     if (OFF === undefined) await loadOfficial().catch(() => null);
@@ -6167,7 +6347,7 @@ td.fx2-c { padding: 4px 3px; }
     const sel = (id, opts, v) => `<select id="${id}">${opts.map(([k, l]) => `<option value="${k}" ${String(k) === String(v) ? "selected" : ""}>${l}</option>`).join("")}</select>`;
     $("#app").innerHTML = `
     <section class="view">
-      <div class="panel-head"><h2>Opta stats</h2><span class="note">FPL's official Opta data for every player, GW1–${last}, summed over the gameweeks you choose</span></div>
+      <div class="panel-head"><h2>Opta stats</h2><span class="note">FPL's official Opta data for every player, GW1–${last}, summed over the gameweeks you choose. Tap a player for his page</span></div>
       <div class="panel os-panel">
         <div class="os-cats" role="tablist">${OCATS.map(([k, l]) => `<button role="tab" data-oscat="${k}" aria-selected="${OS.cat === k}">${l}</button>`).join("")}</div>
         <div class="os-row">${seg("osunit", [["players", "Players"], ["teams", "Teams"]], OS.unit)}${seg("osper", OS.unit === "teams" ? [["total", "Total"], ["app", "Per match"]] : [["total", "Total"], ["app", "Per app"], ["start", "Per start"], ["90", "Per 90"]], OS.per)}</div>

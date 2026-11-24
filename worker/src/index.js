@@ -30,6 +30,8 @@ export default {
     const url = new URL(request.url);
     const kit = /^\/kit\/(\d{1,3})(_1)?\.png$/.exec(url.pathname);
     if (kit) return kitImage(kit[1], kit[2] || "");
+    const photo = /^\/photo\/(\d{1,8})\.png$/.exec(url.pathname);
+    if (photo) return photoImage(photo[1]);
     if (!url.pathname.startsWith("/api/")) return serveStatic(url.pathname);
     const path = url.pathname.slice("/api/".length);
     // Owner data: your player notes and the recorded advice (writes need the owner key)
@@ -265,6 +267,19 @@ async function kitImage(code, gk) {
     if (!r.ok) return new Response("Not found", { status: 404 });
     return new Response(r.body, { headers: { "content-type": "image/png", "cache-control": "public, max-age=604800" } });
   } catch (e) { return new Response("Unavailable", { status: 502 }); }
+}
+
+// Player headshot from the Premier League's image server (the path has moved between seasons, so try each).
+async function photoImage(code) {
+  const urls = [];
+  for (const base of ["premierleague25", "premierleague26", "premierleague"]) for (const size of ["110x140", "250x250"]) for (const pre of ["p", ""]) urls.push(`https://resources.premierleague.com/${base}/photos/players/${size}/${pre}${code}.png`);
+  for (const u of urls) {
+    try {
+      const r = await fetch(u, { headers: { "User-Agent": "Mozilla/5.0 (compatible; fc27-planner)" }, cf: { cacheTtl: 604800, cacheEverything: true } });
+      if (r.ok && (r.headers.get("content-type") || "").includes("image")) return new Response(r.body, { headers: { "content-type": "image/png", "cache-control": "public, max-age=604800" } });
+    } catch (e) { /* try the next */ }
+  }
+  return new Response("Not found", { status: 404 });
 }
 
 // ---------- one gameweek's player stats, compact ----------
