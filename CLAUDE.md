@@ -161,7 +161,7 @@ bench order, transfers or chip before the deadline?*
   only count matches played for the current club.
   - Categories (`OCATS`, columns in `OCOLS`): Key stats, Goal threat, Creativity, Involvement (ICT), Set pieces
     (taker order), Defending (tackles, CBI, recoveries, DC, DC points), Goalkeeping, Discipline and FPL.
-  - Players/Teams; Total / Per app / Per start / Per 90; search; position (including Your squad); price slider;
+  - Players/Teams; Total / Per app / Per start / Per 90; search (with a Clear button, `#osClear`, also Esc); position (including Your squad); price slider;
     Hide low minutes (under 30% of possible minutes); Per £1m. Click a header to sort.
   - xPts is `deservedPts()` per match. `optaInsights()` shows "due a goal", the best value threat (passes
     `buySecure`), your player running hot, and your weakest underlying numbers.

@@ -445,7 +445,7 @@ td.why { white-space: normal; min-width: 220px; font-size: .8rem; color: var(--m
 .odds-stamp { display: flex; flex-wrap: wrap; gap: 4px 18px; align-items: baseline; padding: 10px 14px; background: var(--surface); border: 1px solid var(--line); border-radius: var(--r); }
 .odds-stamp .k { font-size: .72rem; text-transform: uppercase; letter-spacing: .08em; color: var(--muted); }
 .match small { color: var(--muted); }
-select, input[type="search"] { font: inherit; color: var(--ink); background: var(--surface); border: 1px solid var(--line); border-radius: 8px; padding: 6px 10px; max-width: 100%; }
+select, input[type="search"], .os-qw input { font: inherit; color: var(--ink); background: var(--surface); border: 1px solid var(--line); border-radius: 8px; padding: 6px 10px; max-width: 100%; }
 .btn { border: 1px solid var(--line); background: var(--surface); border-radius: 8px; padding: 6px 12px; font-weight: 600; }
 .btn.pri { background: var(--accent); color: var(--accent-ink); border-color: var(--accent); }
 .btn.sm { padding: 3px 9px; font-size: .78rem; }
@@ -491,7 +491,7 @@ select, input[type="search"] { font: inherit; color: var(--ink); background: var
   h2 { font-size: 1.35rem; }
   .kpi { padding: 12px; }
   .kpi .v { font-size: 1.6rem; }
-  select, input[type="search"] { font-size: 16px; }
+  select, input[type="search"], .os-qw input { font-size: 16px; }
   .btn, .seg button { min-height: 40px; }
   .btn.sm { min-height: 34px; }
   .panel { padding: 12px; }
@@ -857,6 +857,9 @@ td.fx2-c { padding: 4px 3px; }
 @media (max-width: 700px) { .st-row { flex-wrap: wrap; } .st-row select { flex: 1 1 100%; } .lr-sum { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
 /* Player predictions: compare */
 .pr-mode button { min-width: 130px; }
+.os-qw { position: relative; } .os-qw input { padding-right: 84px; }
+.os-clear { position: absolute; right: 4px; top: 50%; transform: translateY(-50%); border: 1px solid var(--line); background: var(--surface-2); color: var(--ink); border-radius: 6px; padding: 4px 9px; font-size: .78rem; font-weight: 600; cursor: pointer; }
+.os-clear:hover { border-color: var(--accent); } .os-clear[hidden] { display: none; }
 .os-click { cursor: pointer; } .os-click:hover td { background: color-mix(in srgb, var(--accent) 8%, transparent); } .os-click:focus-visible { outline: 2px solid var(--accent); }
 .op-backbtn { margin: 4px 0 12px; width: auto !important; display: inline-flex !important; }
 .op-grid { align-items: start; }
@@ -6352,7 +6355,7 @@ td.fx2-c { padding: 4px 3px; }
         <div class="os-cats" role="tablist">${OCATS.map(([k, l]) => `<button role="tab" data-oscat="${k}" aria-selected="${OS.cat === k}">${l}</button>`).join("")}</div>
         <div class="os-row">${seg("osunit", [["players", "Players"], ["teams", "Teams"]], OS.unit)}${seg("osper", OS.unit === "teams" ? [["total", "Total"], ["app", "Per match"]] : [["total", "Total"], ["app", "Per app"], ["start", "Per start"], ["90", "Per 90"]], OS.per)}</div>
         <div class="os-filters">
-          <label class="os-search"><span class="k">Search</span><input type="search" id="osQ" placeholder="Search players or teams" value="${esc(OS.q)}"></label>
+          <div class="os-search"><label class="k" for="osQ">Search</label><div class="os-qw"><input type="text" id="osQ" placeholder="Search players or teams" value="${esc(OS.q)}" autocomplete="off" enterkeyhint="search"><button type="button" class="os-clear" id="osClear" aria-label="Clear search" ${OS.q ? "" : "hidden"}>✕ Clear</button></div></div>
           <label><span class="k">Position</span>${sel("osPos", [["all", "All positions"], ["1", "Goalkeepers"], ["2", "Defenders"], ["3", "Midfielders"], ["4", "Forwards"], ["mine", "Your squad"]], OS.pos)}</label>
           <label><span class="k">Venue</span>${sel("osVen", [["all", "Home and away"], ["home", "Home"], ["away", "Away"]], OS.venue)}</label>
           <label><span class="k">Season</span><select disabled><option>2026/27</option></select></label>
@@ -6371,7 +6374,9 @@ td.fx2-c { padding: 4px 3px; }
     $("#app").querySelectorAll("[data-oscat]").forEach((b) => b.addEventListener("click", () => { OS.cat = b.dataset.oscat; $("#app").querySelectorAll("[data-oscat]").forEach((x) => x.setAttribute("aria-selected", x === b)); redraw(); }));
     $("#app").querySelectorAll("[data-osunit]").forEach((b) => b.addEventListener("click", () => { OS.unit = b.dataset.osunit; if (OS.unit === "teams" && !["total", "app"].includes(OS.per)) OS.per = "app"; renderOpta(); }));
     $("#app").querySelectorAll("[data-osper]").forEach((b) => b.addEventListener("click", () => { OS.per = b.dataset.osper; $("#app").querySelectorAll("[data-osper]").forEach((x) => x.setAttribute("aria-pressed", x === b)); redraw(); }));
-    let qt; $("#osQ").addEventListener("input", (e) => { clearTimeout(qt); qt = setTimeout(() => { OS.q = e.target.value; redraw(); }, 200); });
+    let qt; $("#osQ").addEventListener("input", (e) => { $("#osClear").hidden = !e.target.value; clearTimeout(qt); qt = setTimeout(() => { OS.q = e.target.value; redraw(); }, 200); });
+    $("#osQ").addEventListener("keydown", (e) => { if (e.key === "Escape" && e.target.value) $("#osClear").click(); });
+    $("#osClear").addEventListener("click", () => { clearTimeout(qt); OS.q = ""; const q = $("#osQ"); q.value = ""; $("#osClear").hidden = true; redraw(); q.focus(); });
     $("#osPos").addEventListener("change", (e) => { OS.pos = e.target.value; redraw(); });
     $("#osVen").addEventListener("change", (e) => { OS.venue = e.target.value; redraw(); });
     $("#osLow").addEventListener("change", (e) => { OS.low = e.target.checked; redraw(); });
