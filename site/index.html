@@ -857,6 +857,14 @@ td.fx2-c { padding: 4px 3px; }
 @media (max-width: 700px) { .st-row { flex-wrap: wrap; } .st-row select { flex: 1 1 100%; } .lr-sum { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
 /* Player predictions: compare */
 .pr-mode button { min-width: 130px; }
+.trm-kpis { margin-bottom: 14px; }
+.pill.warn { background: color-mix(in srgb, var(--warn) 18%, transparent); color: var(--warn); }
+.trm-p { display: inline-flex; flex-direction: column; } .trm-p small { white-space: nowrap; }
+.trm-tbl .up, .trm-kpis .up { color: var(--good); } .trm-tbl .down, .trm-kpis .down { color: var(--bad); }
+.trm-tbl tr.trm-fh td { opacity: .75; }
+.trm-tbl td { vertical-align: middle; } .trm-tbl th { white-space: normal; } .trm-own small { display: block; white-space: nowrap; }
+@media (max-width: 760px) { .trm-own small { display: inline; } }
+@media (max-width: 760px) { .trm-p { align-items: flex-end; text-align: right; } }
 .os-panel { display: grid; gap: 14px; }
 .os-cats { display: flex; gap: 4px; overflow-x: auto; padding-bottom: 6px; border-bottom: 1px solid var(--line); scrollbar-width: thin; }
 .os-cats button { flex: none; border: 0; background: none; padding: 8px 12px; border-radius: 8px; font-weight: 600; color: var(--muted); white-space: nowrap; }
@@ -4192,6 +4200,109 @@ td.fx2-c { padding: 4px 3px; }
       return { rows, picks, offline, cur };
     })());
   }
+  // ---- Transfers made analysis: every transfer since GW1, the player bought against the player sold ----
+  // Points come from /api/gwstats (OS.gw); "for you" uses your picks each gameweek (multiplier and automatic subs).
+  const TRM = { picks: {} };
+  async function myGwPicks(g) {
+    if (TRM.picks[g]) return TRM.picks[g];
+    try {
+      const j = await api(`entry/${me}/event/${g}/picks/`), m = {};
+      j.picks.forEach((p) => (m[p.element] = p.multiplier));
+      (j.automatic_subs || []).forEach((a) => { if (m[a.element_out] === 1) { m[a.element_in] = 1; m[a.element_out] = 0; } });
+      return (TRM.picks[g] = m);
+    } catch (e) { return (TRM.picks[g] = null); }
+  }
+  async function renderTransfersMade() {
+    const box = $("#trMade"); if (!box) return;
+    const title = `<div class="panel-head"><h3>Transfers made analysis</h3><span class="note">Every transfer since GW1: the player you bought against the player you sold</span></div>`;
+    // FPL logs every swap in the order it was clicked, so a wildcard can hold chains (A→B then B→C):
+    // merge them into the real move (A→C) and drop any player sold and bought back in the same gameweek.
+    const raw = (D.transfers || []).map(([gw, pin, cin, pout, cout]) => ({ gw, pin, cin, pout, cout }));
+    // transfers made for the next deadline only show in FPL's public list once it passes: add them from your Pick Team login
+    const mt = GWE.mtP ? await GWE.mtP : null, pend = (mt && (mt.latest || mt.last?.latest)) || [];
+    pend.filter((x) => !raw.some((t) => t.gw === x.event && t.pin === x.element_in && t.pout === x.element_out))
+      .forEach((x) => raw.push({ gw: x.event, pin: x.element_in, cin: x.element_in_cost, pout: x.element_out, cout: x.element_out_cost, pending: true }));
+    const trs = [];
+    [...new Set(raw.map((t) => t.gw))].forEach((g) => {
+      let L = raw.filter((t) => t.gw === g), merged = true;
+      while (merged) {
+        merged = false;
+        for (const p of L) { const q = L.find((x) => x !== p && x.pout === p.pin); if (q) { L = L.filter((x) => x !== p && x !== q); L.push({ gw: g, pout: p.pout, cout: p.cout, pin: q.pin, cin: q.cin, pending: p.pending || q.pending }); merged = true; break; } }
+      }
+      trs.push(...L.filter((t) => t.pin !== t.pout));
+    });
+    trs.sort((a, b) => b.gw - a.gw || (E[a.pin]?.element_type || 0) - (E[b.pin]?.element_type || 0));
+    if (!trs.length) { box.innerHTML = title + `<p class="note">No transfers yet this season.</p>`; return; }
+    const last = await loadOptaGws();
+    const played = []; for (let g = 1; g <= last; g++) played.push(g);
+    await Promise.all(played.map(myGwPicks));
+    if (!$("#trMade")) return;
+    const pts = (id, g) => OS.gw[g]?.els[id]?.[OI.PTS] || 0;
+    const sum = (id, a, b) => { let t = 0; for (let g = a; g <= b; g++) t += pts(id, g); return t; };
+    const forYou = (id, a, b) => { let t = 0; for (let g = a; g <= b; g++) { const m = TRM.picks[g]; if (m && m[id]) t += pts(id, g) * m[id]; } return t; };
+    const chipAt = {}; (myM.chips || []).forEach(([n, ev]) => (chipAt[ev] = n));
+    const hitAt = {}; (myM.history || []).forEach((h) => (hitAt[h[0]] = h[4] || 0));
+    const CHIP = { wildcard: "Wildcard", freehit: "Free Hit" };
+    // When did the bought player leave the squad? The next transfer that sold him (Free Hit squads revert after one gameweek).
+    const rows = trs.map((t) => {
+      const fh = chipAt[t.gw] === "freehit";
+      const soldAt = fh ? t.gw + 1 : (trs.filter((x) => x.pout === t.pin && x.gw > t.gw && chipAt[x.gw] !== "freehit").map((x) => x.gw).sort((a, b) => a - b)[0] || null);
+      const end = Math.min(last, soldAt ? soldAt - 1 : last), future = t.gw > last;
+      const r = { ...t, fh, soldAt, future, chip: CHIP[chipAt[t.gw]] || "",
+        inSince: future ? 0 : sum(t.pin, t.gw, last), outSince: future ? 0 : sum(t.pout, t.gw, last),
+        inOwned: future || end < t.gw ? 0 : sum(t.pin, t.gw, end), outOwned: future || end < t.gw ? 0 : sum(t.pout, t.gw, end),
+        mine: future || end < t.gw ? 0 : forYou(t.pin, t.gw, end), gws: future ? 0 : Math.max(0, end - t.gw + 1),
+        valIn: E[t.pin] ? E[t.pin].now_cost - t.cin : 0, valOut: E[t.pout] ? E[t.pout].now_cost - t.cout : 0 };
+      r.diff = r.inSince - r.outSince; r.diffOwned = r.inOwned - r.outOwned;
+      return r;
+    });
+    const scored = rows.filter((r) => !r.future && !r.fh);
+    const net = scored.reduce((a, r) => a + r.diffOwned, 0), netSince = scored.reduce((a, r) => a + r.diff, 0);
+    const hits = Object.values(hitAt).reduce((a, b) => a + b, 0), won = scored.filter((r) => r.diffOwned > 0).length;
+    // a wildcard rebuilds the squad, so FPL's one-for-one pairs there are arbitrary: judge it as a whole
+    const regular = scored.filter((r) => !r.chip);
+    const best = [...regular].sort((a, b) => b.diffOwned - a.diffOwned)[0], worst = [...regular].sort((a, b) => a.diffOwned - b.diffOwned)[0];
+    const wcs = [...new Set(scored.filter((r) => r.chip === "Wildcard").map((r) => r.gw))].map((g) => { const L = scored.filter((r) => r.gw === g); return { g, n: L.length, d: L.reduce((a, r) => a + r.diffOwned, 0), inn: L.reduce((a, r) => a + r.inOwned, 0), out: L.reduce((a, r) => a + r.outOwned, 0) }; });
+    const nm = (id) => (E[id] ? esc(E[id].web_name) : "?"), sg = (v) => (v > 0 ? "+" : "") + v;
+    const cls = (v) => (v > 0 ? "up" : v < 0 ? "down" : "");
+    // sold players who are now beating what replaced them over the last 3 gameweeks
+    const lg0 = Math.max(1, last - 2);
+    const regret = scored.filter((r) => !r.soldAt && r.gw <= lg0 && (TRM.picks[last]?.[r.pin] || 0) > 0 && E[r.pout] && sum(r.pout, lg0, last) - sum(r.pin, lg0, last) >= 6).sort((a, b) => (sum(b.pout, lg0, last) - sum(b.pin, lg0, last)) - (sum(a.pout, lg0, last) - sum(a.pin, lg0, last)))[0];
+    const ins = [
+      { k: net - hits >= 0 ? "good" : "bad", lab: "Fact", t: `Net ${sg(net - hits)} points from your transfers`, d: `The players you bought outscored the players you sold by ${sg(net)} points while you owned them${hits ? `, less ${hits} points of hits` : ", with no hits taken"}. ${won} of ${scored.length} transfers beat the player sold (${Math.round((won / Math.max(1, scored.length)) * 100)}%).${rows.some((r) => r.fh) ? " Free Hit moves are shown but left out of the totals, because that squad reverted." : ""}` },
+      best && best.diffOwned > 0 ? { k: "good", lab: "Fact", t: `Best move: ${nm(best.pout)} → ${nm(best.pin)} (GW${best.gw})`, d: `${sg(best.diffOwned)} points while owned: ${best.inOwned} against ${best.outOwned}. ${nm(best.pin)} has scored ${best.mine} points for you, including captaincy.` } : null,
+      ...wcs.map((w) => ({ k: w.d >= 0 ? "good" : "warn", lab: "Fact", t: `GW${w.g} wildcard: ${sg(w.d)} points`, d: `The ${w.n} players you brought in have scored ${w.inn} points while owned, against ${w.out} for the ${w.n} you let go over the same gameweeks. A wildcard rebuilds the whole squad, so the one-for-one pairs below are just how FPL logged it; judge it on this total.` })),
+      worst && worst.diffOwned < 0 ? { k: "warn", lab: "Fact", t: `Worst move: ${nm(worst.pout)} → ${nm(worst.pin)} (GW${worst.gw})`, d: `${sg(worst.diffOwned)} points while owned: ${worst.inOwned} against ${worst.outOwned}.` } : null,
+      regret ? { k: "info", lab: "Projection", t: `Watch: ${nm(regret.pout)} is outscoring ${nm(regret.pin)} lately`, d: `${sum(regret.pout, lg0, last)} points to ${sum(regret.pin, lg0, last)} over GW${lg0}–${last}. One run of form isn't a reason to reverse a move, but check the Opta stats tab to see if his underlying numbers back it up before your next transfer.` } : null,
+    ].filter(Boolean);
+    const LB = { Fact: "lab-fact", Projection: "lab-proj" };
+    const pl = (id, cost, now) => `<span class="trm-p"><strong>${nm(id)}</strong> <small class="note">${E[id] ? `${tShort(E[id].team)} · ${POSN(E[id])} · ` : ""}£${price(cost)}m${now ? ` <span class="${now > 0 ? "up" : "down"}">${now > 0 ? "▲" : "▼"}${price(Math.abs(now))}</span>` : ""}</small></span>`;
+    const gwHead = (g) => `GW${g}${hitAt[g] ? ` <span class="pill warn">−${hitAt[g]} hit</span>` : ""}${CHIP[chipAt[g]] ? ` <span class="pill acc">${CHIP[chipAt[g]]}</span>` : ""}`;
+    box.innerHTML = `${title}
+      <div class="kpis trm-kpis">
+        <div class="kpi"><span class="k">Transfers made</span><span class="v">${rows.length}</span><span class="s">across ${new Set(rows.map((r) => r.gw)).size} gameweeks${rows.some((r) => r.pending) ? `, ${rows.filter((r) => r.pending).length} pending` : ""}</span></div>
+        <div class="kpi"><span class="k">Points gained while owned</span><span class="v ${cls(net)}">${sg(net)}</span><span class="s">bought vs sold, same gameweeks</span></div>
+        <div class="kpi"><span class="k">Hits taken</span><span class="v">${hits ? "−" + hits : "0"}</span><span class="s">${hits ? `net ${sg(net - hits)}` : "every transfer was free"}</span></div>
+        <div class="kpi"><span class="k">Since each transfer</span><span class="v ${cls(netSince)}">${sg(netSince)}</span><span class="s">bought vs sold to GW${last}, kept or not</span></div>
+      </div>
+      <ul class="insights">${ins.map((i) => `<li class="${i.k}"><div><div class="t">${i.t} <span class="lab ${LB[i.lab]}">${i.lab}</span></div><div class="d">${i.d}</div></div></li>`).join("")}</ul>
+      <div class="tbl-wrap"><table class="cards-sm trm-tbl">
+        <thead><tr><th>Gameweek</th><th>Sold</th><th>Bought</th><th class="n" title="Points each scored from the transfer gameweek to GW${last}">Sold: pts to date</th><th class="n" title="Points each scored from the transfer gameweek to GW${last}">Bought: pts to date</th><th class="n">Diff</th><th class="n" title="Same comparison, only for the gameweeks you kept the player you bought">While owned</th><th class="n" title="Points the player you bought actually scored for you: starting or auto-subbed in, captaincy included">Pts for you</th></tr></thead>
+        <tbody>${rows.map((r) => `<tr class="${r.fh ? "trm-fh" : ""}">
+          <td data-label="Gameweek">${gwHead(r.gw)}</td>
+          <td data-label="Sold">${pl(r.pout, r.cout, r.valOut)}</td>
+          <td data-label="Bought">${pl(r.pin, r.cin, r.valIn)}</td>
+          ${r.future ? `<td class="n span" colspan="5"><span class="note">${r.pending ? "Pending: made for " : ""}GW${r.gw}, not played yet</span></td>` : `
+          <td data-label="Sold pts to date" class="n">${r.outSince}</td>
+          <td data-label="Bought pts to date" class="n">${r.inSince}</td>
+          <td data-label="Difference" class="n"><strong class="${cls(r.diff)}">${sg(r.diff)}</strong></td>
+          <td data-label="While owned" class="n trm-own"><span class="${cls(r.diffOwned)}">${sg(r.diffOwned)}</span> <small class="note">${r.inOwned}–${r.outOwned} · ${r.gws} GW${r.gws === 1 ? "" : "s"}${r.fh ? " (Free Hit)" : r.soldAt ? `, sold GW${r.soldAt}` : ""}</small></td>
+          <td data-label="Pts for you" class="n">${r.mine}</td>`}
+        </tr>`).join("")}</tbody>
+      </table></div>
+      <p class="note"><span class="lab lab-fact">Fact</span> From your FPL transfer history and each gameweek's official points. "To date" counts both players from the gameweek of the transfer to GW${last}, whether or not you still own the player you bought. "While owned" stops when you sold him again. Prices are what you paid and got; the arrow is how each player's price has moved since. Points for you include captaincy, bench boost and automatic subs.</p>`;
+  }
+
   async function renderInsights() {
     if (OFF === undefined) {
       $("#app").innerHTML = `<section class="view"><p class="empty">Loading your GW${gwNext} team from FPL…</p></section>`;
@@ -4217,6 +4328,7 @@ td.fx2-c { padding: 4px 3px; }
       <div class="panel-head"><h2>Insights</h2></div>
       <div class="panel ki-panel" id="insSummary"><div class="panel-head"><h2>Key insights</h2></div><p class="empty">Analysing every section below…</p></div>
       <div class="panel" id="adviceScore"><p class="empty">Checking how the advice did…</p></div>
+      <div class="panel" id="trMade"><div class="panel-head"><h3>Transfers made analysis</h3></div><p class="empty">Loading every transfer and each gameweek's points…</p></div>
       <div class="panel" id="valueChart"><div class="panel-head"><h3>Best Value: Price vs Projected Points</h3></div><p class="empty">Projecting the next 4 gameweeks…</p></div>
       <div class="panel" id="capCost"><div class="panel-head"><h3>Captaincy decisions</h3></div><p class="empty">Loading every gameweek's points…</p></div>
       <div class="panel" id="luck"><div class="panel-head"><h3>Luck tracker: actual vs expected points</h3></div><p class="empty">Loading…</p></div>
@@ -4248,7 +4360,7 @@ td.fx2-c { padding: 4px 3px; }
       <div class="panel" id="minSec"><div class="panel-head"><h3>Minutes security</h3></div><p class="empty">Loading…</p></div>
       ${freshness()}
     </section>`;
-    wireXgiTop(); wireDefTop(); renderAdviceScore().catch(() => {}); renderCaptaincy().then(renderValue).then(renderDeep).then(renderSummary).catch((e) => { const b = $("#insSummary"); if (b) b.innerHTML = `<div class="panel-head"><h2>Key insights</h2></div><div class="err">The summary couldn't be built (${esc(e.message)}). Reload to try again.</div>`; });
+    wireXgiTop(); wireDefTop(); renderAdviceScore().catch(() => {}); renderTransfersMade().catch((e) => { const b = $("#trMade"); if (b) b.innerHTML = `<div class="panel-head"><h3>Transfers made analysis</h3></div><div class="err">Couldn't build this section (${esc(e.message)}).</div>`; }); renderCaptaincy().then(renderValue).then(renderDeep).then(renderSummary).catch((e) => { const b = $("#insSummary"); if (b) b.innerHTML = `<div class="panel-head"><h2>Key insights</h2></div><div class="err">The summary couldn't be built (${esc(e.message)}). Reload to try again.</div>`; });
   }
 
   // ---- Captaincy shortlist: chance of scoring with a likely range, plus projected captain points ----

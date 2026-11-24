@@ -275,6 +275,14 @@ bench order, transfers or chip before the deadline?*
   deadline. `renderAdviceScore()` (Insights) scores it afterwards. Once there are 2+ finished
   gameweeks and 30+ samples per position, it saves per-position calibration to `/api/calib`, which
   `calFactor` applies.
+- **Transfers made analysis (Insights):** `renderTransfersMade()` (`#trMade`). Every transfer from `D.transfers`,
+  plus pending ones for the next deadline from the Pick Team login (`latest`). Wildcard chains (A→B, B→C in one
+  gameweek) are merged into A→C. Per transfer it shows sold vs bought points to date (from the transfer gameweek to
+  now), "while owned" (until he was sold again; a Free Hit lasts one gameweek and is left out of the totals) and
+  "points for you" from your picks (`myGwPicks`: multiplier and automatic subs). Points come from `/api/gwstats`
+  (`OS.gw`). Insights: net gain after hits and the hit rate, the best and worst regular move, each wildcard judged as
+  a whole (its one-for-one pairs are arbitrary), and a sold starter now outscoring his replacement over the last 3
+  gameweeks.
 - **Rival watch:** `renderRivalWatch()`, at the top of Mini League analysis. It shows the leader and
   the 2 managers above and below you: their likely captain, their threats, your edges and the
   projected swing.
