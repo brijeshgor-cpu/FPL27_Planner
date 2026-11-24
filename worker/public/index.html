@@ -857,6 +857,23 @@ td.fx2-c { padding: 4px 3px; }
 @media (max-width: 700px) { .st-row { flex-wrap: wrap; } .st-row select { flex: 1 1 100%; } .lr-sum { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
 /* Player predictions: compare */
 .pr-mode button { min-width: 130px; }
+.nw-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 14px; }
+@media (max-width: 900px) { .nw-grid { grid-template-columns: minmax(0, 1fr); } }
+.nw-card { margin-top: 0 !important; display: flex; flex-direction: column; gap: 10px; scroll-margin-top: 120px; }
+.nw-h { display: flex; gap: 10px; align-items: center; } .nw-h h3 { margin: 0; }
+.nw-press { margin: 0; }
+.nw-flags { display: grid; gap: 6px; padding: 8px 10px; border-radius: 8px; background: var(--surface-2); }
+.nw-flags .k, .nw-jump .k { display: block; font-size: .68rem; text-transform: uppercase; letter-spacing: .06em; color: var(--muted); font-weight: 600; }
+.nw-flag.mine strong { color: var(--accent); }
+.nw-list { list-style: none; margin: 0; padding: 0; display: grid; gap: 10px; }
+.nw-it { border-top: 1px solid var(--line); padding-top: 8px; } .nw-it a { font-weight: 600; color: var(--ink); text-decoration: none; } .nw-it a:hover { text-decoration: underline; }
+.nw-it p { margin: 4px 0 0; } .nw-meta { display: flex; flex-wrap: wrap; gap: 4px 6px; align-items: center; margin-top: 3px; }
+.nw-ctl { display: flex; flex-wrap: wrap; gap: 12px 18px; align-items: flex-end; }
+.nw-jump { margin-left: auto; } .nw-jump select { min-width: 180px; }
+@media (max-width: 600px) { .nw-jump { margin-left: 0; width: 100%; } .nw-jump select { width: 100%; } }
+.nw-other summary { cursor: pointer; font-weight: 600; color: var(--muted); }
+.nw-card > .btn { align-self: flex-start; }
+.pill.bad { background: color-mix(in srgb, var(--bad) 18%, transparent); color: var(--bad); }
 .os-qw { position: relative; } .os-qw input { padding-right: 84px; }
 .os-clear { position: absolute; right: 4px; top: 50%; transform: translateY(-50%); border: 1px solid var(--line); background: var(--surface-2); color: var(--ink); border-radius: 6px; padding: 4px 9px; font-size: .78rem; font-weight: 600; cursor: pointer; }
 .os-clear:hover { border-color: var(--accent); } .os-clear[hidden] { display: none; }
@@ -1017,6 +1034,7 @@ td.fx2-c { padding: 4px 3px; }
   <nav class="wrap tabs" aria-label="Views">
     <a href="#overview" data-v="overview">Overview</a>
     <a href="#gw" data-v="gw" id="gwTab">Current gameweek</a>
+    <a href="#news" data-v="news" id="newsTab">News</a>
     <a href="#analysis" data-v="analysis">Mini League analysis</a>
     <a href="#league" data-v="league">Standings</a>
     <a href="#planner" data-v="planner">Transfer planner</a>
@@ -1258,9 +1276,9 @@ td.fx2-c { padding: 4px 3px; }
   // ---------- routing ----------
   function route() {
     const v = (location.hash || "#overview").slice(1);
-    view = ["overview", "gw", "train", "analysis", "league", "planner", "predict", "opta", "insights", "fixtures", "matches", "odds"].includes(v) ? v : "overview";
+    view = ["overview", "gw", "news", "train", "analysis", "league", "planner", "predict", "opta", "insights", "fixtures", "matches", "odds"].includes(v) ? v : "overview";
     document.querySelectorAll(".tabs a").forEach((a) => { if (a.dataset.v === view) a.setAttribute("aria-current", "page"); else a.removeAttribute("aria-current"); });
-    ({ overview: renderOverview, gw: renderGw, train: renderTrain, analysis: renderAnalysis, league: renderLeague, planner: renderPlanner, predict: renderPredict, opta: renderOpta, insights: renderInsights, fixtures: renderFixtures, matches: renderMatches, odds: renderOdds })[view]();
+    ({ overview: renderOverview, gw: renderGw, news: renderNews, train: renderTrain, analysis: renderAnalysis, league: renderLeague, planner: renderPlanner, predict: renderPredict, opta: renderOpta, insights: renderInsights, fixtures: renderFixtures, matches: renderMatches, odds: renderOdds })[view]();
   }
 
   function tick() {
@@ -6421,6 +6439,92 @@ td.fx2-c { padding: 4px 3px; }
   }
 
   let oddsCache = null;
+  // ---------- News tab: this gameweek's club news, press conferences and FPL availability flags ----------
+  // Articles come from /api/teamnews (BBC club feeds plus the general BBC and Guardian feeds), fetched fresh on
+  // every visit. Anything published before the start of the current gameweek (the last deadline that has passed)
+  // is dropped. Availability comes from FPL's own player flags, which change as press conferences happen.
+  const NW = { scope: "mine", pressOnly: false, open: {} };
+  // Press conference and team news: injuries, fitness, availability, selection and manager updates (not match reports)
+  const PRESS_RE = /press conference|presser|team news|injur|fitness|fit for|fit to|ruled out|out for|doubt|knock|scan|setback|return(s|ing)? (to|from)|available|unavailable|to miss|will miss|misses|suspen|\bban\b|confirms|update on|blow|sidelined|surgery|operation|hamstring|groin|ankle|knee|calf|thigh|shoulder|concussion|illness|rested|rotate|rotation|line-?up|starting xi|selection|boss|manager|head coach/i;
+  const REPORT_RE = /as it happened|\b\d+-\d+\b|player ratings|match report|highlights|team of the week|fan /i;
+  async function renderNews() {
+    const app = $("#app");
+    app.innerHTML = `<section class="view"><div class="panel-head"><h2>News for GW${gwNext}</h2></div><p class="empty">Loading the latest club news and press conference updates…</p></section>`;
+    if (OFF === undefined) await loadOfficial().catch(() => null);
+    const j = await fetch("api/teamnews", { cache: "no-store" }).then((r) => (r.ok && (r.headers.get("content-type") || "").includes("json") ? r.json() : null)).catch(() => null);
+    if (view !== "news") return;
+    if (!j) { app.innerHTML = `<section class="view"><div class="panel-head"><h2>News for GW${gwNext}</h2></div><div class="err">News loads on the live site. Try again in a minute.</div></section>`; return; }
+    NW.j = j; drawNews();
+  }
+  function drawNews() {
+    const app = $("#app"), j = NW.j, now = Date.now();
+    const started = D.events.filter((e) => e.deadline && Date.parse(e.deadline) <= now).sort((a, b) => Date.parse(b.deadline) - Date.parse(a.deadline))[0];
+    const cutoff = started ? Date.parse(started.deadline) : now - 7 * 864e5;
+    const nq = (x) => String(x || "").normalize("NFD").replace(/[̀-ͯ]/g, "").toLowerCase();
+    const mine = new Set(baseSquad().map((p) => p[0])), slots = baseSquad().map((p) => p[0]);
+    // key players: your squad, anyone 10%+ owned overall or 20%+ in your league, and each club's top 3 scorers
+    const key = new Set(mine);
+    D.teams.forEach((t) => Object.values(E).filter((e) => e.team === t.id).sort((a, b) => b.total_points - a.total_points).slice(0, 3).forEach((e) => key.add(e.id)));
+    Object.values(E).forEach((e) => { if (+e.selected_by_percent >= 10 || (own[e.id] || 0) >= 0.2) key.add(e.id); });
+    const names = Object.values(E).filter((e) => key.has(e.id) && e.web_name.length >= 4).map((e) => ({ e, re: new RegExp(`\\b${nq(e.web_name).replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}\\b`) }));
+    const teamRe = D.teams.map((t) => ({ id: t.id, re: new RegExp(`\\b(${[nq(t.name), ...(ODDS_ALIASES[t.short] || [])].map((x) => x.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")).join("|")})\\b`) }));
+    const seen = new Set(), byTeam = {}; D.teams.forEach((t) => (byTeam[t.id] = []));
+    const add = (tid, it) => { const k = tid + "|" + nq(it.title); if (seen.has(k)) return; seen.add(k); byTeam[tid].push(it); };
+    // match players by FPL name; when two share a name (e.g. Palmer), only keep the one whose club the article is about
+    const dupName = {}; names.forEach((n) => (dupName[nq(n.e.web_name)] = (dupName[nq(n.e.web_name)] || 0) + 1));
+    const enrich = (x, tids) => { const desc = String(x.desc || "").replace(/<[^>]+>/g, " ").replace(/\s+/g, " ").trim(), txt = nq(x.title + " " + desc);
+      const pl = names.filter((n) => n.re.test(txt) && (dupName[nq(n.e.web_name)] === 1 || tids.has(n.e.team))).map((n) => n.e);
+      return { ...x, desc, pl, press: PRESS_RE.test(x.title + " " + desc) && !REPORT_RE.test(x.title), mineP: pl.filter((e) => mine.has(e.id)) }; };
+    const fresh = (x) => x.date && x.date >= cutoff;
+    Object.entries(j.clubs || {}).forEach(([short, items]) => { const t = D.teams.find((x) => x.short === short); if (t) items.filter(fresh).forEach((x) => add(t.id, enrich(x, new Set([t.id])))); });
+    (j.general || []).filter(fresh).forEach((x) => { const txt = nq(x.title + " " + x.desc), named = new Set(teamRe.filter((t) => t.re.test(txt)).map((t) => t.id)), it = enrich(x, named);
+      const tids = new Set([...named, ...it.pl.map((e) => e.team)]); tids.forEach((tid) => add(tid, it)); });
+    Object.values(byTeam).forEach((l) => l.sort((a, b) => (b.mineP.length - a.mineP.length) || ((b.pl.length > 0) - (a.pl.length > 0)) || (b.press - a.press) || (b.date - a.date)));
+    const flagged = (tid) => Object.values(E).filter((e) => e.team === tid && (key.has(e.id) || e.minutes >= 450) && (e.status !== "a" || (e.chance_of_playing_next_round != null && e.chance_of_playing_next_round < 100)) && e.news)
+      .sort((a, b) => (mine.has(b.id) - mine.has(a.id)) || ((b.news_added ? Date.parse(b.news_added) : 0) - (a.news_added ? Date.parse(a.news_added) : 0)));
+    const ukT = (t) => new Date(t).toLocaleString("en-GB", { timeZone: "Europe/London", weekday: "short", day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" });
+    const ago = (t) => { const m = Math.round((now - t) / 6e4); return m < 60 ? `${m}m ago` : m < 1440 ? `${Math.round(m / 60)}h ago` : `${Math.round(m / 1440)}d ago`; };
+    const stCls = (e) => (e.status === "a" ? "warn" : e.status === "d" ? "warn" : "bad");
+    const flagTxt = (e) => `${e.status === "d" || e.status === "a" ? (e.chance_of_playing_next_round != null ? `${e.chance_of_playing_next_round}%` : "Doubt") : { i: "Injured", s: "Suspended", u: "Unavailable", n: "Not available" }[e.status] || e.status}`;
+    // alerts: your players with a flag, and who covers them from your bench
+    const ids = slots, myFlags = ids.map((id) => E[id]).filter((e) => e && (e.status !== "a" || (e.chance_of_playing_next_round != null && e.chance_of_playing_next_round < 100)));
+    const alerts = myFlags.map((e) => { const slot = ids.indexOf(e.id), starter = slot < 11, cover = starter ? autoSub({ ids }, e.id) : null;
+      return `<li class="${e.status === "d" || e.status === "a" ? "warn" : "bad"}"><div><div class="t">${esc(e.web_name)} (${tShort(e.team)}): ${flagTxt(e)} <span class="lab lab-fact">Fact</span></div><div class="d">${esc(e.news || "Flagged by FPL")}${e.news_added ? ` · updated ${ukT(e.news_added)}` : ""}. ${starter ? (cover ? `If he misses out, ${esc(E[cover].web_name)} comes in from your bench.` : "Your bench has no playing cover for him: consider a transfer or reshuffle.") : "He's on your bench, so he only matters if a starter drops out."}</div></div></li>`; }).join("");
+    const pressAll = Object.entries(byTeam).flatMap(([tid, l]) => l.filter((x) => x.press && x.pl.length).map((x) => ({ ...x, tid: +tid }))).filter((x, i, a) => a.findIndex((y) => y.link === x.link) === i).sort((a, b) => (b.mineP.length - a.mineP.length) || (b.date - a.date)).slice(0, 8);
+    const item = (x) => `<li class="nw-it"><a href="${esc(x.link)}" target="_blank" rel="noopener">${esc(x.title)}</a><div class="nw-meta"><span class="note">${esc(x.source)} · ${ago(x.date)}</span>${x.press ? `<span class="pill">Team news</span>` : ""}${x.mineP.map((e) => `<span class="pill acc">Your player: ${esc(e.web_name)}</span>`).join("")}${x.pl.filter((e) => !mine.has(e.id)).slice(0, 2).map((e) => `<span class="pill">${esc(e.web_name)}</span>`).join("")}</div>${x.desc ? `<p class="note">${esc(x.desc.slice(0, 180))}${x.desc.length > 180 ? "…" : ""}</p>` : ""}</li>`;
+    const myCount = (tid) => slots.filter((id) => E[id]?.team === tid).length;
+    const kick = (tid) => (teamFx[tid][gwNext] || [])[0];
+    const nextFx = (tid) => { const fx = teamFx[tid][gwNext] || [], f = D.fixtures.find((x) => x[1] === gwNext && (x[2] === tid || x[3] === tid)); return fx.length ? `GW${gwNext}: ${fx.map(fxLabel).join(" + ")}${f && f[6] ? ` · ${ukT(f[6])}` : ""}` : `No GW${gwNext} match`; };
+    const presser = (tid) => { const f = D.fixtures.find((x) => x[1] === gwNext && (x[2] === tid || x[3] === tid)); if (!f || !f[6]) return ""; const d = new Date(Date.parse(f[6]) - 2 * 864e5); return d > now ? `Press conference expected around ${d.toLocaleDateString("en-GB", { timeZone: "Europe/London", weekday: "short", day: "numeric", month: "short" })}` : "Pre-match press conference should be out"; };
+    let teams = D.teams.map((t) => t.id).filter((tid) => NW.scope === "all" || myCount(tid) > 0);
+    teams.sort((a, b) => (myCount(b) - myCount(a)) || ((kick(a) ? 0 : 1) - (kick(b) ? 0 : 1)) || T[a].name.localeCompare(T[b].name));
+    const card = (tid) => {
+      let l = byTeam[tid]; if (NW.pressOnly) l = l.filter((x) => x.press);
+      const rel = l.filter((x) => x.pl.length || x.press), other = l.filter((x) => !(x.pl.length || x.press)), fl = flagged(tid);
+      const shownRel = NW.open[tid] ? rel : rel.slice(0, 4);
+      return `<div class="cmp-card nw-card" id="nw-${tid}"><div class="nw-h">${T[tid]?.code != null ? `<img src="kit/${T[tid].code}.png" alt="" width="34" height="34" loading="lazy" onerror="this.remove()">` : ""}<div><h3>${esc(T[tid].name)}${myCount(tid) ? ` <span class="pill acc">${myCount(tid)} yours</span>` : ""}</h3><span class="note">${nextFx(tid)}</span></div></div>
+        ${presser(tid) ? `<p class="note nw-press">${presser(tid)} <span class="lab lab-asm">Assumption</span> managers usually speak 1–2 days before kick-off; FPL's flags below update after it.</p>` : ""}
+        ${fl.length ? `<div class="nw-flags"><span class="k">FPL availability</span>${fl.map((e) => `<div class="nw-flag ${mine.has(e.id) ? "mine" : ""}"><span class="pill ${stCls(e)}">${flagTxt(e)}</span> <strong>${esc(e.web_name)}</strong>${mine.has(e.id) ? ` <span class="pill acc">Yours</span>` : ""} <span class="note">${esc(e.news)}${e.news_added ? ` · ${ago(Date.parse(e.news_added))}` : ""}</span></div>`).join("")}</div>` : `<div class="nw-flags"><span class="k">FPL availability</span><span class="note">No flags on key players.</span></div>`}
+        ${shownRel.length ? `<ul class="nw-list">${shownRel.map(item).join("")}</ul>` : `<p class="note">${NW.pressOnly ? "No press conference or team news yet this gameweek." : "No news about key players since the gameweek started."}</p>`}
+        ${rel.length > 4 ? `<button class="btn sm" data-nwmore="${tid}">${NW.open[tid] ? "Show fewer" : `Show ${rel.length - 4} more`}</button>` : ""}
+        ${!NW.pressOnly && other.length ? `<details class="nw-other"><summary>Other ${esc(T[tid].short)} news (${other.length})</summary><ul class="nw-list">${other.map(item).join("")}</ul></details>` : ""}</div>`;
+    };
+    app.innerHTML = `<section class="view">
+      <div class="panel-head"><h2>News for GW${gwNext}</h2><span class="note">Refreshed ${ukT(j.fetched)} · news from before the GW${started ? started.id : gwCur} deadline (${ukT(cutoff)}) is removed</span></div>
+      ${alerts ? `<div class="panel"><div class="panel-head"><h3>Your players: availability</h3><span class="note">FPL's official flags, which update after press conferences</span></div><ul class="insights">${alerts}</ul></div>` : `<div class="panel"><p class="note"><strong>Your players:</strong> none of your 15 is flagged by FPL right now.</p></div>`}
+      ${pressAll.length ? `<div class="panel"><div class="panel-head"><h3>Latest press conference and team news</h3></div><ul class="nw-list">${pressAll.map((x) => `<li class="nw-it"><span class="pill nw-team">${esc(T[x.tid].short)}</span> <a href="${esc(x.link)}" target="_blank" rel="noopener">${esc(x.title)}</a><div class="nw-meta"><span class="note">${esc(x.source)} · ${ago(x.date)}</span>${x.mineP.map((e) => `<span class="pill acc">Your player: ${esc(e.web_name)}</span>`).join("")}</div></li>`).join("")}</ul></div>` : ""}
+      <div class="panel nw-ctl"><div class="seg" role="group">${[["mine", "Your teams"], ["all", "All teams"]].map(([k, l]) => `<button data-nwscope="${k}" aria-pressed="${NW.scope === k}">${l}</button>`).join("")}</div>
+        <label class="fx-toggle"><input type="checkbox" id="nwPress" ${NW.pressOnly ? "checked" : ""}><span class="sw"></span>Press conferences &amp; team news only</label>
+        <label class="nw-jump"><span class="k">Jump to</span><select id="nwJump"><option value="">Choose a team</option>${teams.map((tid) => `<option value="${tid}">${esc(T[tid].name)}</option>`).join("")}</select></label></div>
+      <div class="nw-grid">${teams.map(card).join("")}</div>
+      <p class="note">Sources: BBC Sport club feeds, BBC Sport and The Guardian Premier League feeds, and FPL's player flags, all fetched on every visit. Articles are matched to clubs by feed, club name or player name, and to players by their FPL name. Exact press conference times aren't in any free feed, so the expected day is an estimate. ${j.failed && j.failed.length ? `Couldn't reach the feed for ${j.failed.join(", ")} this time.` : ""}</p>
+    </section>`;
+    app.querySelectorAll("[data-nwscope]").forEach((b) => b.addEventListener("click", () => { NW.scope = b.dataset.nwscope; drawNews(); }));
+    $("#nwPress").addEventListener("change", (e) => { NW.pressOnly = e.target.checked; drawNews(); });
+    $("#nwJump").addEventListener("change", (e) => { const el = $(`#nw-${e.target.value}`); if (el) el.scrollIntoView({ behavior: "smooth", block: "start" }); });
+    app.querySelectorAll("[data-nwmore]").forEach((b) => b.addEventListener("click", () => { const t = b.dataset.nwmore; NW.open[t] = !NW.open[t]; drawNews(); $(`#nw-${t}`)?.scrollIntoView({ block: "start" }); }));
+  }
+
   function renderOdds() {
     $("#app").innerHTML = `<section class="view"><div class="panel-head"><h2>GW${gwNext} bookmaker odds</h2></div><p class="empty">Loading bookmaker odds…</p></section>`;
     const load = oddsCache ? Promise.resolve(oddsCache) : fetch("api/odds", { cache: "no-store" }).then(async (r) => {

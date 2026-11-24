@@ -305,6 +305,18 @@ bench order, transfers or chip before the deadline?*
   transfers roll and the money freed is carried forward.
 - **Current gameweek tab:** `gwAdvice()` for the recommendations, `gwBuys()` for transfers,
   `gwChips()` for chips, `bestXI()`, `autoSub()` and `squadHealth()`.
+- **News tab:** `renderNews()` / `drawNews()` (`#news`, after Current gameweek), state in `NW`. It fetches the Worker's
+  `/api/teamnews` on every visit: each club's BBC Sport feed (`CLUB_FEEDS`), plus the BBC and Guardian Premier League
+  feeds, with a 2-minute edge cache. Articles from before the last deadline that has passed (the start of the
+  current gameweek) are dropped.
+  - Articles are matched to clubs by feed, club name or player name, and to players by FPL name. Players who share
+    a name are only matched to the article's club. "Team news" (`PRESS_RE`, excluding match reports via
+    `REPORT_RE`) covers injuries, fitness, availability and manager comments.
+  - Sections: Your players' availability (FPL flags, with bench cover from `autoSub`), Latest press conference and
+    team news, then a card per club (your teams first, or all). Each card has the next fixture, the expected press
+    conference day (kick-off minus 2 days, an Assumption), FPL availability flags for key players, relevant
+    articles (yours first) and other club news collapsed.
+  - Key players: your squad, 10%+ owned overall or 20%+ in the league, and each club's top 3 scorers.
 - **Transfers to make (Current gameweek, bottom):** `gwXfersHTML(st)` (`#gwXfers`), cached in `GWE.xs`. Four plans for
   the team as edited:
   - **Model's pick:** `gwBuys()` unchanged.

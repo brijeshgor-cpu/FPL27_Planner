@@ -50,6 +50,7 @@ export default {
 
     if (path === "odds" || path === "odds/") return odds(env);
     if (path === "news" || path === "news/") return news();
+    if (path === "teamnews" || path === "teamnews/") return teamNews();
     if (path === "my-team" || path === "my-team/") return myTeamResponse(env);
     const gpl = /^gwplayers\/(\d+)\/?$/.exec(path);
     if (gpl) return gwPlayers(Number(gpl[1]), url.searchParams.get("ids"));
@@ -239,7 +240,7 @@ const NEWS_FEEDS = [
 ];
 const decode = (t) => t.replace(/<!\[CDATA\[([\s\S]*?)\]\]>/g, "$1").replace(/<[^>]+>/g, " ")
   .replace(/&amp;/g, "&").replace(/&quot;/g, '"').replace(/&#39;|&#x27;|&apos;/g, "'").replace(/&lt;/g, "<").replace(/&gt;/g, ">")
-  .replace(/&#(\d+);/g, (_, n) => String.fromCharCode(Number(n))).replace(/\s+/g, " ").trim();
+  .replace(/&#(\d+);/g, (_, n) => String.fromCharCode(Number(n))).replace(/<[^>]+>/g, " ").replace(/\s+/g, " ").trim();
 const tag = (item, name) => { const m = new RegExp(`<${name}[^>]*>([\\s\\S]*?)</${name}>`).exec(item); return m ? decode(m[1]) : ""; };
 async function news() {
   const results = await Promise.all(NEWS_FEEDS.map(async ([source, url]) => {
@@ -256,6 +257,34 @@ async function news() {
   const week = Date.now() - 8 * 864e5;
   const items = results.flatMap((r) => r.items).filter((x) => !x.date || x.date >= week).sort((a, b) => (b.date || 0) - (a.date || 0));
   return json({ fetched: Date.now(), sources: results.map((r) => ({ source: r.source, ok: !r.error, count: r.items.length })), items }, 200);
+}
+
+// ---------- News tab: every club's BBC feed plus the general Premier League feeds ----------
+// Fetched on every request (a 2-minute edge cache stops rapid reloads from hammering the feeds).
+const CLUB_FEEDS = { ARS: "arsenal", AVL: "aston-villa", BOU: "afc-bournemouth", BRE: "brentford", BHA: "brighton-and-hove-albion", BUR: "burnley",
+  CHE: "chelsea", COV: "coventry-city", CRY: "crystal-palace", EVE: "everton", FUL: "fulham", HUL: "hull-city", IPS: "ipswich-town", LEE: "leeds-united",
+  LEI: "leicester-city", LIV: "liverpool", MCI: "manchester-city", MUN: "manchester-united", NEW: "newcastle-united", NFO: "nottingham-forest",
+  SOU: "southampton", SUN: "sunderland", TOT: "tottenham-hotspur", WHU: "west-ham-united", WOL: "wolverhampton-wanderers" };
+async function feedItems(source, url, n) {
+  try {
+    const r = await fetch(url, { headers: { "User-Agent": "Mozilla/5.0 (compatible; fc27-planner)", Accept: "application/rss+xml, application/xml" }, cf: { cacheTtl: 120, cacheEverything: true } });
+    if (!r.ok) return { error: r.status, items: [] };
+    const xml = await r.text();
+    return { items: (xml.match(/<item[\s>][\s\S]*?<\/item>/g) || []).slice(0, n).map((it) => ({ source, title: tag(it, "title"), link: tag(it, "link"), desc: tag(it, "description").slice(0, 300), date: Date.parse(tag(it, "pubDate")) || null }))
+      .filter((x) => x.title && /^https:\/\//.test(x.link)) };
+  } catch (e) { return { error: "unreachable", items: [] }; }
+}
+async function teamNews() {
+  let teams = [];
+  try { const b = await fplJson("bootstrap-static/"); teams = b.teams.map((t) => t.short_name).filter((s) => CLUB_FEEDS[s]); } catch (e) { teams = Object.keys(CLUB_FEEDS).slice(0, 20); }
+  const [clubs, general] = await Promise.all([
+    Promise.all(teams.map((s) => feedItems("BBC Sport", `https://feeds.bbci.co.uk/sport/football/teams/${CLUB_FEEDS[s]}/rss.xml`, 25).then((r) => [s, r]))),
+    Promise.all(NEWS_FEEDS.map(([source, url]) => feedItems(source, url, 60))),
+  ]);
+  const since = Date.now() - 14 * 864e5;
+  const keep = (l) => l.filter((x) => !x.date || x.date >= since);
+  return json({ fetched: Date.now(), clubs: Object.fromEntries(clubs.map(([s, r]) => [s, keep(r.items)])), failed: clubs.filter(([, r]) => r.error).map(([s]) => s),
+    general: keep(general.flatMap((r) => r.items)) }, 200);
 }
 
 // ---------- club kit images (FPL's official shirt artwork) ----------
