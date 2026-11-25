@@ -2544,13 +2544,24 @@ td.fx2-c { padding: 4px 3px; }
     const capBoost = (id) => (hasTag(id, "captain") ? 1.15 : 1);
     const capC = xiIds.map((id) => ({ id, p: P(id), mp: MP(id), sc: scoreChance(E[id], TO), haul: haulChance(E[id]) })).filter((x) => x.mp.pStart >= 0.6).sort((a, b) => b.p * capBoost(b.id) - a.p * capBoost(a.id));
     if (capC.length >= 2) {
-      // Within 0.5 xP the mini-league decides: chasing takes the lower captaincy EO, protecting the higher.
-      const capEO = (id) => (own[id] || 0) + (capCount[id] || 0) / (D._n || 1);
+      // Close calls: every option within the band of the best xP is compared, not just the top two. Captaincy
+      // doubles the score, so haul chance counts; the mini-league decides the rest (chasing favours a low league
+      // captaincy EO, protecting a high one). Outside the band, the best xP wins.
+      const capEO = (id) => Math.min(1, (own[id] || 0) + (capCount[id] || 0) / (D._n || 1));
+      const band = Math.max(stratDiff(), 0.6), top = capC[0];
+      const capScore = (x) => x.p * capBoost(x.id) + 3 * x.haul + (stratDiff() <= 0 ? 0 : L.stance === "chase" ? 0.8 * (1 - capEO(x.id)) : L.stance === "protect" ? 0.8 * capEO(x.id) : 0);
+      const close5 = capC.filter((x) => top.p * capBoost(top.id) - x.p * capBoost(x.id) <= band);
+      close5.sort((a, b) => capScore(b) - capScore(a));
       let leagueNote = "";
-      if (stratDiff() > 0 && capC[0].p - capC[1].p < stratDiff() && L.stance !== "balanced") {
-        const [x, y] = capC, flip = L.stance === "chase" ? capEO(y.id) < capEO(x.id) - 0.1 : capEO(y.id) > capEO(x.id) + 0.1;
-        if (flip) { capC[0] = y; capC[1] = x; leagueNote = ` League call: only ${(x.p - y.p).toFixed(1)} xP apart, and ${L.stance === "chase" ? `${esc(E[y.id].web_name)} is the differential (league captaincy EO ${Math.round(capEO(y.id) * 100)}% vs ${Math.round(capEO(x.id) * 100)}%), which suits chasing` : `${esc(E[y.id].web_name)} is the safer template pick (EO ${Math.round(capEO(y.id) * 100)}% vs ${Math.round(capEO(x.id) * 100)}%), which suits protecting your lead`}.`; }
+      if (close5.length > 1 && close5[0].id !== top.id) {
+        const y = close5[0], x = top;
+        leagueNote = ` Close call: ${nm(y.id)} is only ${(x.p - y.p).toFixed(1)} xP behind ${nm(x.id)} but has a higher ceiling (${pct(y.haul)} haul chance vs ${pct(x.haul)}${y.sc && x.sc ? `, ${pct(y.sc.p)} to score vs ${pct(x.sc.p)}` : ""})${stratDiff() > 0 && L.stance === "chase" ? ` and is a differential for you (league captaincy EO ${Math.round(capEO(y.id) * 100)}% vs ${Math.round(capEO(x.id) * 100)}%), which suits chasing` : stratDiff() > 0 && L.stance === "protect" ? `, and more of your league own him` : ""}.`;
       }
+      const rest = capC.filter((x) => x.id !== close5[0].id);
+      rest.sort((a, b) => (close5.includes(b) - close5.includes(a)) || capScore(b) - capScore(a));
+      // when the pick isn't the top xP, compare it with the top xP option
+      if (close5[0].id !== top.id) { rest.splice(rest.indexOf(top), 1); rest.unshift(top); }
+      capC.splice(0, capC.length, close5[0], ...rest);
       const [c1, c2] = capC, g = c1.p - c2.p, e1 = E[c1.id], e2 = E[c2.id];
       const reasons = [];
       const s1 = c1.sc ? c1.sc.p : 0, s2 = c2.sc ? c2.sc.p : 0;

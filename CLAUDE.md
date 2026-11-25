@@ -303,6 +303,11 @@ bench order, transfers or chip before the deadline?*
 - **3-gameweek plan:** `renderSeqPlan()` in the Transfer planner. Week 1 is the GW plan; weeks 2–3
   come from `weekMoves()`, using best-XI gain over the next 5 gameweeks with `windowXp`. Free
   transfers roll and the money freed is carried forward.
+- **Captain choice (in `gwAdvice()`):** every captain option within max(`stratDiff()`, 0.6) xP of the best is compared,
+  not just the top two, on `capScore` = xP (× captain note) + 3 × haul chance + the league factor (chasing:
+  0.8 × (1 − league captaincy EO); protecting: 0.8 × EO; off when the diffs strategy is Off). Outside the band the
+  best xP wins. Added after Calvert-Lewin (7.6 xP, 53% to score, 19% haul, 0% captained in the league) was left out
+  of a Wirtz (7.7, 7% haul) vs Groß (8.1) comparison.
 - **Current gameweek tab:** `gwAdvice()` for the recommendations, `gwBuys()` for transfers,
   `gwChips()` for chips, `bestXI()`, `autoSub()` and `squadHealth()`.
 - **News tab:** `renderNews()` / `drawNews()` (`#news`, after Current gameweek), state in `NW`. It fetches the Worker's
