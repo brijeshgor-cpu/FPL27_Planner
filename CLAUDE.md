@@ -106,6 +106,14 @@ The owner's standing brief. Every new feature, insight or recommendation must fo
 - **Template sales.** When suggesting selling a player most of the league owns, say what it risks
   for the mini-league. When a downgrade frees money, say where it should go next.
 
+- **Captaincy: think beyond the top two.** When captain options are close (within about 0.6 xP), compare all
+  of them, not just the top two. Weigh the route to a haul: chance to score, haul chance, penalties, and a
+  home game against one of the weakest sides. A captain's points are doubled, so ceiling matters. When you're
+  chasing, favour the option your rivals haven't captained. Be wary of an xP propped up by recent form when
+  the underlying numbers (xG, xA, chance to score) are modest. Say what the choice costs in xP, and why the
+  ceiling is worth it. (From GW12: Calvert-Lewin at home to Coventry, 53% to score and 19% haul chance, over
+  Wirtz away at Everton, 18% and 7%, whose 7.7 xP leaned on recent form.)
+
 ### Output format for recommendations
 Every recommendation item should carry:
 - **a decision:** the headline action, such as "Start X over Y" or "Captain X, vice Y";
@@ -304,10 +312,15 @@ bench order, transfers or chip before the deadline?*
   come from `weekMoves()`, using best-XI gain over the next 5 gameweeks with `windowXp`. Free
   transfers roll and the money freed is carried forward.
 - **Captain choice (in `gwAdvice()`):** every captain option within max(`stratDiff()`, 0.6) xP of the best is compared,
-  not just the top two, on `capScore` = xP (× captain note) + 3 × haul chance + the league factor (chasing:
+  not just the top two, on `capScore` = xP (× captain note) + `capHaulW()` (default 3) × haul chance + the league factor (chasing:
   0.8 × (1 − league captaincy EO); protecting: 0.8 × EO; off when the diffs strategy is Off). Outside the band the
   best xP wins. Added after Calvert-Lewin (7.6 xP, 53% to score, 19% haul, 0% captained in the league) was left out
   of a Wirtz (7.7, 7% haul) vs Groß (8.1) comparison.
+- **Captain learning:** the captain item keeps `capCands` (the close options with xP, haul chance, scoring chance,
+  league EO and note boost) and `capStance`, which `recordAdvice()` saves with the GW plan (`capC`). After each
+  final gameweek `capLearn()` (run with `loadNotes()`) replays the choice with haul weights 0–6 and keeps the
+  weight whose picks scored most; `capHaulW()` uses it from 4 gameweeks, phased in fully by 8. `capLearnHTML()`
+  shows it in "How the advice did".
 - **Current gameweek tab:** `gwAdvice()` for the recommendations, `gwBuys()` for transfers,
   `gwChips()` for chips, `bestXI()`, `autoSub()` and `squadHealth()`.
 - **News tab:** `renderNews()` / `drawNews()` (`#news`, after Current gameweek), state in `NW`. It fetches the Worker's

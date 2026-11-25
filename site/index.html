@@ -2549,7 +2549,7 @@ td.fx2-c { padding: 4px 3px; }
       // captaincy EO, protecting a high one). Outside the band, the best xP wins.
       const capEO = (id) => Math.min(1, (own[id] || 0) + (capCount[id] || 0) / (D._n || 1));
       const band = Math.max(stratDiff(), 0.6), top = capC[0];
-      const capScore = (x) => x.p * capBoost(x.id) + 3 * x.haul + (stratDiff() <= 0 ? 0 : L.stance === "chase" ? 0.8 * (1 - capEO(x.id)) : L.stance === "protect" ? 0.8 * capEO(x.id) : 0);
+      const capScore = (x) => x.p * capBoost(x.id) + capHaulW() * x.haul + (stratDiff() <= 0 ? 0 : L.stance === "chase" ? 0.8 * (1 - capEO(x.id)) : L.stance === "protect" ? 0.8 * capEO(x.id) : 0);
       const close5 = capC.filter((x) => top.p * capBoost(top.id) - x.p * capBoost(x.id) <= band);
       close5.sort((a, b) => capScore(b) - capScore(a));
       let leagueNote = "";
@@ -2587,6 +2587,7 @@ td.fx2-c { padding: 4px 3px; }
       const close = g < 0.6, isCap = st.cap === c1.id, isVc = st.vc === vice.id;
       out.push({
         sec: "cap", k: isCap && isVc ? "good" : "warn", lab: "Projection", capId: c1.id, vcId: vice.id,
+        capCands: close5.concat(capC.filter((x) => !close5.includes(x)).slice(0, 2)).slice(0, 6).map((x) => ({ id: x.id, p: +x.p.toFixed(2), h: +x.haul.toFixed(3), s: x.sc ? +x.sc.p.toFixed(3) : null, eo: +capEO(x.id).toFixed(3), cb: capBoost(x.id) })), capStance: stratDiff() > 0 ? L.stance : "balanced",
         t: `${isCap ? "Keep" : "Captain"} ${nm(c1.id)}, vice ${nm(vice.id)}${close ? " (close call)" : ""}`,
         d: `${nm(c1.id)} ${c1.p.toFixed(1)} xP vs ${nm(c2.id)} ${c2.p.toFixed(1)} (${g < 0 ? `${(-2 * g).toFixed(1)} less once doubled, the price of the differential` : `${(2 * g).toFixed(1)} once doubled`}). ${g < 0 ? "" : "Main edge: "} ${why1} Captain haul chance ${pct(c1.haul)}; ${lgOwnTxt(c1.id)}.${vice.id !== c2.id ? ` Vice ${nm(vice.id)} over ${nm(c2.id)}: more dependable (${pct(vice.mp.pStart)} vs ${pct(c2.mp.pStart)} to start)${!shared && sameMatch(c2.id, c1.id) ? " and in a different match" : ""}.` : ""}${shared ? ` Note: your vice plays in the same match as your captain, so a postponement would hit both.` : ""}${!isCap && st.cap ? ` You have ${nm(st.cap)} (${P(st.cap).toFixed(1)}).` : ""}${leagueNote}`,
         unc: close ? `It's close: ${nm(c1.id)} ${pct(s1)} to score, ${pct(c1.mp.p70)} for 70+; ${nm(c2.id)} ${pct(s2)} to score, ${pct(c2.mp.p70)} for 70+. A late team-news change would flip it.` : `${nm(c1.id)}'s minutes (${pct(c1.mp.pStart)} to start, ${pct(c1.mp.p70)} for 70+).`,
@@ -5296,7 +5297,7 @@ td.fx2-c { padding: 4px 3px; }
   function loadNotes() {
     if (notesP) return notesP;
     const get = (p) => (D.source === "live" ? fetch("api/" + p, { cache: "no-store" }).then((r) => (r.ok ? r.json() : null)).catch(() => null) : Promise.resolve(null));
-    return (notesP = Promise.all([get("notes"), get("calib"), get("strategy"), loadNewsCal().catch(() => null)]).then(([n, c, st]) => { NOTES = n || {}; CAL = c && (c.f || c.start || c.noteRel) ? c : null; STRAT = st || {}; XS.clear(); NF.clear(); }));
+    return (notesP = Promise.all([get("notes"), get("calib"), get("strategy"), loadNewsCal().catch(() => null), capLearn().catch(() => null)]).then(([n, c, st]) => { NOTES = n || {}; CAL = c && (c.f || c.start || c.noteRel) ? c : null; STRAT = st || {}; XS.clear(); NF.clear(); }));
   }
   // A note holds any number of overall calls (tags) and what-you-saw categories (cats: {key: "+" | "-"}).
   // Older notes with a single `tag` still work.
@@ -5428,8 +5429,8 @@ td.fx2-c { padding: 4px 3px; }
       const xg = (+e.expected_goals_per_90 || 0) * share, tf = sc && xg > 0.01 ? sc.lam / xg : 1;
       preds[id] = { xp: +gp1(e).toFixed(2), ps: +mp.pStart.toFixed(2), p70: +mp.p70.toFixed(2), xm: Math.round(mp.xMinsIfStart), lg: +(sc ? sc.lam : 0).toFixed(2), la: +((+e.expected_assists_per_90 || 0) * share * tf).toFixed(2), cs: o ? +o.cs.toFixed(2) : null, tf: o ? +o.lam.toFixed(2) : fixtureGoals(e.team, (teamFx[e.team][gwNext] || [])[0] || { opp: e.team, home: true }, gwNext + 1).for, nf: +noteFactor(e).toFixed(3), nk: noteOf(id) ? noteKeys(noteOf(id)) : [] };
     });
-    const body = { v: 2, gw: gwNext, at: Date.now(), cap: cap ? cap.capId : null, vc: cap ? cap.vcId : null, xi: bx.ids, squad: B.ids, buys, holds: adv.filter((x) => x.hold).map((x) => x.hold), preds };
-    const hash = JSON.stringify(["v2", body.cap, body.vc, body.xi, body.buys, body.holds, Object.keys(NOTES).length]);
+    const body = { v: 2, gw: gwNext, at: Date.now(), cap: cap ? cap.capId : null, vc: cap ? cap.vcId : null, capC: cap ? cap.capCands : null, capStance: cap ? cap.capStance : null, xi: bx.ids, squad: B.ids, buys, holds: adv.filter((x) => x.hold).map((x) => x.hold), preds };
+    const hash = JSON.stringify(["v2", body.cap, body.vc, body.xi, body.buys, body.holds, Object.keys(NOTES).length, body.capC]);
     if (store.get("recHash:" + gwNext, "") === hash) return;
     try { await ownerPost(`rec/${gwNext}`, body); store.set("recHash:" + gwNext, hash); } catch (e) { /* tried; will retry on the next load */ }
   }
@@ -5440,13 +5441,20 @@ td.fx2-c { padding: 4px 3px; }
     const o = {}; ids.forEach((id) => { const h = FA.summ[id]; o[id] = h ? h.filter((x) => x[0] === gw).reduce((a, x) => a + (x[2] || 0), 0) : null; });
     return o;
   }
+  // One line on what the captain-choice learning has found (shown with the advice scorecard).
+  function capLearnHTML() {
+    const C = CAPL;
+    if (!C || !C.n) return `<p class="note"><strong>Captain learning:</strong> each gameweek the close captain options are saved with their expected points, haul chance and league captaincy share. After each gameweek the site checks whether weighing haul chance more or less would have picked a better captain, and tunes the weight (now ${capHaulW()}, the default) once 4+ gameweeks are in.</p>`;
+    const L = C.log[C.log.length - 1];
+    return `<p class="note"><strong>Captain learning (${C.n} gameweek${C.n > 1 ? "s" : ""}):</strong> haul-chance weight ${capHaulW()}${C.n >= 4 ? ` (learned; the best-scoring weight was ${C.raw})` : ` (default until 4 gameweeks; so far the best-scoring weight is ${C.raw})`}. Last time, GW${L.g}: the site picked ${esc(E[L.chose]?.web_name || "?")} (${L.chosePts} pts)${L.chose === L.top ? ", the top expected-points option" : ` over ${esc(E[L.top]?.web_name || "?")}, the top on expected points alone (${L.topPts})`}; the best close option scored ${L.best}.</p>`;
+  }
   async function renderAdviceScore() {
     const box = $("#adviceScore"); if (!box) return;
     let recs = null; try { recs = D.source === "live" ? await fetch("api/recs", { cache: "no-store" }).then((r) => (r.ok ? r.json() : null)) : null; } catch (e) { recs = null; }
     if (!document.body.contains(box)) return;
     const gws = recs ? Object.keys(recs).map(Number).filter((g) => recs[g] && g <= gwCur && D.events.find((e) => e.id === g && (e.finished || e.id === gwCur))).sort((a, b) => b - a) : [];
     const head = `<div class="panel-head"><h3>How the advice did</h3><span class="note">The site's GW plan, recorded before each deadline, against what happened</span></div>`;
-    if (!gws.length) { box.innerHTML = head + `<p class="note">Tracking starts with GW${gwNext}: the site records its plan (captain, vice, best XI, transfers and ${recs && recs[gwNext] ? "projections" : "projections"}) before the deadline${ownerKey() ? "" : " from a device that has opened your owner link"}, then scores it here once the matches are played. After two gameweeks it also corrects any bias in the model's projections.</p>${recs && recs[gwNext] ? `<p class="note">GW${gwNext} plan recorded ${new Date(recs[gwNext].at).toLocaleString("en-GB", { timeZone: "Europe/London", dateStyle: "short", timeStyle: "short" })}.</p>` : ""}`; return; }
+    if (!gws.length) { box.innerHTML = head + capLearnHTML() + `<p class="note">Tracking starts with GW${gwNext}: the site records its plan (captain, vice, best XI, transfers and ${recs && recs[gwNext] ? "projections" : "projections"}) before the deadline${ownerKey() ? "" : " from a device that has opened your owner link"}, then scores it here once the matches are played. After two gameweeks it also corrects any bias in the model's projections.</p>${recs && recs[gwNext] ? `<p class="note">GW${gwNext} plan recorded ${new Date(recs[gwNext].at).toLocaleString("en-GB", { timeZone: "Europe/London", dateStyle: "short", timeStyle: "short" })}.</p>` : ""}`; return; }
     const rows = [], errs = { 1: [], 2: [], 3: [], 4: [] };
     for (const g of gws) {
       const r = recs[g], ids = [...new Set([...Object.keys(r.preds).map(Number), r.cap, ...(r.buys || []).flatMap((b) => [b.out, b.inn])].filter(Boolean))];
@@ -5464,7 +5472,7 @@ td.fx2-c { padding: 4px 3px; }
     const f = {}; [1, 2, 3, 4].forEach((t) => { const xs = errs[t].filter((x) => fin.has(x[2])); if (fin.size >= 2 && xs.length >= 30) { const pa = xs.reduce((a, x) => a + x[0], 0), aa = xs.reduce((a, x) => a + x[1], 0); f[t] = Math.max(0.85, Math.min(1.15, aa / Math.max(1, pa))); } });
     // (recalibration now comes from the learning loop in Train the model)
     const nm = (id) => esc(E[id]?.web_name || "?");
-    box.innerHTML = head + `<div class="tbl-wrap"><table class="cards-sm"><thead><tr><th>GW</th><th>Recommended captain</th><th>Your captain</th><th>Best in XI</th><th>Recommended transfers</th></tr></thead><tbody>
+    box.innerHTML = head + capLearnHTML() + `<div class="tbl-wrap"><table class="cards-sm"><thead><tr><th>GW</th><th>Recommended captain</th><th>Your captain</th><th>Best in XI</th><th>Recommended transfers</th></tr></thead><tbody>
       ${rows.map((r) => `<tr><td>GW${r.g}${r.live ? ' <span class="pill">Live</span>' : ""}</td><td>${r.cap ? `${nm(r.cap)} <strong>${r.capPts ?? "–"}</strong>` : "–"}</td><td>${r.myCap ? `${nm(r.myCap)} <strong>${r.myCapPts ?? "–"}</strong>${r.myCap !== r.cap && r.capPts != null && r.myCapPts != null ? ` <span class="${r.capPts > r.myCapPts ? "down" : r.capPts < r.myCapPts ? "up" : "note"}">(${r.capPts > r.myCapPts ? "advice +" + 2 * (r.capPts - r.myCapPts) : r.capPts < r.myCapPts ? "you +" + 2 * (r.myCapPts - r.capPts) : "same"})</span>` : ""}` : "–"}</td><td>${r.xiBest ?? "–"}</td><td>${r.buys.length ? r.buys.map((b) => `${nm(b.out)} → ${nm(b.inn)}`).join(", ") + ` <strong class="${r.bt >= 0 ? "up" : "down"}">${r.bt >= 0 ? "+" : ""}${r.bt}</strong>` : "Roll"}</td></tr>`).join("")}
       </tbody></table></div>
       <p class="note">Projection accuracy over ${all.length} player-gameweeks: average miss ${mae.toFixed(1)} pts, ${bias >= 0 ? "under" : "over"}-projecting by ${Math.abs(bias).toFixed(2)} pts a player on average. ${Object.keys(f).length ? `Calibration applied: ${Object.entries(f).map(([t, v]) => `${D.positions[t]} ×${v.toFixed(2)}`).join(", ")}.` : "Calibration kicks in after two finished gameweeks."} Single gameweeks are noisy: judge the advice over several. <span class="lab lab-fact">Fact</span></p>`;
@@ -6481,6 +6489,30 @@ td.fx2-c { padding: 4px 3px; }
       out.push({ e, last, mins, kind, starts, n: prev.length, mine: mine.has(e.id) });
     });
     return out.sort((a, b) => (b.mine - a.mine) || (+b.e.selected_by_percent - +a.e.selected_by_percent));
+  }
+  // ---- Captain choice: a learning loop for the haul-chance weight ----
+  // Each gameweek's advice record keeps the close captain options (xP, haul chance, league EO). After the gameweek,
+  // capLearn() replays the choice with haul weights 0–6 and keeps the weight whose picks scored the most
+  // (doubled), shrunk towards the default 3 until there are 4+ gameweeks. capHaulW() is used by gwAdvice.
+  let CAPL = null;
+  const capHaulW = () => (CAPL && CAPL.n >= 4 ? CAPL.w : 3);
+  async function capLearn() {
+    if (D.source !== "live") return;
+    const recs = await fetch("api/recs", { cache: "no-store" }).then((r) => (r.ok ? r.json() : null)).catch(() => null); if (!recs) return;
+    const gws = Object.keys(recs).map(Number).filter((g) => recs[g] && recs[g].capC && recs[g].capC.length > 1 && g <= gwCur);
+    await Promise.all(gws.filter((g) => !OS.gw[g] || !OS.gw[g].final).map((g) => fetch(`api/gwstats/${g}`).then((r) => (r.ok ? r.json() : null)).then((j) => { if (j && j.els) OS.gw[g] = j; }).catch(() => null)));
+    const done = gws.filter((g) => OS.gw[g] && OS.gw[g].final), W = [0, 1.5, 3, 4.5, 6], tot = W.map(() => 0), log = [];
+    done.forEach((g) => {
+      const R = recs[g], pts = (id) => (OS.gw[g].els[id] ? OS.gw[g].els[id][OI.PTS] : 0), best = Math.max(...R.capC.map((c) => pts(c.id)));
+      const lg = (c) => (R.capStance === "chase" ? 0.8 * (1 - c.eo) : R.capStance === "protect" ? 0.8 * c.eo : 0);
+      const pick = (w) => { const band = Math.max(...R.capC.map((c) => c.p * c.cb)) - 0.6; return R.capC.filter((c) => c.p * c.cb >= band).sort((a, b) => (b.p * b.cb + w * b.h + lg(b)) - (a.p * a.cb + w * a.h + lg(a)))[0]; };
+      W.forEach((w, i) => (tot[i] += 2 * pts(pick(w).id)));
+      const topX = [...R.capC].sort((a, b) => b.p * b.cb - a.p * a.cb)[0]; // expected points alone
+      log.push({ g, chose: R.cap, chosePts: pts(R.cap), top: topX.id, topPts: pts(topX.id), best });
+    });
+    if (!done.length) { CAPL = { n: 0, w: 3, log }; return; }
+    const mx = Math.max(...tot), raw = W.filter((w, i) => tot[i] === mx).sort((a, b) => Math.abs(a - 3) - Math.abs(b - 3))[0]; // ties stay nearest the default
+    CAPL = { n: done.length, w: +(3 + (raw - 3) * Math.min(1, done.length / 8)).toFixed(2), raw, tot, W, log };
   }
   // ---- News start calls: a learning loop ----
   // Before each deadline the News tab's calls (start chance, source, FPL flag) are saved to /api/newsrec/{gw}.
