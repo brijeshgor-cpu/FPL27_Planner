@@ -1874,7 +1874,7 @@ td.fx2-c { padding: 4px 3px; }
       if (teamNews(e.team).length) sc *= 0.95; // new manager: some rotation risk
     }
     if (!LAYER.noNote) sc *= noteFactor(e); // your notes
-    if (!LAYER.noCal) sc *= calFactor(e); // recalibration from tracked results
+    if (!LAYER.noCal) sc *= calFactor(e) * ctxFactor(e, n, TO); // recalibration from tracked results (position, then fixture/venue/odds/form context)
     return sc;
   }
   // Short evidence list for a player, drawn from the Insights data.
@@ -5297,7 +5297,7 @@ td.fx2-c { padding: 4px 3px; }
   function loadNotes() {
     if (notesP) return notesP;
     const get = (p) => (D.source === "live" ? fetch("api/" + p, { cache: "no-store" }).then((r) => (r.ok ? r.json() : null)).catch(() => null) : Promise.resolve(null));
-    return (notesP = Promise.all([get("notes"), get("calib"), get("strategy"), loadNewsCal().catch(() => null), capLearn().catch(() => null)]).then(([n, c, st]) => { NOTES = n || {}; CAL = c && (c.f || c.start || c.noteRel) ? c : null; STRAT = st || {}; XS.clear(); NF.clear(); }));
+    return (notesP = Promise.all([get("notes"), get("calib"), get("strategy"), loadNewsCal().catch(() => null), capLearn().catch(() => null)]).then(([n, c, st]) => { NOTES = n || {}; CAL = c && (c.f || c.start || c.noteRel || c.ctx) ? c : null; STRAT = st || {}; XS.clear(); NF.clear(); }));
   }
   // A note holds any number of overall calls (tags) and what-you-saw categories (cats: {key: "+" | "-"}).
   // Older notes with a single `tag` still work.
@@ -5421,13 +5421,15 @@ td.fx2-c { padding: 4px 3px; }
     const B = eng.base, adv = eng.adv, cap = adv.find((x) => x.sec === "cap" && x.capId);
     const bx = bestXI(B.ids);
     const buys = adv.filter((x) => x.act && x.act.a === "xfer").map((x) => ({ out: x.act.out, inn: x.act.inn, gain: +x.act.gain.toFixed(2), hit: x.act.hit }));
-    const pool = new Set([...B.ids, ...buys.map((b) => b.inn), ...Object.values(E).filter((e) => isFit(e) && e.minutes >= 450).sort((a, b) => gp1(b) - gp1(a)).slice(0, 60).map((e) => e.id)]);
+    const pool = new Set([...B.ids, ...buys.map((b) => b.inn), ...Object.values(E).filter((e) => isFit(e) && e.minutes >= 450).sort((a, b) => gp1(b) - gp1(a)).slice(0, 90).map((e) => e.id), ...[1, 2, 3, 4].flatMap((t) => Object.values(E).filter((e) => e.element_type === t && isFit(e) && e.minutes >= 450).sort((a, b) => gp1(b) - gp1(a)).slice(0, 15).map((e) => e.id))]);
     // Each prediction keeps the inputs needed to classify its error afterwards.
     const TO = gwTO(), preds = {};
     pool.forEach((id) => {
       const e = E[id], mp = minutesProfile(e), sc = scoreChance(e, TO), o = TO[e.team], share = Math.min(1, mp.xMinsIfStart / 90) * mp.pStart;
       const xg = (+e.expected_goals_per_90 || 0) * share, tf = sc && xg > 0.01 ? sc.lam / xg : 1;
-      preds[id] = { xp: +gp1(e).toFixed(2), ps: +mp.pStart.toFixed(2), p70: +mp.p70.toFixed(2), xm: Math.round(mp.xMinsIfStart), lg: +(sc ? sc.lam : 0).toFixed(2), la: +((+e.expected_assists_per_90 || 0) * share * tf).toFixed(2), cs: o ? +o.cs.toFixed(2) : null, tf: o ? +o.lam.toFixed(2) : fixtureGoals(e.team, (teamFx[e.team][gwNext] || [])[0] || { opp: e.team, home: true }, gwNext + 1).for, nf: +noteFactor(e).toFixed(3), nk: noteOf(id) ? noteKeys(noteOf(id)) : [] };
+      const fx0 = (teamFx[e.team][gwNext] || [])[0];
+      preds[id] = { fd: fx0 ? Math.max(...(teamFx[e.team][gwNext] || []).map((f) => f.fdr)) : null, h: fx0 ? (fx0.home ? 1 : 0) : null, fo: +(+e.form || 0).toFixed(1), pp: +(+e.points_per_game || 0).toFixed(1),
+        xp: +gp1(e).toFixed(2), ps: +mp.pStart.toFixed(2), p70: +mp.p70.toFixed(2), xm: Math.round(mp.xMinsIfStart), lg: +(sc ? sc.lam : 0).toFixed(2), la: +((+e.expected_assists_per_90 || 0) * share * tf).toFixed(2), cs: o ? +o.cs.toFixed(2) : null, tf: o ? +o.lam.toFixed(2) : fixtureGoals(e.team, (teamFx[e.team][gwNext] || [])[0] || { opp: e.team, home: true }, gwNext + 1).for, nf: +noteFactor(e).toFixed(3), nk: noteOf(id) ? noteKeys(noteOf(id)) : [] };
     });
     const body = { v: 2, gw: gwNext, at: Date.now(), cap: cap ? cap.capId : null, vc: cap ? cap.vcId : null, capC: cap ? cap.capCands : null, capStance: cap ? cap.capStance : null, xi: bx.ids, squad: B.ids, buys, holds: adv.filter((x) => x.hold).map((x) => x.hold), preds };
     const hash = JSON.stringify(["v2", body.cap, body.vc, body.xi, body.buys, body.holds, Object.keys(NOTES).length, body.capC]);
@@ -5683,15 +5685,52 @@ td.fx2-c { padding: 4px 3px; }
     if (fin.length >= 2) {
       const f = {}; [1, 2, 3, 4].forEach((t) => { const xs = all.filter((x) => x.t === t && !x.cats.includes("event")); if (xs.length >= 30) { const p = xs.reduce((s, x) => s + x.pr.xp, 0), d = xs.reduce((s, x) => s + x.des, 0); f[t] = Math.max(0.85, Math.min(1.15, d / Math.max(1, p))); } });
       if (Object.keys(f).length) out.f = f;
+      // context factors: what's left after the position factor, by fixture, venue, odds and form
+      const ctx = {}, fpos = (t) => (out.f && out.f[t]) || 1;
+      all.filter((x) => !x.cats.includes("event") && x.pr.fd !== undefined).forEach((x) => ctxKeys(x.pr).forEach((k) => { const c = (ctx[k] ||= [0, 0, 0]); c[0]++; c[1] += x.pr.xp * fpos(x.t); c[2] += x.des; }));
+      Object.keys(ctx).forEach((k) => { const [nn, p, d] = ctx[k]; const raw = Math.max(0.88, Math.min(1.12, (d + 2) / (p + 2))); ctx[k] = [nn, +(1 + (raw - 1) * (nn / (nn + 50))).toFixed(3), +(p / nn).toFixed(2), +(d / nn).toFixed(2)]; });
+      if (Object.keys(ctx).length) out.ctx = ctx;
       const st = all.filter((x) => x.pr.ps >= 0.5); if (st.length >= 30) out.start = Math.max(0.85, Math.min(1.1, (st.filter((x) => x.started).length + 1) / (st.reduce((s, x) => s + x.pr.ps, 0) + 1)));
     }
     const rel = {}; all.forEach((x) => { if (x.noteRight == null) return; (x.pr.nk || []).forEach((k) => { rel[k] = rel[k] || [0, 0]; rel[k][1]++; if (x.noteRight) rel[k][0]++; }); });
     if (Object.keys(rel).length) out.noteRel = rel;
     return out;
   }
+  // Prediction context buckets: fixture difficulty, venue, the bookmakers' expected goals for his team, and form
+  // against points per game. calibrate() learns a factor per bucket (against the underlying numbers, after the
+  // position factor); ctxFactor() applies them to new predictions.
+  const CTX_L = { "fdr:easy": "Easy fixtures (FDR 1–2)", "fdr:mid": "Medium fixtures (FDR 3)", "fdr:hard": "Hard fixtures (FDR 4–5)", "venue:home": "At home", "venue:away": "Away",
+    "odds:low": "Team expected to score under 1.2", "odds:mid": "Team expected to score 1.2–1.8", "odds:high": "Team expected to score 1.8+", "form:hot": "Hot form (form 2+ above his average)", "form:normal": "Normal form", "form:cold": "Cold form (form 2+ below his average)" };
+  const ctxKeys = (c) => [c.fd == null ? null : c.fd <= 2 ? "fdr:easy" : c.fd === 3 ? "fdr:mid" : "fdr:hard", c.h == null ? null : c.h ? "venue:home" : "venue:away",
+    c.tf == null ? null : c.tf < 1.2 ? "odds:low" : c.tf <= 1.8 ? "odds:mid" : "odds:high", c.fo == null || c.pp == null ? null : c.fo - c.pp >= 2 ? "form:hot" : c.pp - c.fo >= 2 ? "form:cold" : "form:normal"].filter(Boolean);
+  function ctxFactor(e, n = 1, TO = null) {
+    if (!CAL || !CAL.ctx) return 1;
+    const fx = teamFx[e.team][gwNext] || [], f0 = fx[0], o = (TO && TO[e.team]) || null;
+    const c = { fd: f0 ? Math.max(...fx.map((f) => f.fdr)) : null, h: f0 ? (f0.home ? 1 : 0) : null, tf: o ? o.lam : null, fo: +e.form || 0, pp: +e.points_per_game || 0 };
+    let k = 1; ctxKeys(c).forEach((key) => { const v = CAL.ctx[key]; if (v && v[0] >= 25) k *= v[1]; });
+    k = Math.max(0.85, Math.min(1.15, k));
+    return 1 + (k - 1) / Math.max(1, n); // the context is this gameweek's, so it fades over a longer horizon
+  }
   // How much to trust each kind of note, from its record (1 = neutral until there's evidence).
   const noteWeight = (key) => { const r = CAL && CAL.noteRel && CAL.noteRel[key]; if (!r || r[1] < 2) return 1; return Math.max(0.5, Math.min(1.4, 0.5 + (r[0] + 1) / (r[1] + 2))); };
 
+  // Ranking quality per position: Spearman correlation between predicted xP and points (and underlying points),
+  // plus how often the top-5 predicted in each position finished in the top half.
+  function pickAccHTML(res) {
+    const spear = (xs, f) => { if (xs.length < 6) return null; const rk = (arr) => { const o = arr.map((v, i) => [v, i]).sort((a, b) => a[0] - b[0]), r = []; o.forEach(([, i], k) => (r[i] = k)); return r; };
+      const a = rk(xs.map((x) => x.pr.xp)), b = rk(xs.map(f)), n = xs.length; return 1 - (6 * a.reduce((s, v, i) => s + (v - b[i]) ** 2, 0)) / (n * (n * n - 1)); };
+    const rows = [1, 2, 3, 4].map((t) => {
+      const per = res.filter((r) => r.final).map((r) => r.rows.filter((x) => x.t === t && x.started));
+      const rp = per.map((xs) => spear(xs, (x) => x.actual)).filter((v) => v != null), rd = per.map((xs) => spear(xs, (x) => x.des)).filter((v) => v != null);
+      let hit = 0, tot = 0; per.forEach((xs) => { if (xs.length < 10) return; const med = [...xs].sort((a, b) => a.actual - b.actual)[Math.floor(xs.length / 2)].actual; [...xs].sort((a, b) => b.pr.xp - a.pr.xp).slice(0, 5).forEach((x) => { tot++; if (x.actual >= med) hit++; }); });
+      const avg = (v) => (v.length ? v.reduce((a, b) => a + b, 0) / v.length : null);
+      return { t, rp: avg(rp), rd: avg(rd), hit, tot, n: per.reduce((s, xs) => s + xs.length, 0) };
+    });
+    if (!rows.some((r) => r.rp != null)) return `<p class="note">Starts once a gameweek with saved predictions is finished.</p>`;
+    const f = (v) => (v == null ? "–" : v.toFixed(2));
+    return `<div class="tbl-wrap"><table class="lr-tbl"><thead><tr><th>Position</th><th class="n">Starters checked</th><th class="n">Rank match vs points</th><th class="n">vs underlying</th><th class="n">Top 5 predicted in top half</th></tr></thead><tbody>${rows.map((r) => `<tr><td>${D.positions[r.t]}</td><td class="n">${r.n}</td><td class="n">${f(r.rp)}</td><td class="n">${f(r.rd)}</td><td class="n">${r.tot ? `${r.hit} of ${r.tot} (${pct(r.hit / r.tot)})` : "–"}</td></tr>`).join("")}</tbody></table></div>
+      <p class="note">Rank match is a correlation from −1 to 1: 0 means the ranking was no better than chance, 1 means perfect order. Points are noisy, so "vs underlying" (what the chances were worth) is the fairer test of the picks.</p>`;
+  }
   async function renderLearning() {
     const box = $("#learning"); if (!box) return;
     let recs = null; try { recs = D.source === "live" ? await fetch("api/recs", { cache: "no-store" }).then((r) => (r.ok ? r.json() : null)) : null; } catch (e) { recs = null; }
@@ -5713,7 +5752,7 @@ td.fx2-c { padding: 4px 3px; }
     const pat = {}; all.forEach((x) => x.cats.filter((k) => !["ok", "unlucky", "lucky", "event"].includes(k)).forEach((k) => { const key = `${k}|${E[x.id].team}|${x.t}`; (pat[key] = pat[key] || []).push(x); }));
     const patterns = Object.entries(pat).filter(([, xs]) => xs.length >= 2).sort((a, b) => b[1].length - a[1].length).slice(0, 6);
     const cal = calibrate(res);
-    if (ownerKey() && JSON.stringify([cal.f, cal.start, cal.noteRel]) !== JSON.stringify([CAL && CAL.f, CAL && CAL.start, CAL && CAL.noteRel])) ownerPost("calib", cal).then(() => { CAL = cal; XS.clear(); }).catch(() => {});
+    if (ownerKey() && JSON.stringify([cal.f, cal.start, cal.noteRel, cal.ctx]) !== JSON.stringify([CAL && CAL.f, CAL && CAL.start, CAL && CAL.noteRel, CAL && CAL.ctx])) ownerPost("calib", cal).then(() => { CAL = cal; XS.clear(); }).catch(() => {});
     const latest = res[0];
     box.innerHTML = head + `
       <div class="lr-sum"><div><span class="k">Average miss vs points</span><b>${mae(all, (x) => x.actual).toFixed(1)}</b></div><div><span class="k">vs underlying numbers</span><b>${mae(all, (x) => x.des).toFixed(1)}</b></div><div><span class="k">Players tracked</span><b>${all.length}</b></div><div><span class="k">Gameweeks</span><b>${res.map((r) => "GW" + r.g + (r.final ? "" : " (live)")).join(", ")}</b></div></div>
@@ -5726,6 +5765,10 @@ td.fx2-c { padding: 4px 3px; }
       ${patterns.length ? `<ul class="lr-pat">${patterns.map(([key, xs]) => { const [k, team, t] = key.split("|"); return `<li><strong>${ERR_CATS[k].l}</strong>: ${esc(T[team].name)} ${D.positions[t]} ×${xs.length} <span class="note">(${[...new Set(xs.map((x) => E[x.id].web_name))].map(esc).join(", ")})</span></li>`; }).join("")}</ul>` : `<p class="note">None yet: a pattern needs the same error for the same club and position at least twice.</p>`}
       <h4 class="lr-h">Recalibration</h4>
       <p class="note">${cal.f ? `Projections by position (against underlying numbers): ${Object.entries(cal.f).map(([t, v]) => `${D.positions[t]} ×${v.toFixed(2)}`).join(", ")}. ` : "Position corrections start after two finished gameweeks with 30+ players each. "}${cal.start ? `Starting probability ×${cal.start.toFixed(2)}.` : ""} Corrections are capped (±15%) so one odd week can't swing the model.</p>
+      <h4 class="lr-h">Picking accuracy: did the highest-rated players score most?</h4>
+      ${pickAccHTML(res)}
+      <h4 class="lr-h">Where the predictions go wrong: fixture, venue, odds and form</h4>
+      ${cal.ctx ? `<div class="tbl-wrap"><table class="lr-tbl"><thead><tr><th>Situation</th><th class="n">Players</th><th class="n">Predicted</th><th class="n">Deserved</th><th class="n">Correction</th></tr></thead><tbody>${Object.entries(cal.ctx).sort((a, b) => Object.keys(CTX_L).indexOf(a[0]) - Object.keys(CTX_L).indexOf(b[0])).map(([k, [nn, f, p, d]]) => `<tr><td>${CTX_L[k] || k}</td><td class="n">${nn}</td><td class="n">${p.toFixed(1)}</td><td class="n">${d.toFixed(1)}</td><td class="n ${nn >= 25 && Math.abs(f - 1) >= 0.02 ? (f > 1 ? "up" : "down") : ""}">${nn >= 25 ? `×${f.toFixed(2)}` : "needs 25+"}</td></tr>`).join("")}</tbody></table></div><p class="note">"Predicted" is the average projection after the position correction; "Deserved" is what the underlying numbers were worth. Corrections are capped at ±12% per situation (±15% combined), shrink on small samples, and apply to new predictions for the next gameweek (fading over longer horizons).</p>` : `<p class="note">Starts after two finished gameweeks.</p>`}
       <h4 class="lr-h">Reliability of your notes</h4>
       ${cal.noteRel ? `<ul class="lr-pat">${Object.entries(cal.noteRel).sort((a, b) => b[1][1] - a[1][1]).map(([k, [r, n]]) => `<li>${esc(noteKeyLabel(k))}: right ${r} of ${n}${n >= 2 ? ` · weight ×${noteWeight(k).toFixed(2)}` : " · needs 2+ to adjust"}</li>`).join("")}</ul>` : `<p class="note">No noted players have been through a gameweek yet. Each kind of note earns more weight when it proves right and less when it doesn't.</p>`}
       <p class="note"><span class="lab lab-fact">Fact</span> results from FPL's live data · <span class="lab lab-proj">Projection</span> deserved points from the underlying numbers.</p>`;

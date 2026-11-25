@@ -239,6 +239,16 @@ bench order, transfers or chip before the deadline?*
     (vs deserved, ±15%), a starting-probability factor and note reliability (`noteRel`). These are
     saved to `/api/calib`. `noteWeight()` scales each kind of note's effect by its record
     (0.5 to 1.4).
+- **Context learning (player predictions):** `recordAdvice()` also saves each prediction's context: FDR `fd`, home
+  `h`, form `fo` and points per game `pp`, plus the team goal λ `tf` it already had. The pool is the top 90 plus the
+  top 15 per position. `calibrate()` learns `CAL.ctx` from 2+ finished gameweeks: per bucket from `ctxKeys()` (fixture
+  easy/mid/hard, home/away, team λ low/mid/high, form hot/normal/cold), the ratio of deserved points to the
+  position-corrected projection. Each ratio is capped ±12%, shrunk by n/(n+50), and needs 25+ players.
+  `ctxFactor(e, n, TO)` multiplies a player's buckets for his next fixture (capped ±15%, fading over longer horizons)
+  and is applied with `calFactor` in `scoreCore`, so every tab's projections, buys and captain picks use it.
+  `pickAccHTML()` (Train → Learning from results) shows, per position, the rank correlation of predicted xP with
+  points and with deserved points, and how often the top 5 predicted finished in the top half; a table shows each
+  context's predicted vs deserved and its correction.
 - **Your strategy:** `STRAT_RULES`, saved to `/api/strategy` (owner only), with priority levels Off to
   Critical. They change decisions:
   - nailed: the buy start-rate floor;
