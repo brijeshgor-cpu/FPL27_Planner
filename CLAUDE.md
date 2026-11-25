@@ -326,6 +326,22 @@ bench order, transfers or chip before the deadline?*
     a selection call"), recent minutes, the GW start chance (`minutesProfile().pStart`, as likely, in doubt or
     unlikely), matching articles and, for your players, a decision with bench cover. Each club card lists its
     players too.
+- **News start calls: learning loop.**
+  - **Saving:** `recordNewsCalls()` saves every outlook (id, shown p, raw p `pr`, source news/flag/model, FPL chance
+    `c`, status, drop kind, verdict) to the Worker's `/api/newsrec/{gw}` (owner key; refused after the deadline; index
+    `newsrecs`). It runs from the News tab, and in the background from the Current gameweek and Train tabs
+    (`newsCallsInBackground()`, which uses `drawNews(true)` in compute-only mode). The last save before the deadline
+    counts.
+  - **Learning:** `loadNewsCal()` runs with `loadNotes()`. For each saved gameweek whose `/api/gwstats` is final, it
+    checks the calls against starts (ST) and appearances (minutes) and builds `NCAL`:
+    - per source × band (0–25/25–50/50–75/75–100%) of raw p: calls, mean prediction and start rate;
+    - FPL flag levels: played and started rates;
+    - overall right-call rate and Brier score.
+  - **Using it:** `newsCalibrate()` shifts new raw calls by the band's error (8+ calls, shrink n/(n+15), capped
+    ±0.2) and notes "Adjusted from X%". `availability()` uses the learned play rate for 25/50/75% flags (8+ calls,
+    blended with FPL's %), so the xP model learns too.
+  - **Scorecard:** `newsLearnHTML()` (`#nwLearn`) shows calls checked, right-call rate, Brier score, the calibration
+    table, the flag rates, the biggest misses and the save status.
 - **Transfers to make (Current gameweek, bottom):** `gwXfersHTML(st)` (`#gwXfers`), cached in `GWE.xs`. Four plans for
   the team as edited:
   - **Model's pick:** `gwBuys()` unchanged.

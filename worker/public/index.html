@@ -857,6 +857,7 @@ td.fx2-c { padding: 4px 3px; }
 @media (max-width: 700px) { .st-row { flex-wrap: wrap; } .st-row select { flex: 1 1 100%; } .lr-sum { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
 /* Player predictions: compare */
 .pr-mode button { min-width: 130px; }
+.nw-cal td, .nw-cal th { white-space: nowrap; } .nw-cal .down { color: var(--bad); font-weight: 600; }
 .nw-ol { list-style: none; margin: 0; padding: 0; display: grid; gap: 8px; }
 .nw-ol li { border-top: 1px solid var(--line); padding-top: 8px; } .nw-ol li:first-child { border-top: 0; padding-top: 0; }
 .nw-ol-h { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 6px; } .nw-v { margin-left: auto; }
@@ -1238,8 +1239,11 @@ td.fx2-c { padding: 4px 3px; }
     return h + "</span>";
   }
   function availability(p) {
-    if (p.chance_of_playing_next_round == null) return p.status === "a" ? 1 : p.status === "d" ? 0.75 : p.status === "i" || p.status === "s" || p.status === "u" ? 0 : 1;
-    return p.chance_of_playing_next_round / 100;
+    const c = p.chance_of_playing_next_round;
+    const raw = c == null ? (p.status === "a" ? 1 : p.status === "d" ? 0.75 : p.status === "i" || p.status === "s" || p.status === "u" ? 0 : 1) : c / 100;
+    // Learning loop: what FPL's 25/50/75% flags have actually meant (News tab calls checked after each gameweek)
+    const lv = c == null ? (p.status === "d" ? 75 : null) : c, L = lv && lv > 0 && lv < 100 && NCAL && NCAL.flagPlay[lv];
+    return L && L.n >= 8 ? (L.played + 10 * raw) / (L.n + 10) : raw;
   }
   // Planner projection: blended form/points-per-game, scaled by fixture difficulty per fixture, over `h` gameweeks.
   function project(p, h) {
@@ -2182,7 +2186,7 @@ td.fx2-c { padding: 4px 3px; }
     GWE.sel = null; GWE.msg = "";
     drawGw();
     gwPoll();
-    gwEngine().then(recordAdvice).catch(() => {});
+    gwEngine().then(recordAdvice).then(newsCallsInBackground).catch(() => {});
   }
   // Builds the official team (GWE.base) from FPL's Pick Team, or from public data without a login.
   function gwBuild(mt) {
@@ -5281,7 +5285,7 @@ td.fx2-c { padding: 4px 3px; }
   function loadNotes() {
     if (notesP) return notesP;
     const get = (p) => (D.source === "live" ? fetch("api/" + p, { cache: "no-store" }).then((r) => (r.ok ? r.json() : null)).catch(() => null) : Promise.resolve(null));
-    return (notesP = Promise.all([get("notes"), get("calib"), get("strategy")]).then(([n, c, st]) => { NOTES = n || {}; CAL = c && (c.f || c.start || c.noteRel) ? c : null; STRAT = st || {}; XS.clear(); NF.clear(); }));
+    return (notesP = Promise.all([get("notes"), get("calib"), get("strategy"), loadNewsCal().catch(() => null)]).then(([n, c, st]) => { NOTES = n || {}; CAL = c && (c.f || c.start || c.noteRel) ? c : null; STRAT = st || {}; XS.clear(); NF.clear(); }));
   }
   // A note holds any number of overall calls (tags) and what-you-saw categories (cats: {key: "+" | "-"}).
   // Older notes with a single `tag` still work.
@@ -5378,7 +5382,7 @@ td.fx2-c { padding: 4px 3px; }
   async function renderTrain() {
     const app = $("#app");
     app.innerHTML = `<section class="view"><div class="panel-head"><h2>Train the model</h2></div><p class="empty">Loading your notes…</p></section>`;
-    try { await loadOfficial(); await ensureFA(baseSquad().map((p) => p[0])); GWE.eng = await gwEngine(); if (GWE.eng) recordAdvice(GWE.eng); } catch (e) { /* season data used */ }
+    try { await loadOfficial(); await ensureFA(baseSquad().map((p) => p[0])); GWE.eng = await gwEngine(); if (GWE.eng) recordAdvice(GWE.eng).then(newsCallsInBackground).catch(() => {}); } catch (e) { /* season data used */ }
     if (view !== "train") return;
     app.innerHTML = `<section class="view">
       <div class="panel-head"><h2>Train the model</h2><span class="note">Your judgement and the results teach the model</span></div>
@@ -6467,18 +6471,91 @@ td.fx2-c { padding: 4px 3px; }
     });
     return out.sort((a, b) => (b.mine - a.mine) || (+b.e.selected_by_percent - +a.e.selected_by_percent));
   }
+  // ---- News start calls: a learning loop ----
+  // Before each deadline the News tab's calls (start chance, source, FPL flag) are saved to /api/newsrec/{gw}.
+  // Once that gameweek is finished, loadNewsCal() checks each call against who actually started (/api/gwstats)
+  // and learns: (1) per source and probability band, how far the calls were off, used to recalibrate new calls
+  // in outlook(); (2) what FPL's 25/50/75% flags really meant for playing, used by availability() in the xP model.
+  let NCAL = null;
+  const NB = (p) => (p < 0.25 ? 0 : p < 0.5 ? 1 : p < 0.75 ? 2 : 3);
+  async function loadNewsCal() {
+    if (D.source !== "live") return;
+    const recs = await fetch("api/newsrecs", { cache: "no-store" }).then((r) => (r.ok ? r.json() : null)).catch(() => null);
+    if (!recs) return;
+    const cand = Object.keys(recs).map(Number).filter((g) => recs[g] && recs[g].items && g <= gwCur);
+    await Promise.all(cand.filter((g) => !OS.gw[g] || !OS.gw[g].final).map((g) => fetch(`api/gwstats/${g}`).then((r) => (r.ok ? r.json() : null)).then((j) => { if (j && j.els) OS.gw[g] = j; }).catch(() => null)));
+    const done = cand.filter((g) => OS.gw[g] && OS.gw[g].final); // every fixture of the gameweek finished
+    const cal = { bins: {}, flagPlay: {}, flagStart: {}, gws: [], items: {}, saved: recs, n: 0, brier: 0, hits: 0 };
+    done.filter((g) => OS.gw[g]).forEach((g) => {
+      const res = [];
+      recs[g].items.forEach((it) => {
+        const e = E[it.id]; if (!e) return;
+        if (!D.fixtures.some((f) => f[1] === g && (f[2] === e.team || f[3] === e.team))) return; // blank gameweek
+        const r = OS.gw[g].els[it.id], started = r && r[OI.ST] > 0 ? 1 : 0, played = r && r[OI.M] > 0 ? 1 : 0;
+        const b = ((cal.bins[it.src] ||= [0, 1, 2, 3].map(() => ({ n: 0, pred: 0, started: 0 }))))[NB(it.pr)];
+        b.n++; b.pred += it.pr; b.started += started;
+        if (it.c > 0 && it.c < 100) { const fp = (cal.flagPlay[it.c] ||= { n: 0, played: 0, started: 0 }); fp.n++; fp.played += played; fp.started += started; }
+        cal.n++; cal.brier += (it.p - started) ** 2; cal.hits += (it.p >= 0.5) === !!started ? 1 : 0;
+        res.push({ ...it, started, played, mins: r ? r[OI.M] : 0 });
+      });
+      if (res.length) { cal.gws.push(g); cal.items[g] = res; }
+    });
+    NCAL = cal;
+  }
+  // Recalibrate a raw call by what past calls from the same source and band turned out to be.
+  function newsCalibrate(p, src) {
+    const b = NCAL && NCAL.bins[src] && NCAL.bins[src][NB(p)];
+    if (!b || b.n < 8 || p <= 0 || p >= 1) return p;
+    const shift = (b.n / (b.n + 15)) * (b.started / b.n - b.pred / b.n); // shrunk on small samples
+    return Math.max(0.01, Math.min(0.99, p + Math.max(-0.2, Math.min(0.2, shift))));
+  }
+  async function recordNewsCalls() {
+    if (!ownerKey() || D.source !== "live" || !NW.outlooks || NW.saved === gwNext) return;
+    const ev = D.events.find((x) => x.id === gwNext); if (!ev || Date.now() > Date.parse(ev.deadline)) return;
+    const items = NW.outlooks.map((o) => ({ id: o.e.id, p: +o.p.toFixed(3), pr: +o.praw.toFixed(3), src: o.src, c: o.e.chance_of_playing_next_round ?? (o.e.status === "d" ? 75 : null), st: o.e.status, k: o.d ? o.d.kind : null, v: o.v[1] }));
+    try { await ownerPost(`newsrec/${gwNext}`, { gw: gwNext, at: Date.now(), items }); NW.saved = gwNext; NW.savedAt = Date.now(); } catch (e) { /* try again next visit */ }
+  }
+  // From other tabs: work out this gameweek's calls in the background so they're saved even if the News tab isn't opened.
+  async function newsCallsInBackground() {
+    if (NW.saved === gwNext || !ownerKey() || D.source !== "live") return;
+    const j = NW.j || await fetch("api/teamnews", { cache: "no-store" }).then((r) => (r.ok ? r.json() : null)).catch(() => null); if (!j) return;
+    NW.j = j; await loadOptaGws();
+    const ids = newsDropped().map((d) => d.e.id).filter((id) => !(id in FA.summ)); if (ids.length) await fetchSumm(ids);
+    drawNews(true); await recordNewsCalls();
+  }
+  // Scorecard for the News start calls: how last gameweeks' calls did and what the model learned from them.
+  function newsLearnHTML() {
+    const C = NCAL, saved = C && C.saved && C.saved[gwNext];
+    const savedTxt = `<p class="note nw-saved">${saved ? `GW${gwNext}'s ${saved.items.length} calls are saved (latest ${new Date(saved.at).toLocaleString("en-GB", { timeZone: "Europe/London", weekday: "short", hour: "2-digit", minute: "2-digit" })}); the last save before the deadline is the one that's checked.` : ownerKey() ? `GW${gwNext}'s calls will be saved when this page finishes loading, and again on each visit until the deadline.` : `Calls are saved from your own devices (with your owner password), so open this tab on one of them before the deadline.`}</p>`;
+    if (!C || !C.gws.length) return `<div class="panel-head"><h3>How the start calls did</h3><span class="note">The learning loop</span></div>
+      <p class="note">Every "Likely to start" or "Doubt" call above is saved before the deadline. After GW${gwNext} it's checked against who actually started, and the results recalibrate future calls (by source: news, FPL flag or model) and teach the xP model what FPL's 25/50/75% flags really mean. The first results appear here once GW${gwNext} is finished.</p>${savedTxt}`;
+    const g = C.gws[C.gws.length - 1], L = C.items[g], acc = C.hits / C.n, brier = C.brier / C.n;
+    const SRC = { news: "News-based (Assumption)", flag: "FPL flag (Fact)", model: "Model (Projection)" }, BAND = ["0–25%", "25–50%", "50–75%", "75–100%"];
+    const rows = Object.entries(C.bins).flatMap(([src, bins]) => bins.map((b, i) => [src, i, b]).filter(([, , b]) => b.n)).map(([src, i, b]) => `<tr><td>${SRC[src] || src}</td><td>${BAND[i]}</td><td class="n">${b.n}</td><td class="n">${pct(b.pred / b.n)}</td><td class="n"><strong>${pct(b.started / b.n)}</strong></td><td class="n ${Math.abs(b.started / b.n - b.pred / b.n) >= 0.1 ? "down" : ""}">${b.started / b.n - b.pred / b.n >= 0 ? "+" : "−"}${Math.round(Math.abs(b.started / b.n - b.pred / b.n) * 100)} pts</td></tr>`).join("");
+    const flags = Object.entries(C.flagPlay).sort((a, b) => +a[0] - +b[0]).map(([c, f]) => `FPL ${c}% flags: ${f.played} of ${f.n} played (${pct(f.played / f.n)}), ${f.started} started${f.n >= 8 ? " (now used in the xP model)" : ` (used once there are 8+)`}`).join(". ");
+    const miss = L.filter((x) => (x.p >= 0.5) !== !!x.started).sort((a, b) => Math.abs(b.p - b.started) - Math.abs(a.p - a.started)).slice(0, 6);
+    return `<div class="panel-head"><h3>How the start calls did</h3><span class="note">${C.gws.length} gameweek${C.gws.length > 1 ? "s" : ""} checked: GW${C.gws.join(", GW")}</span></div>
+      <div class="kpis"><div class="kpi"><span class="k">Calls checked</span><span class="v">${C.n}</span><span class="s">${L.length} in GW${g}</span></div>
+        <div class="kpi"><span class="k">Right call</span><span class="v">${pct(acc)}</span><span class="s">50%+ called as a start</span></div>
+        <div class="kpi"><span class="k">Brier score</span><span class="v">${brier.toFixed(3)}</span><span class="s">lower is better; 0.25 is a coin flip</span></div></div>
+      <div class="tbl-wrap"><table class="nw-cal"><thead><tr><th>Source</th><th>Called</th><th class="n">Calls</th><th class="n">Average call</th><th class="n">Actually started</th><th class="n">Off by</th></tr></thead><tbody>${rows}</tbody></table></div>
+      <p class="note">Bands with 8+ calls now shift new calls of the same source towards what actually happened: the more calls, the bigger the shift, capped at 20 points. ${flags ? flags + "." : ""}</p>
+      ${miss.length ? `<p class="note"><strong>Biggest misses in GW${g}:</strong> ${miss.map((x) => `${esc(E[x.id]?.web_name || "?")} called ${pct(x.p)}, ${x.started ? `started (${x.mins}')` : x.played ? `came on (${x.mins}')` : "didn't play"}`).join("; ")}.</p>` : `<p class="note">Every call in GW${g} was right.</p>`}
+      ${savedTxt}`;
+  }
   async function renderNews() {
     const app = $("#app");
     app.innerHTML = `<section class="view"><div class="panel-head"><h2>News for GW${gwNext}</h2></div><p class="empty">Loading the latest club news and press conference updates…</p></section>`;
     if (OFF === undefined) await loadOfficial().catch(() => null);
+    await loadNotes().catch(() => null); // your notes, calibration and the start-call learning
     const j = await fetch("api/teamnews", { cache: "no-store" }).then((r) => (r.ok && (r.headers.get("content-type") || "").includes("json") ? r.json() : null)).catch(() => null);
     try { await loadOptaGws(); } catch (e) { /* the dropped check needs the gameweek stats */ }
     if (j) { try { const ids = newsDropped().map((d) => d.e.id).filter((id) => !(id in FA.summ)); if (ids.length) await fetchSumm(ids); } catch (e) { /* season rates used */ } }
     if (view !== "news") return;
     if (!j) { app.innerHTML = `<section class="view"><div class="panel-head"><h2>News for GW${gwNext}</h2></div><div class="err">News loads on the live site. Try again in a minute.</div></section>`; return; }
-    NW.j = j; drawNews();
+    NW.j = j; drawNews(); recordNewsCalls().then(() => { if (view === "news" && NW.savedAt) { const b = $("#nwLearn .nw-saved"); if (b) b.textContent = `GW${gwNext}'s ${NW.outlooks.length} calls are saved (latest ${new Date(NW.savedAt).toLocaleTimeString("en-GB", { hour: "2-digit", minute: "2-digit" })}); the last save before the deadline is the one that's checked.`; } });
   }
-  function drawNews() {
+  function drawNews(computeOnly = false) {
     const app = $("#app"), j = NW.j, now = Date.now();
     const started = D.events.filter((e) => e.deadline && Date.parse(e.deadline) <= now).sort((a, b) => Date.parse(b.deadline) - Date.parse(a.deadline))[0];
     const cutoff = started ? Date.parse(started.deadline) : now - 7 * 864e5;
@@ -6556,18 +6633,24 @@ td.fx2-c { padding: 4px 3px; }
         }
         break;
       }
+      const praw = p; p = newsCalibrate(p, src);
+      const calNote = Math.abs(p - praw) >= 0.02 ? ` Adjusted from ${pct(praw)} by how past ${src === "news" ? "news-based" : src === "flag" ? "FPL-flag" : "model"} calls turned out.` : "";
       const v = p >= 0.75 ? ["ok", "Likely to start"] : p >= 0.5 ? ["warn", "Doubt, leaning yes"] : p >= 0.25 ? ["warn", "Doubt"] : p > 0 ? ["bad", "Unlikely to start"] : ["bad", "Out"];
       const what = d ? (d.kind === "out" ? `didn't play in GW${d.last}` : d.kind === "red" ? `sent off in GW${d.last}` : d.kind === "bench" ? `came off the bench in GW${d.last} (${d.mins}')` : `taken off after ${d.mins}' in GW${d.last}`) : "";
       why = [flag ? `FPL: ${esc(e.news || flagTxt(e))}` : d ? `no FPL flag, so ${d.kind === "hooked" ? "possibly a knock or a tactical change" : "a selection call"}` : "",
         src === "news" && quote ? `latest news: "${esc(quote.title)}" (${esc(quote.source)}, ${ago(quote.date)})` : src === "model" ? `model start chance from his last 5 matches` : ""].filter(Boolean).join("; ");
-      return { e, d, p, v, lab, what, why };
+      return { e, d, p, praw, src, v, lab, what, why: why + (why ? "." : "") + calNote };
     };
+    const teamList = (tid) => [...new Map([...flagged(tid).map((e) => [e.id, null]), ...(dropByTeam[tid] || []).map((d) => [d.e.id, d])])].map(([id, d]) => outlook(E[id], d || (dropByTeam[tid] || []).find((x) => x.e.id === id)))
+      .sort((a, b) => (mine.has(b.e.id) - mine.has(a.e.id)) || (a.p - b.p));
+    const allOut = {}; D.teams.forEach((t) => (allOut[t.id] = teamList(t.id)));
+    NW.outlooks = Object.values(allOut).flat();
+    if (computeOnly) return;
     const card = (tid) => {
-      const list = [...new Map([...flagged(tid).map((e) => [e.id, null]), ...(dropByTeam[tid] || []).map((d) => [d.e.id, d])])].map(([id, d]) => outlook(E[id], d || (dropByTeam[tid] || []).find((x) => x.e.id === id)))
-        .sort((a, b) => (mine.has(b.e.id) - mine.has(a.e.id)) || (a.p - b.p));
+      const list = allOut[tid];
       return `<div class="cmp-card nw-card" id="nw-${tid}"><div class="nw-h">${T[tid]?.code != null ? `<img src="kit/${T[tid].code}.png" alt="" width="34" height="34" loading="lazy" onerror="this.remove()">` : ""}<div><h3>${esc(T[tid].name)}${myCount(tid) ? ` <span class="pill acc">${myCount(tid)} yours</span>` : ""}</h3><span class="note">${nextFx(tid)}${presser(tid) ? ` · ${presser(tid).charAt(0).toLowerCase() + presser(tid).slice(1)}` : ""}</span></div></div>
         ${list.length ? `<ul class="nw-ol">${list.map((o) => `<li class="${mine.has(o.e.id) ? "mine" : ""}"><div class="nw-ol-h"><strong>${esc(o.e.web_name)}</strong> <span class="note">${POSN(o.e)}</span>${mine.has(o.e.id) ? ` <span class="pill acc">Yours</span>` : ""}<span class="pill ${o.v[0]} nw-v">${o.v[1]}${o.p > 0 && o.p < 1 ? ` · ${pct(o.p)}` : ""}</span></div>
-          <div class="note">${o.what ? `${o.what.charAt(0).toUpperCase() + o.what.slice(1)}. ` : ""}${o.why ? o.why.charAt(0).toUpperCase() + o.why.slice(1) + "." : ""} <span class="lab ${{ Fact: "lab-fact", Projection: "lab-proj", Assumption: "lab-asm" }[o.lab]}">${o.lab}</span></div></li>`).join("")}</ul>` : `<p class="note">No injury, suspension or selection worries for key players.</p>`}</div>`;
+          <div class="note">${o.what ? `${o.what.charAt(0).toUpperCase() + o.what.slice(1)}. ` : ""}${o.why ? o.why.charAt(0).toUpperCase() + o.why.slice(1) : ""} <span class="lab ${{ Fact: "lab-fact", Projection: "lab-proj", Assumption: "lab-asm" }[o.lab]}">${o.lab}</span></div></li>`).join("")}</ul>` : `<p class="note">No injury, suspension or selection worries for key players.</p>`}</div>`;
     };
     app.innerHTML = `<section class="view">
       <div class="panel-head"><h2>News for GW${gwNext}</h2><span class="note">Refreshed ${ukT(j.fetched)} · news from before the GW${started ? started.id : gwCur} deadline (${ukT(cutoff)}) is removed</span></div>
@@ -6575,6 +6658,7 @@ td.fx2-c { padding: 4px 3px; }
       <div class="panel nw-ctl"><div class="seg" role="group">${[["mine", "Your teams"], ["all", "All teams"]].map(([k, l]) => `<button data-nwscope="${k}" aria-pressed="${NW.scope === k}">${l}</button>`).join("")}</div>
         <label class="nw-jump"><span class="k">Jump to</span><select id="nwJump"><option value="">Choose a team</option>${teams.map((tid) => `<option value="${tid}">${esc(T[tid].name)}</option>`).join("")}</select></label></div>
       <div class="nw-grid">${teams.map(card).join("")}</div>
+      <div class="panel" id="nwLearn">${newsLearnHTML()}</div>
       <p class="note">Sources: BBC Sport club feeds, BBC Sport and The Guardian Premier League feeds, and FPL's player flags, all fetched on every visit. Articles are matched to clubs by feed, club name or player name, and to players by their FPL name. Exact press conference times aren't in any free feed, so the expected day is an estimate. ${j.failed && j.failed.length ? `Couldn't reach the feed for ${j.failed.join(", ")} this time.` : ""}</p>
     </section>`;
     app.querySelectorAll("[data-nwscope]").forEach((b) => b.addEventListener("click", () => { NW.scope = b.dataset.nwscope; drawNews(); }));

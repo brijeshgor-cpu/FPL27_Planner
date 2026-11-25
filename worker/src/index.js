@@ -39,6 +39,10 @@ export default {
     const rec = /^rec\/(\d+)\/?$/.exec(path);
     if (rec) return ownerStore(request, env, "rec:" + rec[1], Number(rec[1]));
     if (path === "recs" || path === "recs/") return allRecs(env);
+    // News tab start calls, saved before each deadline and checked after the gameweek (learning loop)
+    const nrec = /^newsrec\/(\d+)\/?$/.exec(path);
+    if (nrec) return ownerStore(request, env, "newsrec:" + nrec[1], Number(nrec[1]), "newsrecs");
+    if (path === "newsrecs" || path === "newsrecs/") { const idx = (await env.ODDS.get("newsrecs", "json")) || []; const out = {}; for (const g of idx) out[g] = await env.ODDS.get("newsrec:" + g, "json"); return json(out, 200); }
     if (path === "owner-check") {
       if (request.method !== "POST") return new Response("Method not allowed", { status: 405 });
       const k = (request.headers.get("X-Owner-Key") || "").trim();
@@ -465,7 +469,7 @@ async function myTeamResponse(env) {
 // ---------- owner data: player notes and recorded advice ----------
 // Reads are public (the page shows them); writes need the X-Owner-Key header to match the OWNER_KEY
 // secret. Advice for a gameweek can only be written before that gameweek's deadline.
-async function ownerStore(request, env, key, gw) {
+async function ownerStore(request, env, key, gw, idxName = "recs") {
   if (request.method === "GET") return json((await env.ODDS.get(key, "json")) || (gw ? null : {}), 200);
   if (request.method !== "POST") return new Response("Method not allowed", { status: 405 });
   if (!env.OWNER_KEY) return json({ error: "OWNER_KEY isn't set in Cloudflare" }, 403);
@@ -476,8 +480,8 @@ async function ownerStore(request, env, key, gw) {
   if (gw) {
     const dl = await deadlineOf(gw);
     if (dl && Date.now() > dl) return json({ error: "deadline passed" }, 409);
-    const idx = (await env.ODDS.get("recs", "json")) || [];
-    if (!idx.includes(gw)) { idx.push(gw); await env.ODDS.put("recs", JSON.stringify(idx.sort((a, b) => a - b))); }
+    const idx = (await env.ODDS.get(idxName, "json")) || [];
+    if (!idx.includes(gw)) { idx.push(gw); await env.ODDS.put(idxName, JSON.stringify(idx.sort((a, b) => a - b))); }
   }
   await env.ODDS.put(key, text);
   return json({ ok: true }, 200);
