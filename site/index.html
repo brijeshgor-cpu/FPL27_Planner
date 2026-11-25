@@ -5432,7 +5432,7 @@ td.fx2-c { padding: 4px 3px; }
         xp: +gp1(e).toFixed(2), ps: +mp.pStart.toFixed(2), p70: +mp.p70.toFixed(2), xm: Math.round(mp.xMinsIfStart), lg: +(sc ? sc.lam : 0).toFixed(2), la: +((+e.expected_assists_per_90 || 0) * share * tf).toFixed(2), cs: o ? +o.cs.toFixed(2) : null, tf: o ? +o.lam.toFixed(2) : fixtureGoals(e.team, (teamFx[e.team][gwNext] || [])[0] || { opp: e.team, home: true }, gwNext + 1).for, nf: +noteFactor(e).toFixed(3), nk: noteOf(id) ? noteKeys(noteOf(id)) : [] };
     });
     const body = { v: 2, gw: gwNext, at: Date.now(), cap: cap ? cap.capId : null, vc: cap ? cap.vcId : null, capC: cap ? cap.capCands : null, capStance: cap ? cap.capStance : null, xi: bx.ids, squad: B.ids, buys, holds: adv.filter((x) => x.hold).map((x) => x.hold), preds };
-    const hash = JSON.stringify(["v2", body.cap, body.vc, body.xi, body.buys, body.holds, Object.keys(NOTES).length, body.capC]);
+    const hash = JSON.stringify(["v2-ctx", body.cap, body.vc, body.xi, body.buys, body.holds, Object.keys(NOTES).length, body.capC]);
     if (store.get("recHash:" + gwNext, "") === hash) return;
     try { await ownerPost(`rec/${gwNext}`, body); store.set("recHash:" + gwNext, hash); } catch (e) { /* tried; will retry on the next load */ }
   }
