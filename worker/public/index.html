@@ -2645,10 +2645,21 @@ td.fx2-c { padding: 4px 3px; }
       if (P(cover) < 2.5) weak.push(`projects only ${P(cover).toFixed(1)} xP`);
       if (weak.length) out.push({ sec: "bench", k: "warn", lab: "Projection", t: `Weak cover for ${nm(id)}: ${nm(cover)} would come on`, d: `Under the formation rules ${nm(cover)} is the first eligible substitute, but ${weak.join(", ")}.`, unc: `Matters only if ${nm(id)} misses out (${pct(MP(id).pAbsent)}).`, why: whyHTML([E[id], c]) });
     });
-    const outB = benchIds.slice(1), ideal = [...outB].sort((a, b) => P(b) * MP(b).pPlay - P(a) * MP(a).pPlay);
-    if (outB.join() !== ideal.join() && P(ideal[0]) * MP(ideal[0]).pPlay - P(outB[0]) * MP(outB[0]).pPlay >= 0.5) {
+    // Bench order: expected points if called on (xP × chance of playing), with the route to points breaking
+    // close calls: haul chance, penalties, and a defender facing one of the best attacks (low clean sheet chance).
+    const benchV = (id) => { const e = E[id], o = TO[e.team]; return P(id) * MP(id).pPlay + MP(id).pPlay * (2 * haulChance(e) + (e.penalties_order === 1 ? 0.15 : 0) - (e.element_type <= 2 && o && o.cs < 0.3 ? 0.25 : 0)); };
+    const outB = benchIds.slice(1), ideal = [...outB].sort((a, b) => benchV(b) - benchV(a));
+    // the higher-ceiling alternative for first sub, when it's close
+    const ev1 = (id) => P(id) * MP(id).pPlay, upB = outB.filter((id) => E[id].element_type > 1 && id !== ideal[0] && haulChance(E[id]) - haulChance(E[ideal[0]]) >= 0.03 && ev1(ideal[0]) - ev1(id) <= 1.2).sort((a, b) => haulChance(E[b]) - haulChance(E[a]))[0];
+    let upItem = null;
+    if (upB) {
+      const a1 = E[ideal[0]], u = E[upB], o1 = TO[a1.team], cost = ev1(ideal[0]) - ev1(upB);
+      upItem = ({ sec: "bench", k: "", lab: "Projection", t: `Upside bench order: ${nm(upB)} first`, d: `${nm(ideal[0])} is worth ${ev1(ideal[0]).toFixed(1)} expected pts if he's needed, ${nm(upB)} ${ev1(upB).toFixed(1)}, so the model keeps ${nm(ideal[0])} first. ${nm(upB)} has the higher ceiling: ${pct(haulChance(u))} haul chance vs ${pct(haulChance(a1))}${u.penalties_order === 1 ? ", and he's on penalties" : ""}${a1.element_type <= 2 && o1 ? `, while ${tShort(a1.team)} are ${pct(o1.cs)} to keep a clean sheet` : ""}. Putting ${nm(upB)} first costs about ${cost.toFixed(1)} pts on average, and only if a starter misses out.`, unc: "Bench order only matters if a starter doesn't play.", why: whyHTML([u, a1]), act: { a: "bench", ids: [upB, ...outB.filter((x) => x !== upB)], l: `Put ${E[upB].web_name} first` } });
+    }
+    if (outB.join() !== ideal.join() && benchV(ideal[0]) - benchV(outB[0]) >= 0.5) {
       out.push({ sec: "bench", k: "warn", lab: "Projection", t: `Reorder your bench: ${ideal.map(nm).join(", ")}`, d: `${nm(ideal[0])} is the most valuable substitute (${P(ideal[0]).toFixed(1)} xP, ${pct(MP(ideal[0]).pPlay)} to play) but is ${["first", "second", "third"][outB.indexOf(ideal[0])]} in line. FPL brings substitutes on in bench order.`, unc: "Only matters if a starter misses out.", why: whyHTML(ideal.map((id) => E[id])), act: { a: "bench", ids: ideal, l: "Apply bench order" } });
     } else out.push({ sec: "bench", k: "good", lab: "Projection", t: "Bench order is right", d: `If a starter misses out, ${(() => { const s = benchIds.slice(1).find((id) => MP(id).pPlay >= 0.5); return s ? `${nm(s)} (${P(s).toFixed(1)} xP) is first in line` : "your bench covers the formation"; })()}.` });
+    if (upItem) out.push(upItem);
     if (!out.some((x) => x.sec === "risk")) out.push({ sec: "risk", k: "good", lab: "Projection", t: "No minutes or availability risks in your XI", d: "Every starter is fit, has a fixture and has been starting regularly.", unc: `Team news from the press conferences before the GW${gwNext} deadline.` });
 
     out.push(...gwBuys(st), ...gwChips(st));
@@ -5429,10 +5440,11 @@ td.fx2-c { padding: 4px 3px; }
       const xg = (+e.expected_goals_per_90 || 0) * share, tf = sc && xg > 0.01 ? sc.lam / xg : 1;
       const fx0 = (teamFx[e.team][gwNext] || [])[0];
       preds[id] = { fd: fx0 ? Math.max(...(teamFx[e.team][gwNext] || []).map((f) => f.fdr)) : null, h: fx0 ? (fx0.home ? 1 : 0) : null, fo: +(+e.form || 0).toFixed(1), pp: +(+e.points_per_game || 0).toFixed(1),
+        t: e.element_type, pen: e.penalties_order === 1 ? 1 : 0, oga: fx0 ? +recentConceded(fx0.opp).toFixed(2) : null, hc: +haulChance(e).toFixed(3),
         xp: +gp1(e).toFixed(2), ps: +mp.pStart.toFixed(2), p70: +mp.p70.toFixed(2), xm: Math.round(mp.xMinsIfStart), lg: +(sc ? sc.lam : 0).toFixed(2), la: +((+e.expected_assists_per_90 || 0) * share * tf).toFixed(2), cs: o ? +o.cs.toFixed(2) : null, tf: o ? +o.lam.toFixed(2) : fixtureGoals(e.team, (teamFx[e.team][gwNext] || [])[0] || { opp: e.team, home: true }, gwNext + 1).for, nf: +noteFactor(e).toFixed(3), nk: noteOf(id) ? noteKeys(noteOf(id)) : [] };
     });
     const body = { v: 2, gw: gwNext, at: Date.now(), cap: cap ? cap.capId : null, vc: cap ? cap.vcId : null, capC: cap ? cap.capCands : null, capStance: cap ? cap.capStance : null, xi: bx.ids, squad: B.ids, buys, holds: adv.filter((x) => x.hold).map((x) => x.hold), preds };
-    const hash = JSON.stringify(["v2-ctx", body.cap, body.vc, body.xi, body.buys, body.holds, Object.keys(NOTES).length, body.capC]);
+    const hash = JSON.stringify(["v2-ctx2", body.cap, body.vc, body.xi, body.buys, body.holds, Object.keys(NOTES).length, body.capC]);
     if (store.get("recHash:" + gwNext, "") === hash) return;
     try { await ownerPost(`rec/${gwNext}`, body); store.set("recHash:" + gwNext, hash); } catch (e) { /* tried; will retry on the next load */ }
   }
@@ -5696,17 +5708,32 @@ td.fx2-c { padding: 4px 3px; }
     if (Object.keys(rel).length) out.noteRel = rel;
     return out;
   }
+  // A team's recent defensive form: goals conceded per game over its last 4 finished matches (season rate if fewer).
+  const OPPF = {};
+  function recentConceded(team) {
+    if (OPPF[team] != null) return OPPF[team];
+    const fin = D.fixtures.filter((f) => f[7] && f[9] != null && (f[2] === team || f[3] === team)).sort((a, b) => Date.parse(b[6]) - Date.parse(a[6]));
+    const last = fin.slice(0, 4), ga = (f) => (f[2] === team ? f[10] : f[9]);
+    return (OPPF[team] = last.length ? last.reduce((s, f) => s + ga(f), 0) / last.length : 1.3);
+  }
   // Prediction context buckets: fixture difficulty, venue, the bookmakers' expected goals for his team, and form
   // against points per game. calibrate() learns a factor per bucket (against the underlying numbers, after the
   // position factor); ctxFactor() applies them to new predictions.
   const CTX_L = { "fdr:easy": "Easy fixtures (FDR 1–2)", "fdr:mid": "Medium fixtures (FDR 3)", "fdr:hard": "Hard fixtures (FDR 4–5)", "venue:home": "At home", "venue:away": "Away",
-    "odds:low": "Team expected to score under 1.2", "odds:mid": "Team expected to score 1.2–1.8", "odds:high": "Team expected to score 1.8+", "form:hot": "Hot form (form 2+ above his average)", "form:normal": "Normal form", "form:cold": "Cold form (form 2+ below his average)" };
+    "odds:low": "Team expected to score under 1.2", "odds:mid": "Team expected to score 1.2–1.8", "odds:high": "Team expected to score 1.8+", "form:hot": "Hot form (form 2+ above his average)", "form:normal": "Normal form", "form:cold": "Cold form (form 2+ below his average)",
+    "role:pens": "First-choice penalty taker", "def-hard": "Defenders and keepers, hard fixture (FDR 4–5)", "def-mid": "Defenders and keepers, medium fixture", "def-easy": "Defenders and keepers, easy fixture (FDR 1–2)",
+    "att-hard": "Midfielders and forwards, hard fixture (FDR 4–5)", "att-mid": "Midfielders and forwards, medium fixture", "att-easy": "Midfielders and forwards, easy fixture (FDR 1–2)",
+    "opp:leaky": "Opponent leaking goals lately (2+ a game, last 4)", "opp:tight": "Opponent tight lately (0.75 or fewer a game, last 4)" };
   const ctxKeys = (c) => [c.fd == null ? null : c.fd <= 2 ? "fdr:easy" : c.fd === 3 ? "fdr:mid" : "fdr:hard", c.h == null ? null : c.h ? "venue:home" : "venue:away",
-    c.tf == null ? null : c.tf < 1.2 ? "odds:low" : c.tf <= 1.8 ? "odds:mid" : "odds:high", c.fo == null || c.pp == null ? null : c.fo - c.pp >= 2 ? "form:hot" : c.pp - c.fo >= 2 ? "form:cold" : "form:normal"].filter(Boolean);
+    c.tf == null ? null : c.tf < 1.2 ? "odds:low" : c.tf <= 1.8 ? "odds:mid" : "odds:high", c.fo == null || c.pp == null ? null : c.fo - c.pp >= 2 ? "form:hot" : c.pp - c.fo >= 2 ? "form:cold" : "form:normal",
+    c.pen == null ? null : c.pen ? "role:pens" : null,
+    c.t == null || c.fd == null ? null : (c.t <= 2 ? "def" : "att") + (c.fd >= 4 ? "-hard" : c.fd <= 2 ? "-easy" : "-mid"),
+    c.oga == null ? null : c.oga >= 2 ? "opp:leaky" : c.oga <= 0.75 ? "opp:tight" : null].filter(Boolean);
   function ctxFactor(e, n = 1, TO = null) {
     if (!CAL || !CAL.ctx) return 1;
     const fx = teamFx[e.team][gwNext] || [], f0 = fx[0], o = (TO && TO[e.team]) || null;
-    const c = { fd: f0 ? Math.max(...fx.map((f) => f.fdr)) : null, h: f0 ? (f0.home ? 1 : 0) : null, tf: o ? o.lam : null, fo: +e.form || 0, pp: +e.points_per_game || 0 };
+    const c = { fd: f0 ? Math.max(...fx.map((f) => f.fdr)) : null, h: f0 ? (f0.home ? 1 : 0) : null, tf: o ? o.lam : null, fo: +e.form || 0, pp: +e.points_per_game || 0,
+      t: e.element_type, pen: e.penalties_order === 1 ? 1 : 0, oga: f0 ? recentConceded(f0.opp) : null };
     let k = 1; ctxKeys(c).forEach((key) => { const v = CAL.ctx[key]; if (v && v[0] >= 25) k *= v[1]; });
     k = Math.max(0.85, Math.min(1.15, k));
     return 1 + (k - 1) / Math.max(1, n); // the context is this gameweek's, so it fades over a longer horizon

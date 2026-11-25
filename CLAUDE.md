@@ -114,6 +114,13 @@ The owner's standing brief. Every new feature, insight or recommendation must fo
   ceiling is worth it. (From GW12: Calvert-Lewin at home to Coventry, 53% to score and 19% haul chance, over
   Wirtz away at Everton, 18% and 7%, whose 7.7 xP leaned on recent form.)
 
+- **Bench order and the route to points.** Order the bench on expected points if called on, but weigh the
+  ceiling on close calls: an attacking player on penalties with a real haul chance (Gibbs-White, home to a Chelsea
+  side weakened by injuries) can be worth more than a defender facing one of the best attacks (Konsa against Man
+  City). When the model's order and the higher-ceiling order differ, show both, with the average cost. Opponent
+  form (injury dips, recent goals conceded) belongs in the analysis, and the learning tests whether it matters.
+  (From GW12.)
+
 ### Output format for recommendations
 Every recommendation item should carry:
 - **a decision:** the headline action, such as "Start X over Y" or "Captain X, vice Y";
@@ -249,6 +256,15 @@ bench order, transfers or chip before the deadline?*
   `pickAccHTML()` (Train → Learning from results) shows, per position, the rank correlation of predicted xP with
   points and with deserved points, and how often the top 5 predicted finished in the top half; a table shows each
   context's predicted vs deserved and its correction.
+- **Bench order (in `gwAdvice()`):** `benchV` = xP × chance of playing + chance of playing × (2 × haul chance + 0.15 for
+  the penalty taker − 0.25 for a defender or keeper whose team is under 30% to keep a clean sheet). When a bench
+  attacker has a 3+ point higher haul chance and is within 1.2 expected points of the model's first sub, an "Upside
+  bench order" item shows both, with the average cost and an Apply button.
+- **More context buckets for learning:** besides fixture, venue, odds and form, `ctxKeys()` covers the first-choice
+  penalty taker (`role:pens`), position × fixture (`def-`/`att-` easy, mid or hard) and opponent recent form
+  (`opp:leaky` at 2+ goals conceded a game over their last 4, `opp:tight` at 0.75 or fewer, from
+  `recentConceded()`). `recordAdvice()` saves `t`, `pen`, `oga` and the haul chance `hc` with each prediction, so
+  the learning can test the owner's bench and captain reasoning against results.
 - **Your strategy:** `STRAT_RULES`, saved to `/api/strategy` (owner only), with priority levels Off to
   Critical. They change decisions:
   - nailed: the buy start-rate floor;
