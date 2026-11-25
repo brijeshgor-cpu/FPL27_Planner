@@ -2342,6 +2342,60 @@ td.fx2-c { padding: 4px 3px; }
   // From the last 5 team matches (FPL match history), blended with the season rate (worth 2 matches)
   // and scaled by FPL's chance of playing. A start is counted at 50+ minutes (a half-time sub plays 45).
   // pAbsent: doesn't play at all (a legal auto-sub can cover). pCameo: comes off the bench (cover is lost).
+  // ---- Midweek matches (Champions League, Europa League, Conference League, EFL Cup, FA Cup) ----
+  // /api/midweek (ESPN) lists each Premier League club's matches since the last deadline, with every player's role.
+  // mwInfo(e) matches a player by club and surname; mwStartEffect() turns it into a start-chance adjustment
+  // (an Assumption until the learning loop has checked it: NCAL.mw).
+  let MW = null;
+  async function loadMidweek() {
+    if (D.source !== "live" || MW) return;
+    const j = await fetch("api/midweek", { cache: "no-store" }).then((r) => (r.ok ? r.json() : null)).catch(() => null);
+    if (!j || !j.matches) { MW = { byId: {}, clubs: {}, pending: [] }; return; }
+    const nn = (x) => String(x || "").normalize("NFD").replace(/[̀-ͯ]/g, "").toLowerCase().replace(/[^a-z ]/g, " ").trim();
+    const byId = {}, clubs = {};
+    j.matches.forEach((m) => {
+      const ts = m.teams.map((n) => oddsTeamId(n));
+      ts.forEach((tid, i) => {
+        if (!tid) return;
+        const opp = m.teams[1 - i], when = Date.parse(m.date);
+        (clubs[tid] ||= []).push({ comp: m.comp, opp, date: when, score: m.score });
+        const roster = m.players.filter((p) => oddsTeamId(p.team) === tid);
+        Object.values(E).filter((e) => e.team === tid).forEach((e) => {
+          const keys = [nn(e.second_name), nn(e.web_name)].filter((k) => k.length >= 3);
+          const p = roster.find((x) => { const full = nn(x.name), last = nn(x.last); return keys.some((k) => last === k || full.endsWith(" " + k) || full === k || last.endsWith(" " + k)); });
+          const rec = { comp: m.comp, opp, date: when, inSquad: !!p, started: !!(p && p.started), subIn: !!(p && p.subIn), min: p ? p.min : 0 };
+          if (!byId[e.id] || byId[e.id].date < when) byId[e.id] = rec;
+        });
+      });
+    });
+    MW = { byId, clubs, pending: j.pending || [], fetched: j.fetched };
+  }
+  function mwInfo(e) {
+    const m = MW && MW.byId[e.id]; if (!m) return null;
+    const fx = D.fixtures.find((f) => f[1] === gwNext && (f[2] === e.team || f[3] === e.team));
+    const ko = fx && fx[6] ? Date.parse(fx[6]) : null; if (!ko || m.date > ko) return null;
+    const gap = Math.round((ko - m.date) / 864e5);
+    const kind = !m.inSquad ? "mw-out" : m.started && m.min >= 75 ? "mw-full" : m.started ? "mw-part" : m.subIn ? "mw-sub" : "mw-unused";
+    return { ...m, gap, kind };
+  }
+  // Returns { a, f, boost, note } for minutesProfile: a new availability floor, a start multiplier and a pull towards starting.
+  function mwStartEffect(e, a, rStart) {
+    const m = mwInfo(e); if (!m) return null;
+    const day = new Date(m.date).toLocaleDateString("en-GB", { timeZone: "Europe/London", weekday: "short" });
+    const vs = `v ${m.opp} (${m.comp}, ${day})`, flagged = e.status === "d" || (e.chance_of_playing_next_round != null && e.chance_of_playing_next_round < 100);
+    const kk = flagged && m.min >= 45 ? "mw-fit" : m.kind, A1 = (NCAL && NCAL.mw && NCAL.mw[kk]) || { n: 0, pred: 0, started: 0 }, A2 = MWL[kk] || { n: 0, pred: 0, started: 0 };
+    const L = { n: A1.n + A2.n, pred: A1.pred + A2.pred, started: A1.started + A2.started };
+    const learned = L && L.n >= 8 ? Math.max(0.8, Math.min(1.2, 1 + (L.n / (L.n + 15)) * (L.started / L.n - L.pred / L.n))) : 1;
+    let r = { a, f: 1, boost: 0, kind: m.kind, note: "" };
+    if (flagged && m.min >= 45) r = { ...r, a: Math.max(a, 0.9), kind: "mw-fit", note: `Played ${m.min}' ${vs} despite his flag, so he looks fit.` };
+    else if (m.kind === "mw-full") r = { ...r, f: m.gap <= 3 ? 0.85 : m.gap === 4 ? 0.93 : 0.97, note: `Played ${m.min}' ${vs}; GW${gwNext} is ${m.gap} day${m.gap === 1 ? "" : "s"} later${m.gap <= 3 ? ", so real rotation risk" : m.gap === 4 ? ", some rotation risk" : ", so only a small rotation risk"}.` };
+    else if (m.kind === "mw-part") r = { ...r, f: 0.97, note: `Started ${vs} but came off after ${m.min}', with his minutes possibly managed for the weekend.` };
+    else if (m.kind === "mw-sub") r = { ...r, boost: rStart >= 0.6 ? 0.25 : 0, note: `Came off the bench ${vs} (${m.min}'), ${rStart >= 0.6 ? "which suggests he was saved for the weekend" : "in line with his role"}.` };
+    else if (m.kind === "mw-unused") r = { ...r, boost: rStart >= 0.6 && !flagged ? 0.3 : 0, note: `An unused substitute ${vs}${rStart >= 0.6 && !flagged ? ", which looks like rest for the weekend" : ""}.` };
+    else if (m.kind === "mw-out") r = { ...r, note: `Not in the squad ${vs}${flagged || e.status !== "a" ? ", in line with his flag" : ", rested or a knock; check the press conference"}.` };
+    r.learned = learned;
+    return r;
+  }
   function minutesProfile(e) {
     const nt = noteOf(e.id);
     const ntE = noteEffect(e);
@@ -2356,8 +2410,11 @@ td.fx2-c { padding: 4px 3px; }
     const hasFx = (teamFx[e.team][gwNext] || []).length > 0;
     const blend = (k, s) => (k + 2 * s) / (n + 2);
     const rStart = Math.min(1, blend(st, sStart) * ntE.start * (CAL && CAL.start ? CAL.start : 1)), rPlay = Math.max(rStart, blend(app, sApp));
-    const pStart = hasFx ? a * rStart : 0, p70 = hasFx ? a * blend(f70, s70) : 0, p60 = hasFx ? a * blend(f60, s60) : 0;
-    const pPlay = hasFx ? a * rPlay : 0, pCameo = Math.max(0, pPlay - pStart), pAbsent = hasFx ? 1 - pPlay : 1;
+    // midweek matches: rotation risk after a full game, a rest that points to a weekend start, a flagged player who played
+    const mwE = hasFx ? mwStartEffect(e, a, rStart) : null, aM = mwE ? mwE.a : a;
+    const mwAdj = (p) => (mwE ? Math.min(aM, (p + (aM - p) * mwE.boost) * mwE.f * mwE.learned) : p);
+    const pStart = hasFx ? mwAdj(aM * rStart) : 0, p70 = hasFx ? Math.min(pStart, mwAdj(aM * blend(f70, s70))) : 0, p60 = hasFx ? Math.min(pStart, mwAdj(aM * blend(f60, s60))) : 0;
+    const pPlay = hasFx ? Math.max(pStart, mwAdj(aM * rPlay)) : 0, pCameo = Math.max(0, pPlay - pStart), pAbsent = hasFx ? 1 - pPlay : 1;
     const startMins = h.filter((x) => x[1] >= 50).map((x) => x[1]);
     const xMinsIfStart = startMins.length ? startMins.reduce((s, m) => s + m, 0) / startMins.length : Math.min(90, e.starts ? e.minutes / e.starts : 0);
     // Genuinely playable (the 14-of-15 rule): fit, not flagged, an established starter, not a cameo player.
@@ -2365,7 +2422,7 @@ td.fx2-c { padding: 4px 3px; }
     const label = !hasFx ? `No GW${gwNext} match` : pStart >= 0.85 ? "Nailed" : pStart >= 0.65 ? "Likely starter" : pStart >= 0.4 ? "Rotation risk" : "Unlikely to start";
     const gws = h.length ? `GW${h[h.length - 1][0]}–${h[0][0]}` : "";
     const pattern = n ? `Started ${st} of his last ${n} (${gws})${f70 < st ? `, ${st - f70 === 1 ? "once" : st - f70 + " times"} taken off before 70'` : ""}${cameo ? `, ${cameo} cameo${cameo > 1 ? "s" : ""} under 30'` : ""}${dnp ? `, ${dnp} unused` : ""}` : `${e.starts} starts in ${gp} team matches this season`;
-    return { pStart, p60, p70, pPlay, pCameo, pAbsent, xMinsIfStart, playable, rStart, hasFx, label, n, st, f70, cameo, off, dnp, pattern, mins: h.slice().reverse().map((x) => `GW${x[0]} ${x[1]}'`), a };
+    return { pStart, p60, p70, pPlay, pCameo, pAbsent, xMinsIfStart, playable, rStart, hasFx, label, n, st, f70, cameo, off, dnp, pattern, mins: h.slice().reverse().map((x) => `GW${x[0]} ${x[1]}'`), a: aM, mw: mwE };
   }
   const confCls = (p) => (p >= 0.85 ? "ok" : p >= 0.65 ? "" : p >= 0.4 ? "sev2" : "sev3");
   // Momentum and fixture: a player who returned in his last match and has an easy next fixture is kept
@@ -5308,7 +5365,7 @@ td.fx2-c { padding: 4px 3px; }
   function loadNotes() {
     if (notesP) return notesP;
     const get = (p) => (D.source === "live" ? fetch("api/" + p, { cache: "no-store" }).then((r) => (r.ok ? r.json() : null)).catch(() => null) : Promise.resolve(null));
-    return (notesP = Promise.all([get("notes"), get("calib"), get("strategy"), loadNewsCal().catch(() => null), capLearn().catch(() => null)]).then(([n, c, st]) => { NOTES = n || {}; CAL = c && (c.f || c.start || c.noteRel || c.ctx) ? c : null; STRAT = st || {}; XS.clear(); NF.clear(); }));
+    return (notesP = Promise.all([get("notes"), get("calib"), get("strategy"), loadNewsCal().catch(() => null), capLearn().catch(() => null), loadMidweek().catch(() => null)]).then(([n, c, st]) => { NOTES = n || {}; CAL = c && (c.f || c.start || c.noteRel || c.ctx) ? c : null; STRAT = st || {}; XS.clear(); NF.clear(); }));
   }
   // A note holds any number of overall calls (tags) and what-you-saw categories (cats: {key: "+" | "-"}).
   // Older notes with a single `tag` still work.
@@ -5440,11 +5497,11 @@ td.fx2-c { padding: 4px 3px; }
       const xg = (+e.expected_goals_per_90 || 0) * share, tf = sc && xg > 0.01 ? sc.lam / xg : 1;
       const fx0 = (teamFx[e.team][gwNext] || [])[0];
       preds[id] = { fd: fx0 ? Math.max(...(teamFx[e.team][gwNext] || []).map((f) => f.fdr)) : null, h: fx0 ? (fx0.home ? 1 : 0) : null, fo: +(+e.form || 0).toFixed(1), pp: +(+e.points_per_game || 0).toFixed(1),
-        t: e.element_type, pen: e.penalties_order === 1 ? 1 : 0, oga: fx0 ? +recentConceded(fx0.opp).toFixed(2) : null, hc: +haulChance(e).toFixed(3),
+        t: e.element_type, pen: e.penalties_order === 1 ? 1 : 0, oga: fx0 ? +recentConceded(fx0.opp).toFixed(2) : null, hc: +haulChance(e).toFixed(3), mw: mp.mw ? mp.mw.kind : null,
         xp: +gp1(e).toFixed(2), ps: +mp.pStart.toFixed(2), p70: +mp.p70.toFixed(2), xm: Math.round(mp.xMinsIfStart), lg: +(sc ? sc.lam : 0).toFixed(2), la: +((+e.expected_assists_per_90 || 0) * share * tf).toFixed(2), cs: o ? +o.cs.toFixed(2) : null, tf: o ? +o.lam.toFixed(2) : fixtureGoals(e.team, (teamFx[e.team][gwNext] || [])[0] || { opp: e.team, home: true }, gwNext + 1).for, nf: +noteFactor(e).toFixed(3), nk: noteOf(id) ? noteKeys(noteOf(id)) : [] };
     });
     const body = { v: 2, gw: gwNext, at: Date.now(), cap: cap ? cap.capId : null, vc: cap ? cap.vcId : null, capC: cap ? cap.capCands : null, capStance: cap ? cap.capStance : null, xi: bx.ids, squad: B.ids, buys, holds: adv.filter((x) => x.hold).map((x) => x.hold), preds };
-    const hash = JSON.stringify(["v2-ctx2", body.cap, body.vc, body.xi, body.buys, body.holds, Object.keys(NOTES).length, body.capC]);
+    const hash = JSON.stringify(["v2-ctx3", body.cap, body.vc, body.xi, body.buys, body.holds, Object.keys(NOTES).length, body.capC]);
     if (store.get("recHash:" + gwNext, "") === hash) return;
     try { await ownerPost(`rec/${gwNext}`, body); store.set("recHash:" + gwNext, hash); } catch (e) { /* tried; will retry on the next load */ }
   }
@@ -6564,13 +6621,14 @@ td.fx2-c { padding: 4px 3px; }
   // Each gameweek's advice record keeps the close captain options (xP, haul chance, league EO). After the gameweek,
   // capLearn() replays the choice with haul weights 0–6 and keeps the weight whose picks scored the most
   // (doubled), shrunk towards the default 3 until there are 4+ gameweeks. capHaulW() is used by gwAdvice.
-  let CAPL = null;
+  let CAPL = null, MWL = {};
   const capHaulW = () => (CAPL && CAPL.n >= 4 ? CAPL.w : 3);
   async function capLearn() {
     if (D.source !== "live") return;
     const recs = await fetch("api/recs", { cache: "no-store" }).then((r) => (r.ok ? r.json() : null)).catch(() => null); if (!recs) return;
     const gws = Object.keys(recs).map(Number).filter((g) => recs[g] && recs[g].capC && recs[g].capC.length > 1 && g <= gwCur);
-    await Promise.all(gws.filter((g) => !OS.gw[g] || !OS.gw[g].final).map((g) => fetch(`api/gwstats/${g}`).then((r) => (r.ok ? r.json() : null)).then((j) => { if (j && j.els) OS.gw[g] = j; }).catch(() => null)));
+    const need = Object.keys(recs).map(Number).filter((g) => recs[g] && g <= gwCur);
+    await Promise.all(need.filter((g) => !OS.gw[g] || !OS.gw[g].final).map((g) => fetch(`api/gwstats/${g}`).then((r) => (r.ok ? r.json() : null)).then((j) => { if (j && j.els) OS.gw[g] = j; }).catch(() => null)));
     const done = gws.filter((g) => OS.gw[g] && OS.gw[g].final), W = [0, 1.5, 3, 4.5, 6], tot = W.map(() => 0), log = [];
     done.forEach((g) => {
       const R = recs[g], pts = (id) => (OS.gw[g].els[id] ? OS.gw[g].els[id][OI.PTS] : 0), best = Math.max(...R.capC.map((c) => pts(c.id)));
@@ -6580,6 +6638,11 @@ td.fx2-c { padding: 4px 3px; }
       const topX = [...R.capC].sort((a, b) => b.p * b.cb - a.p * a.cb)[0]; // expected points alone
       log.push({ g, chose: R.cap, chosePts: pts(R.cap), top: topX.id, topPts: pts(topX.id), best });
     });
+    // midweek effect: how often players with each kind of midweek actually started, against the predicted start chance
+    const mwl = {};
+    Object.keys(recs).map(Number).filter((g) => recs[g] && recs[g].preds && OS.gw[g] && OS.gw[g].final).forEach((g) => Object.entries(recs[g].preds).forEach(([id, pr]) => {
+      if (!pr.mw) return; const r = OS.gw[g].els[id], b = (mwl[pr.mw] ||= { n: 0, pred: 0, started: 0 }); b.n++; b.pred += pr.ps || 0; b.started += r && r[OI.ST] > 0 ? 1 : 0; }));
+    MWL = mwl;
     if (!done.length) { CAPL = { n: 0, w: 3, log }; return; }
     const mx = Math.max(...tot), raw = W.filter((w, i) => tot[i] === mx).sort((a, b) => Math.abs(a - 3) - Math.abs(b - 3))[0]; // ties stay nearest the default
     CAPL = { n: done.length, w: +(3 + (raw - 3) * Math.min(1, done.length / 8)).toFixed(2), raw, tot, W, log };
@@ -6608,6 +6671,7 @@ td.fx2-c { padding: 4px 3px; }
         const b = ((cal.bins[it.src] ||= [0, 1, 2, 3].map(() => ({ n: 0, pred: 0, started: 0 }))))[NB(it.pr)];
         b.n++; b.pred += it.pr; b.started += started;
         if (it.c > 0 && it.c < 100) { const fp = (cal.flagPlay[it.c] ||= { n: 0, played: 0, started: 0 }); fp.n++; fp.played += played; fp.started += started; }
+        if (it.mw) { const mb = ((cal.mw ||= {})[it.mw] ||= { n: 0, pred: 0, started: 0 }); mb.n++; mb.pred += it.p; mb.started += started; }
         cal.n++; cal.brier += (it.p - started) ** 2; cal.hits += (it.p >= 0.5) === !!started ? 1 : 0;
         res.push({ ...it, started, played, mins: r ? r[OI.M] : 0 });
       });
@@ -6625,7 +6689,7 @@ td.fx2-c { padding: 4px 3px; }
   async function recordNewsCalls() {
     if (!ownerKey() || D.source !== "live" || !NW.outlooks || NW.saved === gwNext) return;
     const ev = D.events.find((x) => x.id === gwNext); if (!ev || Date.now() > Date.parse(ev.deadline)) return;
-    const items = NW.outlooks.map((o) => ({ id: o.e.id, p: +o.p.toFixed(3), pr: +o.praw.toFixed(3), src: o.src, c: o.e.chance_of_playing_next_round ?? (o.e.status === "d" ? 75 : null), st: o.e.status, k: o.d ? o.d.kind : null, v: o.v[1] }));
+    const items = NW.outlooks.map((o) => ({ id: o.e.id, p: +o.p.toFixed(3), pr: +o.praw.toFixed(3), src: o.src, c: o.e.chance_of_playing_next_round ?? (o.e.status === "d" ? 75 : null), st: o.e.status, k: o.d ? o.d.kind : null, v: o.v[1], mw: o.mw }));
     try { await ownerPost(`newsrec/${gwNext}`, { gw: gwNext, at: Date.now(), items }); NW.saved = gwNext; NW.savedAt = Date.now(); } catch (e) { /* try again next visit */ }
   }
   // From other tabs: work out this gameweek's calls in the background so they're saved even if the News tab isn't opened.
@@ -6746,13 +6810,14 @@ td.fx2-c { padding: 4px 3px; }
         }
         break;
       }
+      const mwNote = mp.mw && mp.mw.note ? ` ${mp.mw.note}` : "";
       const praw = p; p = newsCalibrate(p, src);
       const calNote = Math.abs(p - praw) >= 0.02 ? ` Adjusted from ${pct(praw)} by how past ${src === "news" ? "news-based" : src === "flag" ? "FPL-flag" : "model"} calls turned out.` : "";
       const v = p >= 0.75 ? ["ok", "Likely to start"] : p >= 0.5 ? ["warn", "Doubt, leaning yes"] : p >= 0.25 ? ["warn", "Doubt"] : p > 0 ? ["bad", "Unlikely to start"] : ["bad", "Out"];
       const what = d ? (d.kind === "out" ? `didn't play in GW${d.last}` : d.kind === "red" ? `sent off in GW${d.last}` : d.kind === "bench" ? `came off the bench in GW${d.last} (${d.mins}')` : `taken off after ${d.mins}' in GW${d.last}`) : "";
       why = [flag ? `FPL: ${esc(e.news || flagTxt(e))}` : d ? `no FPL flag, so ${d.kind === "hooked" ? "possibly a knock or a tactical change" : "a selection call"}` : "",
         src === "news" && quote ? `latest news: "${esc(quote.title)}" (${esc(quote.source)}, ${ago(quote.date)})` : src === "model" ? `model start chance from his last 5 matches` : ""].filter(Boolean).join("; ");
-      return { e, d, p, praw, src, v, lab, what, why: why + (why ? "." : "") + calNote };
+      return { e, d, p, praw, src, v, lab, what, why: why + (why ? "." : "") + mwNote + calNote, mw: mp.mw ? mp.mw.kind : null };
     };
     const teamList = (tid) => [...new Map([...flagged(tid).map((e) => [e.id, null]), ...(dropByTeam[tid] || []).map((d) => [d.e.id, d])])].map(([id, d]) => outlook(E[id], d || (dropByTeam[tid] || []).find((x) => x.e.id === id)))
       .sort((a, b) => (mine.has(b.e.id) - mine.has(a.e.id)) || (a.p - b.p));

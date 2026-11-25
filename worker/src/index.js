@@ -55,6 +55,7 @@ export default {
     if (path === "odds" || path === "odds/") return odds(env);
     if (path === "news" || path === "news/") return news();
     if (path === "teamnews" || path === "teamnews/") return teamNews();
+    if (path === "midweek" || path === "midweek/") return midweek(env, url.searchParams.get("debug"));
     if (path === "my-team" || path === "my-team/") return myTeamResponse(env);
     const gpl = /^gwplayers\/(\d+)\/?$/.exec(path);
     if (gpl) return gwPlayers(Number(gpl[1]), url.searchParams.get("ids"));
@@ -289,6 +290,57 @@ async function teamNews() {
   const keep = (l) => l.filter((x) => !x.date || x.date >= since);
   return json({ fetched: Date.now(), clubs: Object.fromEntries(clubs.map(([s, r]) => [s, keep(r.items)])), failed: clubs.filter(([, r]) => r.error).map(([s]) => s),
     general: keep(general.flatMap((r) => r.items)) }, 200);
+}
+
+// ---------- Midweek matches (European and domestic cups) from ESPN's public feed ----------
+// FPL only covers the Premier League, so who started, came on or rested in midweek comes from ESPN.
+// Returns the last 6 days' finished matches involving Premier League clubs, with each player's role.
+// Cached in KV for 30 minutes.
+const MW_COMPS = [["uefa.champions", "Champions League"], ["uefa.europa", "Europa League"], ["uefa.europa.conf", "Conference League"], ["eng.league_cup", "EFL Cup"], ["eng.fa", "FA Cup"]];
+const espn = (path) => fetch("https://site.api.espn.com/apis/site/v2/sports/soccer/" + path, { headers: { "User-Agent": "Mozilla/5.0", Accept: "application/json" } }).then((r) => (r.ok ? r.json() : null)).catch(() => null);
+async function midweek(env, debug) {
+  const key = "midweek";
+  if (!debug && env.ODDS) { const c = await env.ODDS.get(key, "json"); if (c && Date.now() - c.fetched < 30 * 60 * 1000) return json(c, 200); }
+  const ymd = (t) => new Date(t).toISOString().slice(0, 10).replace(/-/g, "");
+  let plNames = [], since = Date.now() - 6 * 864e5;
+  try {
+    const b = await fplJson("bootstrap-static/"); plNames = b.teams.map((t) => t.name.toLowerCase());
+    const past = b.events.filter((e) => Date.parse(e.deadline_time) <= Date.now()).map((e) => Date.parse(e.deadline_time));
+    if (past.length) since = Math.max(...past); // since the current gameweek's deadline
+  } catch (e) { /* last 6 days */ }
+  const days = []; for (let t = since; t <= Date.now() + 864e5 * 0.01 && days.length < 7; t += 864e5) days.push(ymd(t));
+  if (!days.includes(ymd(Date.now()))) days.push(ymd(Date.now()));
+  const range = days[0] + "-" + days[days.length - 1];
+  const norm = (s) => String(s || "").toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "");
+  const ALIAS = { "man city": "manchester city", "man utd": "manchester united", "spurs": "tottenham", "nott'm forest": "nottingham", "newcastle": "newcastle", "leeds": "leeds", "brighton": "brighton", "hull city": "hull", "ipswich town": "ipswich", "coventry city": "coventry" };
+  const plKeys = plNames.map((p) => ALIAS[p] || p.split(" ")[0]);
+  const isPL = (n) => { const x = norm(n); return !plKeys.length || plKeys.some((k) => x.includes(k)); };
+  const comps = MW_COMPS.slice(0, 4).concat(new Date().getUTCMonth() <= 2 ? [MW_COMPS[4]] : []); // FA Cup from January
+  const boards = await Promise.all(comps.flatMap(([c, label]) => days.map((d) => espn(`${c}/scoreboard?dates=${d}`).then((j) => [c, label, j]))));
+  const evs = [], seen = new Set();
+  boards.forEach(([c, label, j]) => (j && j.events || []).forEach((ev) => {
+    const comp = ev.competitions && ev.competitions[0]; if (!comp || seen.has(ev.id)) return;
+    const teams = (comp.competitors || []).map((x) => x.team && x.team.displayName);
+    if (!teams.some(isPL)) return;
+    seen.add(ev.id);
+    evs.push({ c, label, id: ev.id, date: ev.date, done: !!(ev.status && ev.status.type && ev.status.type.completed), teams, score: (comp.competitors || []).map((x) => x.score).join("–") });
+  }));
+  const picked = evs.filter((e) => e.done).slice(0, 24);
+  if (debug) { const s1 = picked[0] ? await espn(`${picked[0].c}/summary?event=${picked[0].id}`) : null; return json({ range, evs, sample: s1 && s1.rosters ? s1.rosters.map((r) => ({ team: r.team && r.team.displayName, first: (r.roster || []).slice(0, 3), subs: (r.roster || []).filter((p) => p.subbedIn || p.subbedOut).slice(0, 3) })) : s1 && Object.keys(s1) }, 200); }
+  const matches = await Promise.all(picked.map(async (m) => {
+    const s = await espn(`${m.c}/summary?event=${m.id}`);
+    const players = [];
+    ((s && s.rosters) || []).forEach((r) => (r.roster || []).forEach((p) => {
+      const a = p.athlete || {};
+      const subClock = (p.plays || []).filter((x) => x.substitution).map((x) => parseInt((x.clock && x.clock.displayValue) || "", 10)).filter((n) => n > 0)[0] || null;
+      const min = p.starter ? (p.subbedOut ? subClock || 60 : 90) : p.subbedIn ? Math.max(1, 90 - (subClock || 70)) : 0;
+      players.push({ name: a.displayName || a.fullName || "", last: a.lastName || "", team: r.team && r.team.displayName, started: !!p.starter, subIn: !!p.subbedIn, subOut: !!p.subbedOut, min });
+    }));
+    return { comp: m.label, date: m.date, teams: m.teams, score: m.score, players };
+  }));
+  const out = { fetched: Date.now(), range, pending: evs.filter((e) => !e.done).map((e) => ({ comp: e.label, date: e.date, teams: e.teams })), matches: matches.filter((m) => m.players.length) };
+  if (env.ODDS) await env.ODDS.put(key, JSON.stringify(out));
+  return json(out, 200);
 }
 
 // ---------- club kit images (FPL's official shirt artwork) ----------

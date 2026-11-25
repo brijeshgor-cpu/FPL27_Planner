@@ -265,6 +265,23 @@ bench order, transfers or chip before the deadline?*
   (`opp:leaky` at 2+ goals conceded a game over their last 4, `opp:tight` at 0.75 or fewer, from
   `recentConceded()`). `recordAdvice()` saves `t`, `pen`, `oga` and the haul chance `hc` with each prediction, so
   the learning can test the owner's bench and captain reasoning against results.
+- **Midweek matches:** the Worker's `/api/midweek` reads ESPN's public feed (site.api.espn.com; it needs a plain
+  `User-Agent: Mozilla/5.0`, and dates go one day at a time because ranges return 400). It covers the Champions League,
+  Europa League, Conference League, EFL Cup and the FA Cup (from January), for each day since the current gameweek's
+  deadline, keeping matches with a Premier League club and every player's role (started, came on, came off, minutes).
+  It's KV-cached for 30 minutes, and unfinished matches are listed as `pending`.
+  - `loadMidweek()` (with `loadNotes()`) matches players by club (`oddsTeamId`) and surname. `mwInfo(e)` gives the
+    kind (`mw-full` 75'+, `mw-part`, `mw-sub`, `mw-unused`, `mw-out`) and the days before his GW fixture.
+  - `mwStartEffect()` (Assumptions until learned) is applied in `minutesProfile`, so every projection uses it:
+    - a full game ×0.85 (3 days or fewer before), ×0.93 (4 days) or ×0.97 (5+ days);
+    - part of a game ×0.97;
+    - came off the bench or unused (a regular starter): a pull towards starting (rested for the weekend);
+    - flagged but played 45+ minutes: availability floor 0.9 (`mw-fit`);
+    - not in the squad: noted only.
+  - The News outlook adds the midweek note.
+  - Learning: news calls save `mw`, and advice predictions save `pr.mw`. `loadNewsCal()` (`NCAL.mw`) and `capLearn()`
+    (`MWL`) compare start rates by kind with the predicted start chance; with 8+ cases a factor (±20%, shrunk n/(n+15))
+    is applied on top.
 - **Your strategy:** `STRAT_RULES`, saved to `/api/strategy` (owner only), with priority levels Off to
   Critical. They change decisions:
   - nailed: the buy start-rate floor;
