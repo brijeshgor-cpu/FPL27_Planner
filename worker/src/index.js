@@ -299,7 +299,7 @@ async function teamNews() {
 const MW_COMPS = [["uefa.champions", "Champions League"], ["uefa.europa", "Europa League"], ["uefa.europa.conf", "Conference League"], ["eng.league_cup", "EFL Cup"], ["eng.fa", "FA Cup"]];
 const espn = (path) => fetch("https://site.api.espn.com/apis/site/v2/sports/soccer/" + path, { headers: { "User-Agent": "Mozilla/5.0", Accept: "application/json" } }).then((r) => (r.ok ? r.json() : null)).catch(() => null);
 async function midweek(env, debug) {
-  const key = "midweek";
+  const key = "midweek2";
   if (!debug && env.ODDS) { const c = await env.ODDS.get(key, "json"); if (c && Date.now() - c.fetched < 30 * 60 * 1000) return json(c, 200); }
   const ymd = (t) => new Date(t).toISOString().slice(0, 10).replace(/-/g, "");
   let plNames = [], since = Date.now() - 6 * 864e5;
@@ -334,7 +334,7 @@ async function midweek(env, debug) {
       const a = p.athlete || {};
       const subClock = (p.plays || []).filter((x) => x.substitution).map((x) => parseInt((x.clock && x.clock.displayValue) || "", 10)).filter((n) => n > 0)[0] || null;
       const min = p.starter ? (p.subbedOut ? subClock || 60 : 90) : p.subbedIn ? Math.max(1, 90 - (subClock || 70)) : 0;
-      players.push({ name: a.displayName || a.fullName || "", last: a.lastName || "", team: r.team && r.team.displayName, started: !!p.starter, subIn: !!p.subbedIn, subOut: !!p.subbedOut, min });
+      players.push({ name: a.displayName || a.fullName || "", last: a.lastName || "", team: r.team && r.team.displayName, started: !!p.starter, subIn: !!p.subbedIn, subOut: !!p.subbedOut, min, pos: (p.position && (p.position.abbreviation || p.position.name)) || "" });
     }));
     return { comp: m.label, date: m.date, teams: m.teams, score: m.score, players };
   }));

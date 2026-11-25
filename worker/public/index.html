@@ -857,6 +857,7 @@ td.fx2-c { padding: 4px 3px; }
 @media (max-width: 700px) { .st-row { flex-wrap: wrap; } .st-row select { flex: 1 1 100%; } .lr-sum { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
 /* Player predictions: compare */
 .pr-mode button { min-width: 130px; }
+.nw-sq li.bench strong { color: var(--muted); }
 .nw-cal td, .nw-cal th { white-space: nowrap; } .nw-cal .down { color: var(--bad); font-weight: 600; }
 .nw-ol { list-style: none; margin: 0; padding: 0; display: grid; gap: 8px; }
 .nw-ol li { border-top: 1px solid var(--line); padding-top: 8px; } .nw-ol li:first-child { border-top: 0; padding-top: 0; }
@@ -2361,9 +2362,12 @@ td.fx2-c { padding: 4px 3px; }
         (clubs[tid] ||= []).push({ comp: m.comp, opp, date: when, score: m.score });
         const roster = m.players.filter((p) => oddsTeamId(p.team) === tid);
         Object.values(E).filter((e) => e.team === tid).forEach((e) => {
-          const keys = [nn(e.second_name), nn(e.web_name)].filter((k) => k.length >= 3);
-          const p = roster.find((x) => { const full = nn(x.name), last = nn(x.last); return keys.some((k) => last === k || full.endsWith(" " + k) || full === k || last.endsWith(" " + k)); });
-          const rec = { comp: m.comp, opp, date: when, inSquad: !!p, started: !!(p && p.started), subIn: !!(p && p.subIn), min: p ? p.min : 0 };
+          // FPL names can be multi-part ("dos Santos Magalhães") or a first name ("Gabriel"); ESPN uses "Gabriel Magalhães"
+          const sn = nn(e.second_name), wn = nn(e.web_name), fn = nn(e.first_name), lastTok = sn.split(" ").pop();
+          const keys = [sn, lastTok, wn].filter((k) => k.length >= 3);
+          const p = roster.find((x) => { const full = nn(x.name), last = nn(x.last);
+            return keys.some((k) => last === k || full.endsWith(" " + k) || full === k || last.endsWith(" " + k)) || (wn.length >= 3 && (full.startsWith(wn + " ") && (full.includes(lastTok) || wn === fn.split(" ")[0]))); });
+          const rec = { comp: m.comp, opp, date: when, inSquad: !!p, started: !!(p && p.started), subIn: !!(p && p.subIn), min: p ? p.min : 0, pos: p && p.pos && p.pos !== "SUB" ? p.pos : "" };
           if (!byId[e.id] || byId[e.id].date < when) byId[e.id] = rec;
         });
       });
@@ -2393,6 +2397,20 @@ td.fx2-c { padding: 4px 3px; }
     else if (m.kind === "mw-sub") r = { ...r, boost: rStart >= 0.6 ? 0.25 : 0, note: `Came off the bench ${vs} (${m.min}'), ${rStart >= 0.6 ? "which suggests he was saved for the weekend" : "in line with his role"}.` };
     else if (m.kind === "mw-unused") r = { ...r, boost: rStart >= 0.6 && !flagged ? 0.3 : 0, note: `An unused substitute ${vs}${rStart >= 0.6 && !flagged ? ", which looks like rest for the weekend" : ""}.` };
     else if (m.kind === "mw-out") r = { ...r, note: `Not in the squad ${vs}${flagged || e.status !== "a" ? ", in line with his flag" : ", rested or a knock; check the press conference"}.` };
+    // Rotation swap: who played instead? A same-position team-mate who played 60'+ while he was rested points to a
+    // weekend start for him; the reverse (he played the full game, a regular rival was rested) points the other way.
+    const gpT = teamPlayed(e.team) || 1;
+    const mates = Object.values(E).filter((x) => x.team === e.team && x.element_type === e.element_type && x.id !== e.id && MW.byId[x.id] && MW.byId[x.id].date === m.date);
+    const fit = !flagged && e.status === "a";
+    if (["mw-unused", "mw-sub", "mw-out"].includes(m.kind) && fit && rStart >= 0.5 && (m.kind !== "mw-sub" || m.min < 30)) {
+      const stood = mates.filter((x) => MW.byId[x.id].started && MW.byId[x.id].min >= 60 && x.starts <= e.starts).sort((a, b) => MW.byId[b.id].min - MW.byId[a.id].min)[0];
+      const POSW = { G: "goalkeeper", "CD-L": "centre-back", "CD-R": "centre-back", CD: "centre-back", LB: "left-back", RB: "right-back", LWB: "left wing-back", RWB: "right wing-back", DM: "defensive midfield", CM: "central midfield", LM: "left midfield", RM: "right midfield", AM: "attacking midfield", "AM-L": "left wing", "AM-R": "right wing", F: "up front", CF: "up front" };
+      if (stood) { const sp = POSW[MW.byId[stood.id].pos]; r = { ...r, boost: m.kind === "mw-out" ? 0.3 : 0.5, kind: "mw-swap", note: `Rested ${vs} while ${esc(stood.web_name)} (${stood.starts} Premier League start${stood.starts === 1 ? "" : "s"} to his ${e.starts}) played ${MW.byId[stood.id].min}'${sp ? ` at ${sp}` : ""} in his place, which points to him starting at the weekend.` }; }
+    }
+    if (m.kind === "mw-full") {
+      const restedReg = mates.filter((x) => { const y = MW.byId[x.id]; return (!y.inSquad || (!y.started && y.min < 30)) && x.status === "a" && x.starts / gpT >= 0.6; })[0];
+      if (restedReg) r = { ...r, f: r.f * 0.95, kind: "mw-swapped", note: r.note + ` ${esc(restedReg.web_name)}, a regular starter in his position group, was rested; if they play the same role, he could come back in.` };
+    }
     r.learned = learned;
     return r;
   }
@@ -6823,7 +6841,16 @@ td.fx2-c { padding: 4px 3px; }
       .sort((a, b) => (mine.has(b.e.id) - mine.has(a.e.id)) || (a.p - b.p));
     const allOut = {}; D.teams.forEach((t) => (allOut[t.id] = teamList(t.id)));
     NW.outlooks = Object.values(allOut).flat();
+    // all 15 of your players: will they start? (flags, midweek, rotation swaps, the model)
+    const squadOut = slots.map((id) => E[id]).filter(Boolean).map((e) => { const found = NW.outlooks.find((o) => o.e.id === e.id); return found || outlook(e, (dropByTeam[e.team] || []).find((x) => x.e.id === e.id)); });
+    NW.outlooks = [...NW.outlooks, ...squadOut.filter((o) => !NW.outlooks.includes(o))];
     if (computeOnly) return;
+    const LABC = { Fact: "lab-fact", Projection: "lab-proj", Assumption: "lab-asm" };
+    const squadRows = squadOut.map((o) => { const slot = slots.indexOf(o.e.id), starter = slot < 11, cover = starter && o.p < 0.75 ? autoSub({ ids: slots }, o.e.id) : null; return { o, slot, starter, cover }; })
+      .sort((a, b) => (a.slot === 11) - (b.slot === 11) || (a.o.p >= 0.75) - (b.o.p >= 0.75) || a.o.p - b.o.p);
+    const squadHTML = `<div class="panel"><div class="panel-head"><h3>Your players: will they start?</h3><span class="note">All 15, for GW${gwNext}: flags, midweek games, rotation swaps and the model's start chance</span></div>
+      <ul class="nw-ol nw-sq">${squadRows.map(({ o, starter, cover, slot }) => (slot === 11 && o.e.element_type === 1 && o.e.status === "a" ? { ...o, v: ["", "Back-up keeper"], p: 1, what: "", why: "Only plays if your first-choice keeper misses out", lab: "Fact" } : o)).map((o, i) => [o, squadRows[i]]).map(([o, { starter, cover, slot }]) => `<li class="${starter ? "" : "bench"}"><div class="nw-ol-h"><strong>${esc(o.e.web_name)}</strong> <span class="note">${tShort(o.e.team)} · ${POSN(o.e)} · ${starter ? "starting XI" : slot === 11 ? "bench (GK)" : `bench ${slot - 10}`}</span><span class="pill ${o.v[0]} nw-v">${o.v[1]}${o.p > 0 && o.p < 1 ? ` · ${pct(o.p)}` : ""}</span></div>
+        <div class="note">${o.what ? `${o.what.charAt(0).toUpperCase() + o.what.slice(1)}. ` : ""}${o.why ? o.why.charAt(0).toUpperCase() + o.why.slice(1) : ""}${cover ? ` If he misses out, ${esc(E[cover].web_name)} comes in from your bench.` : starter && o.p < 0.5 ? " Your bench has no playing cover for him." : ""} <span class="lab ${LABC[o.lab]}">${o.lab}</span></div></li>`).join("")}</ul></div>`;
     const card = (tid) => {
       const list = allOut[tid];
       return `<div class="cmp-card nw-card" id="nw-${tid}"><div class="nw-h">${T[tid]?.code != null ? `<img src="kit/${T[tid].code}.png" alt="" width="34" height="34" loading="lazy" onerror="this.remove()">` : ""}<div><h3>${esc(T[tid].name)}${myCount(tid) ? ` <span class="pill acc">${myCount(tid)} yours</span>` : ""}</h3><span class="note">${nextFx(tid)}${presser(tid) ? ` · ${presser(tid).charAt(0).toLowerCase() + presser(tid).slice(1)}` : ""}</span></div></div>
@@ -6832,7 +6859,7 @@ td.fx2-c { padding: 4px 3px; }
     };
     app.innerHTML = `<section class="view">
       <div class="panel-head"><h2>News for GW${gwNext}</h2><span class="note">Refreshed ${ukT(j.fetched)} · news from before the GW${started ? started.id : gwCur} deadline (${ukT(cutoff)}) is removed</span></div>
-      ${alerts ? `<div class="panel"><div class="panel-head"><h3>Your players: availability</h3><span class="note">FPL's official flags, which update after press conferences</span></div><ul class="insights">${alerts}</ul></div>` : `<div class="panel"><p class="note"><strong>Your players:</strong> none of your 15 is flagged by FPL right now.</p></div>`}
+      ${squadHTML}
       <div class="panel nw-ctl"><div class="seg" role="group">${[["mine", "Your teams"], ["all", "All teams"]].map(([k, l]) => `<button data-nwscope="${k}" aria-pressed="${NW.scope === k}">${l}</button>`).join("")}</div>
         <label class="nw-jump"><span class="k">Jump to</span><select id="nwJump"><option value="">Choose a team</option>${teams.map((tid) => `<option value="${tid}">${esc(T[tid].name)}</option>`).join("")}</select></label></div>
       <div class="nw-grid">${teams.map(card).join("")}</div>

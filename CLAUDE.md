@@ -278,7 +278,14 @@ bench order, transfers or chip before the deadline?*
     - came off the bench or unused (a regular starter): a pull towards starting (rested for the weekend);
     - flagged but played 45+ minutes: availability floor 0.9 (`mw-fit`);
     - not in the squad: noted only.
-  - The News outlook adds the midweek note.
+  - Rotation swaps: if he was rested (unused, a cameo under 30', or out of the squad while fit and normally starting)
+    while a same-position team-mate with no more Premier League starts played 60'+, he gets a strong pull towards
+    starting (`mw-swap`, boost 0.5, or 0.3 if out of the squad), and the note names the stand-in's midweek position
+    (ESPN `pos`; substitutes are "SUB"). If he played the full game while a regular rival in his position group was
+    rested, ×0.95 (`mw-swapped`). Example: Calafiori rested while Hincapié (0 PL starts) played 90' at left-back.
+  - The News outlook adds the midweek note. "Your players: will they start?" (top of the News tab) lists all 15
+    with their outlook, sorted by risk, with bench cover; the back-up keeper shows as such. Squad outlooks are saved
+    with the news calls for learning.
   - Learning: news calls save `mw`, and advice predictions save `pr.mw`. `loadNewsCal()` (`NCAL.mw`) and `capLearn()`
     (`MWL`) compare start rates by kind with the predicted start chance; with 8+ cases a factor (±20%, shrunk n/(n+15))
     is applied on top.
