@@ -1282,6 +1282,8 @@ td.fx2-c { padding: 4px 3px; }
   const bankOf = (m) => m.picks?.bank ?? lastHist(m)[8];
   const seasonSum = (m, idx) => m.history.reduce((a, r) => a + r[idx], 0);
 
+  // Debug hook for checking the model from the browser console (only with ?debug in the address).
+  if (/[?&]debug\b/.test(location.search)) window.FC27 = { get E() { return E; }, get OS() { return OS; }, gp1: (e) => gp1(e), modelPts: (e, n) => modelPts(e, n, teamOdds()), proj: (e, n) => proj(e, n, teamOdds()), scoreCore: (e, n) => scoreCore(e, n, teamOdds()), expertScore: (e, n) => expertScore(e, n, teamOdds()), minutesProfile: (e) => minutesProfile(e), teamOdds: () => teamOdds(), deservedPts: (t, a) => deservedPts(t, a), loadOptaGws: () => loadOptaGws(), ensureFA: (ids) => ensureFA(ids), noteFactor: (e) => noteFactor(e), layerBreakdown: (e) => layerBreakdown(e) };
   // ---------- routing ----------
   function route() {
     const v = (location.hash || "#overview").slice(1);
@@ -1745,8 +1747,23 @@ td.fx2-c { padding: 4px 3px; }
   }
   // Points projection: blended form and points per game, scaled per fixture (bookmaker odds for the
   // next gameweek, FDR after that), by availability and by recent minutes.
+  // A team's own season baselines (cached): expected goals per game, and its clean sheet rate. The odds boost for a
+  // fixture is measured against these, not against a league-average team, so team strength isn't counted twice
+  // (a player's xG per 90 already reflects how good his team's attack usually is).
+  const TBASE = {};
+  function teamBase(team) {
+    if (TBASE[team]) return TBASE[team];
+    const gp = teamPlayed(team) || 1, xg = Object.values(E).filter((e) => e.team === team).reduce((a, e) => a + (+e.expected_goals || 0), 0) / gp;
+    const fin = D.fixtures.filter((f) => f[7] && f[9] != null && (f[2] === team || f[3] === team));
+    const cs = fin.length ? fin.filter((f) => (f[2] === team ? f[10] : f[9]) === 0).length / fin.length : 0.25;
+    return (TBASE[team] = { xg: Math.max(0.6, xg), cs: Math.min(0.6, Math.max(0.1, cs)) });
+  }
+  const oddsAttMult = (team, o) => Math.min(1.5, Math.max(0.6, o.lam / teamBase(team).xg));
+  const oddsDefMult = (team, o) => Math.min(1.4, Math.max(0.7, (0.55 + 1.6 * o.cs) / (0.55 + 1.6 * teamBase(team).cs)));
   function proj(e, n, TO) {
-    const base = (0.5 * parseFloat(e.form) + 0.5 * parseFloat(e.points_per_game)) || 0;
+    // points per game counts more than FPL's form (only the last few games), and both are pulled towards the position average
+    const gpN = e.minutes ? Math.max(1, Math.round(e.minutes / 80)) : 0, raw = (0.3 * parseFloat(e.form) + 0.7 * parseFloat(e.points_per_game)) || 0;
+    const base = shrink(raw, posMean(e.element_type).ppg, gpN / (gpN + 6));
     const mi = minutesInfo(e), mf = Math.max(0.15, Math.min(1, mi.avg / 80));
     const per = [];
     for (let g = gwNext, i = 0; i < n && g <= 38; g++, i++) {
@@ -1754,8 +1771,8 @@ td.fx2-c { padding: 4px 3px; }
       (teamFx[e.team][g] || []).forEach((f, k) => {
         let fac = FDR_MULT[f.fdr];
         const o = i === 0 && k === 0 ? TO[e.team] : null;
-        if (o) fac = e.element_type <= 2 ? Math.min(1.4, Math.max(0.7, 0.55 + 1.6 * o.cs)) : Math.min(1.5, Math.max(0.6, o.lam / 1.35));
-        p += base * fac;
+        if (o) fac = e.element_type <= 2 ? oddsDefMult(e.team, o) : oddsAttMult(e.team, o);
+        p += Math.min(base, 2) + Math.max(0, base - 2) * fac; // the fixture scales his returns, not his appearance points
       });
       per.push(p * availFor(e, g, i) * mf * (1 - banMiss(e, i)) * compFactor(e, i));
     }
@@ -2664,7 +2681,7 @@ td.fx2-c { padding: 4px 3px; }
         sec: "cap", k: isCap && isVc ? "good" : "warn", lab: "Projection", capId: c1.id, vcId: vice.id,
         capCands: close5.concat(capC.filter((x) => !close5.includes(x)).slice(0, 2)).slice(0, 6).map((x) => ({ id: x.id, p: +x.p.toFixed(2), h: +x.haul.toFixed(3), s: x.sc ? +x.sc.p.toFixed(3) : null, eo: +capEO(x.id).toFixed(3), cb: capBoost(x.id) })), capStance: stratDiff() > 0 ? L.stance : "balanced",
         t: `${isCap ? "Keep" : "Captain"} ${nm(c1.id)}, vice ${nm(vice.id)}${close ? " (close call)" : ""}`,
-        d: `${nm(c1.id)} ${c1.p.toFixed(1)} xP vs ${nm(c2.id)} ${c2.p.toFixed(1)} (${g < 0 ? `${(-2 * g).toFixed(1)} less once doubled, the price of the differential` : `${(2 * g).toFixed(1)} once doubled`}). ${g < 0 ? "" : "Main edge: "} ${why1} Captain haul chance ${pct(c1.haul)}; ${lgOwnTxt(c1.id)}.${vice.id !== c2.id ? ` Vice ${nm(vice.id)} over ${nm(c2.id)}: more dependable (${pct(vice.mp.pStart)} vs ${pct(c2.mp.pStart)} to start)${!shared && sameMatch(c2.id, c1.id) ? " and in a different match" : ""}.` : ""}${shared ? ` Note: your vice plays in the same match as your captain, so a postponement would hit both.` : ""}${!isCap && st.cap ? ` You have ${nm(st.cap)} (${P(st.cap).toFixed(1)}).` : ""}${leagueNote}`,
+        d: `${nm(c1.id)} ${c1.p.toFixed(1)} xP vs ${nm(c2.id)} ${c2.p.toFixed(1)} (${g < 0 ? `${(-2 * g).toFixed(1)} less once doubled, the price of the differential` : `${(2 * g).toFixed(1)} once doubled`}). ${g < 0 ? "" : "Main edge: "} ${why1} Captain haul chance ${pct(c1.haul)}; ${lgOwnTxt(c1.id)}.${vice.id !== c2.id ? ` Vice ${nm(vice.id)} over ${nm(c2.id)}: ${[!shared && sameMatch(c2.id, c1.id) ? `he plays in a different match (${nm(c2.id)} is in the same game as your captain, so a postponement would hit both)` : "", vice.mp.pStart > c2.mp.pStart + 0.02 ? `more dependable (${pct(vice.mp.pStart)} vs ${pct(c2.mp.pStart)} to start)` : ""].filter(Boolean).join(", and ") || "the more dependable option"}.` : ""}${shared ? ` Note: your vice plays in the same match as your captain, so a postponement would hit both.` : ""}${!isCap && st.cap ? ` You have ${nm(st.cap)} (${P(st.cap).toFixed(1)}).` : ""}${leagueNote}`,
         unc: close ? `It's close: ${nm(c1.id)} ${pct(s1)} to score, ${pct(c1.mp.p70)} for 70+; ${nm(c2.id)} ${pct(s2)} to score, ${pct(c2.mp.p70)} for 70+. A late team-news change would flip it.` : `${nm(c1.id)}'s minutes (${pct(c1.mp.pStart)} to start, ${pct(c1.mp.p70)} for 70+).`,
         why: whyHTML([e1, e2, ...(vice.id !== c2.id ? [E[vice.id]] : [])]), act: isCap && isVc ? null : { a: "cap", id: c1.id, vc: vice.id, l: `Make ${E[c1.id].web_name} captain, ${E[vice.id].web_name} vice` },
       });
@@ -4313,21 +4330,33 @@ td.fx2-c { padding: 4px 3px; }
   const poisAtLeast = (l, k) => { let p = Math.exp(-l), c = p; for (let i = 1; i < k; i++) { p *= l / i; c += p; } return Math.max(0, 1 - c); };
   const DEF_MULT = { 1: 0.7, 2: 0.85, 3: 1, 4: 1.2, 5: 1.4 };
   const SCORE = { 1: { g: 10, cs: 4 }, 2: { g: 6, cs: 4 }, 3: { g: 5, cs: 1 }, 4: { g: 4, cs: 0 } };
+  // Regression to the mean: per-90 rates from a few hundred minutes are noisy, so they're pulled towards the
+  // position's average for regular starters, weighted by minutes (a 900-minute prior). Points per game is
+  // treated the same way, by games played.
+  const PMEAN = {};
+  function posMean(t) {
+    if (PMEAN[t]) return PMEAN[t];
+    const reg = Object.values(E).filter((e) => e.element_type === t && e.minutes >= 450);
+    const m = (k) => { const tot = reg.reduce((a, e) => a + (+e[k] || 0), 0), mins = reg.reduce((a, e) => a + e.minutes, 0); return mins ? (tot / mins) * 90 : 0; };
+    return (PMEAN[t] = { xg: m("expected_goals"), xa: m("expected_assists"), bonus: m("bonus"), ppg: reg.length ? reg.reduce((a, e) => a + (+e.points_per_game || 0), 0) / reg.length : 3 });
+  }
+  const shrink = (own, mean, w) => w * own + (1 - w) * mean;
   function modelPts(e, n, TO) {
     const t = e.element_type, S = SCORE[t];
-    const xg = +e.expected_goals_per_90 || 0, xa = +e.expected_assists_per_90 || 0, xgc = +e.expected_goals_conceded_per_90 || 1.3;
+    const PM = posMean(t), wM = e.minutes / (e.minutes + 900);
+    const xg = shrink(+e.expected_goals_per_90 || 0, PM.xg, wM), xa = shrink(+e.expected_assists_per_90 || 0, PM.xa, wM), xgc = +e.expected_goals_conceded_per_90 || 1.3;
     const dc = +e.defensive_contribution_per_90 || 0, sv = +e.saves_per_90 || 0;
     const share = Math.min(1, minutesInfo(e).avg / 90), full = share >= 0.66;
-    const bonus90 = e.minutes > 0 ? (e.bonus / e.minutes) * 90 : 0;
+    const bonus90 = shrink(e.minutes > 0 ? (e.bonus / e.minutes) * 90 : 0, PM.bonus, wM);
     const dcP = t === 1 ? 0 : poisAtLeast(dc, t === 2 ? 10 : 12);
     let tot = 0;
     for (let g = gwNext, i = 0; i < n && g <= 38; g++, i++) {
       let pts = 0;
       (teamFx[e.team][g] || []).forEach((f, k) => {
         const o = i === 0 && k === 0 ? TO[e.team] : null;
-        const am = o ? Math.min(1.5, Math.max(0.6, o.lam / 1.35)) : FDR_MULT[f.fdr];
+        const am = o ? oddsAttMult(e.team, o) : FDR_MULT[f.fdr];
         const conceded = o ? -Math.log(Math.max(0.01, o.cs)) : xgc * DEF_MULT[f.fdr];
-        pts += (full ? 2 : 1) + (xg * S.g + xa * 3) * am * share + (full ? S.cs * Math.exp(-conceded) : 0) + 2 * dcP * share + (t === 1 ? (sv / 3) * share : 0) + bonus90 * am * share - (t <= 2 ? (conceded / 2) * 0.6 * share : 0);
+        pts += (full ? 2 : 1) + (xg * S.g + xa * 3) * am * share + (full ? S.cs * Math.exp(-conceded) : 0) + 2 * dcP * share + (t === 1 ? (sv / 3) * share : 0) + bonus90 * Math.sqrt(am) * share - (t <= 2 ? (conceded / 2) * 0.6 * share : 0);
       });
       tot += pts * availFor(e, g, i) * (1 - banMiss(e, i)) * compFactor(e, i);
     }
@@ -5519,7 +5548,7 @@ td.fx2-c { padding: 4px 3px; }
         xp: +gp1(e).toFixed(2), ps: +mp.pStart.toFixed(2), p70: +mp.p70.toFixed(2), xm: Math.round(mp.xMinsIfStart), lg: +(sc ? sc.lam : 0).toFixed(2), la: +((+e.expected_assists_per_90 || 0) * share * tf).toFixed(2), cs: o ? +o.cs.toFixed(2) : null, tf: o ? +o.lam.toFixed(2) : fixtureGoals(e.team, (teamFx[e.team][gwNext] || [])[0] || { opp: e.team, home: true }, gwNext + 1).for, nf: +noteFactor(e).toFixed(3), nk: noteOf(id) ? noteKeys(noteOf(id)) : [] };
     });
     const body = { v: 2, gw: gwNext, at: Date.now(), cap: cap ? cap.capId : null, vc: cap ? cap.vcId : null, capC: cap ? cap.capCands : null, capStance: cap ? cap.capStance : null, xi: bx.ids, squad: B.ids, buys, holds: adv.filter((x) => x.hold).map((x) => x.hold), preds };
-    const hash = JSON.stringify(["v2-ctx3", body.cap, body.vc, body.xi, body.buys, body.holds, Object.keys(NOTES).length, body.capC]);
+    const hash = JSON.stringify(["v2-ctx4", body.cap, body.vc, body.xi, body.buys, body.holds, Object.keys(NOTES).length, body.capC]);
     if (store.get("recHash:" + gwNext, "") === hash) return;
     try { await ownerPost(`rec/${gwNext}`, body); store.set("recHash:" + gwNext, hash); } catch (e) { /* tried; will retry on the next load */ }
   }

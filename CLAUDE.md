@@ -138,6 +138,16 @@ bench order, transfers or chip before the deadline?*
     contributions, saves and bonus, with odds for the next gameweek and FDR after that;
   - `proj`: form and points per game.
 
+  Calibration fixes (GW12, after the owner compared 81.2 projected points with fantasyfootballhub.co.uk's 56.5):
+  - **No double-counted team strength:** the next-GW odds boost is the team's expected goals ÷ its **own** season xG
+    per game (`teamBase()`, `oddsAttMult()`), not ÷ a league-average 1.35. Defenders use clean sheet odds against
+    their team's own clean sheet rate (`oddsDefMult()`). Bonus scales by √boost. In `proj` the boost applies only
+    to the returns above 2 appearance points.
+  - **Regression to the mean:** xG, xA and bonus per 90 are shrunk towards the position average of regular
+    starters, weighted minutes/(minutes + 900) (`posMean()`, `shrink()`). The form part uses 0.3 × form +
+    0.7 × points per game, shrunk towards the position average by games/(games + 6).
+  - **Check:** the sum of every player's GW projection should be close to the actual total points per gameweek
+    (about 900–950). `?debug` exposes `window.FC27` (`gp1`, `modelPts`, `proj`, `scoreCore`, …) for this.
   It then adjusts for minutes, availability, bans, returning rivals and news. `gp1` and `gp5` are
   the 1- and 5-gameweek versions used in the Current gameweek tab.
 - **Minutes:** `minutesProfile(e)`. It returns the chance of starting, of 60+ and of 70+ minutes,
