@@ -365,6 +365,11 @@ bench order, transfers or chip before the deadline?*
   (`OS.gw`). Insights: net gain after hits and the hit rate, the best and worst regular move, each wildcard judged as
   a whole (its one-for-one pairs are arbitrary), and a sold starter now outscoring his replacement over the last 3
   gameweeks.
+- **You vs a rival panels (shared):** `rivalPanels(them, pfx)` builds the vs header, Head to head, Chips, Points per
+  gameweek, Season total by gameweek and Gameweek points (the week-by-week table, now its own panel), and returns
+  `{ html, wire }` (`wire()` attaches the chart tooltips; `pfx` keeps chart ids apart: `an` in Mini League analysis,
+  `lg` in Standings). Standings order: the league table, the squad comparison (`#cmp`), the rival panels for the
+  selected rival (`store "rival"`), then Gameweek winners. The owner removed the Season race (`raceChart()` is unused).
 - **Standings: You vs rival, free transfers:** `renderRivalCompare()` shows free transfers for the next deadline.
   Yours are live from `OFF` (left, made and limit, or unlimited with a chip). The rival's are `freeTransfers(r.m,
   r.m.st)` from their public history: managers now store `st` (`started_event`). It's labelled an Estimate, because FPL

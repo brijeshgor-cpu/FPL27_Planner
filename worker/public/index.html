@@ -3386,13 +3386,6 @@ td.fx2-c { padding: 4px 3px; }
     if (!group.some((g) => g.x.entry === sel)) sel = group[0].x.entry;
     const them = group.find((g) => g.x.entry === sel).x;
     const meRow = members.find((x) => x.entry === me);
-    const A = gwStats(myM), B = gwStats(them.m);
-    const tn = firstName(them);
-    const gws = []; for (let g = 1; g <= gwCur; g++) if (A.by[g] || B.by[g]) gws.push(g);
-    let won = 0, lost = 0, drawn = 0;
-    gws.forEach((g) => { if (A.by[g] && B.by[g]) { const d = A.by[g].net - B.by[g].net; d > 0 ? won++ : d < 0 ? lost++ : drawn++; } });
-    const gap = meRow.total - them.total;
-
     const cards = group.map(({ x, role }) => {
       const d = x.total - meRow.total;
       return `<button class="pick" data-h2h="${x.entry}" aria-pressed="${x.entry === sel}">
@@ -3402,6 +3395,34 @@ td.fx2-c { padding: 4px 3px; }
         <span class="row2"><span>${ordinal(x.rank)} · ${fmt(x.total)} pts</span><span class="${d > 0 ? "down" : d < 0 ? "up" : ""}">${d > 0 ? d + " ahead" : d < 0 ? -d + " behind" : "level"}</span></span>
       </button>`;
     }).join("");
+
+    const RP = rivalPanels(them, "an");
+    $("#app").innerHTML = `
+    <section class="view">
+      <div class="panel" id="rivalWatch"><p class="empty">Working out your rivals' likely captains and GW${gwNext} swing…</p></div>
+      <div class="panel-head"><h2>Mini League analysis</h2><span class="note">The league leader, friends and family. Pick one to compare with FC27.</span></div>
+      <div class="picks5">${cards}</div>
+      ${missing.length ? `<p class="note">Not found in ${esc(D.league.name)}: ${missing.map(esc).join(", ")}.</p>` : ""}
+
+      ${RP.html}
+      ${freshness()}
+    </section>`;
+
+    Promise.resolve(OFF === undefined ? loadOfficial() : OFF).then(() => ensureFA([])).then(() => { if (view === "analysis") renderRivalWatch(); }).catch(() => {});
+    document.querySelectorAll("[data-h2h]").forEach((b) => b.addEventListener("click", () => { store.set("h2h", Number(b.dataset.h2h)); renderAnalysis(); }));
+    RP.wire();
+  }
+
+  // You vs a rival: the vs header, head to head, chips, points per gameweek, season total by gameweek and
+  // gameweek points. Shared by Mini League analysis and Standings (pfx keeps the chart ids apart).
+  function rivalPanels(them, pfx) {
+    const meRow = members.find((x) => x.entry === me);
+    const A = gwStats(myM), B = gwStats(them.m);
+    const tn = firstName(them);
+    const gws = []; for (let g = 1; g <= gwCur; g++) if (A.by[g] || B.by[g]) gws.push(g);
+    let won = 0, lost = 0, drawn = 0;
+    gws.forEach((g) => { if (A.by[g] && B.by[g]) { const d = A.by[g].net - B.by[g].net; d > 0 ? won++ : d < 0 ? lost++ : drawn++; } });
+    const gap = meRow.total - them.total;
 
     // head-to-head rows: [label, mine, theirs, kind] kind: "hi" higher is better, "lo" lower is better, "rank", null = no verdict
     const lh = lastHist(myM), th = lastHist(them.m);
@@ -3467,13 +3488,7 @@ td.fx2-c { padding: 4px 3px; }
         <td class="n ${gapT > 0 ? "up" : gapT < 0 ? "down" : ""}"><strong>${gapT == null ? "–" : gapT === 0 ? "Level" : sign(gapT)}</strong></td></tr>`;
     }).join("");
 
-    $("#app").innerHTML = `
-    <section class="view">
-      <div class="panel" id="rivalWatch"><p class="empty">Working out your rivals' likely captains and GW${gwNext} swing…</p></div>
-      <div class="panel-head"><h2>Mini League analysis</h2><span class="note">The league leader, friends and family. Pick one to compare with FC27.</span></div>
-      <div class="picks5">${cards}</div>
-      ${missing.length ? `<p class="note">Not found in ${esc(D.league.name)}: ${missing.map(esc).join(", ")}.</p>` : ""}
-
+    const html = `
       <div class="panel">
         <div class="vs">
           <div class="side"><span class="who"><i style="background:var(--s-me)"></i>You</span><span class="big">${fmt(meRow.total)}</span><span class="mid">${esc(D.entry.name)} · ${ordinal(meRow.rank)}</span></div>
@@ -3498,33 +3513,35 @@ td.fx2-c { padding: 4px 3px; }
       <div class="panel">
         <div class="panel-head"><h3>Points per gameweek</h3><span class="note">Net of hits. Numbers under each gameweek show your margin.</span></div>
         <div class="legend"><span><i style="background:var(--s-me)"></i>You</span><span><i style="background:var(--s-them)"></i>${esc(them.player_name)}</span></div>
-        <div style="overflow-x:auto"><div class="chart" id="gwChart" style="min-width:560px">${gwBarChart(gws, A, B, tn)}</div></div>
+        <div style="overflow-x:auto"><div class="chart" id="${pfx}GwChart" style="min-width:560px">${gwBarChart(gws, A, B, tn)}</div></div>
       </div>
 
       <div class="panel">
         <div class="panel-head"><h3>Season total by gameweek</h3><span class="note">Running total after each gameweek</span></div>
         <div class="legend"><span><i style="background:var(--s-me)"></i>You</span><span><i style="background:var(--s-them)"></i>${esc(them.player_name)}</span></div>
-        <div style="overflow-x:auto"><div class="chart" id="totChart" style="min-width:560px">${totalChart(gws, A, B, tn)}</div></div>
+        <div style="overflow-x:auto"><div class="chart" id="${pfx}TotChart" style="min-width:560px">${totalChart(gws, A, B, tn)}</div></div>
+      </div>
+
+      <div class="panel">
+        <div class="panel-head"><h3>Gameweek points</h3><span class="note">Each gameweek's points and the running totals</span></div>
         <div class="tbl-wrap"><table class="gw-tbl">
           <thead><tr><th>Gameweek</th><th class="n"><span class="sw" style="background:var(--s-me)"></span>Your pts</th><th class="n"><span class="sw" style="background:var(--s-them)"></span>${esc(tn)} pts</th><th class="n">GW margin</th><th class="n">Your total</th><th class="n">${esc(tn)} total</th><th class="n">Overall gap</th></tr></thead>
           <tbody>${tableRows}</tbody></table></div>
         <p class="note">Small numbers in brackets are points deducted for extra transfers. Chip badges show the chip played that week.</p>
       </div>
-      ${freshness()}
-    </section>`;
-
-    Promise.resolve(OFF === undefined ? loadOfficial() : OFF).then(() => ensureFA([])).then(() => { if (view === "analysis") renderRivalWatch(); }).catch(() => {});
-    document.querySelectorAll("[data-h2h]").forEach((b) => b.addEventListener("click", () => { store.set("h2h", Number(b.dataset.h2h)); renderAnalysis(); }));
-    wireTip($("#gwChart"), (g) => {
+`;
+    const wire = () => {
+    wireTip($(`#${pfx}GwChart`), (g) => {
       const a = A.by[g], b = B.by[g], d = a && b ? a.net - b.net : null;
       return `<b>GW${g}</b><div class="r"><span><i style="background:var(--s-me)"></i>You</span><span>${a ? a.net : "–"}${a?.cost ? ` (−${a.cost})` : ""}${A.chipAt[g] ? " · " + CHIP_LABEL[A.chipAt[g]] : ""}</span></div><div class="r"><span><i style="background:var(--s-them)"></i>${esc(tn)}</span><span>${b ? b.net : "–"}${b?.cost ? ` (−${b.cost})` : ""}${B.chipAt[g] ? " · " + CHIP_LABEL[B.chipAt[g]] : ""}</span></div>${d == null ? "" : `<div class="r"><span>Margin</span><span>${d === 0 ? "Level" : sign(d)}</span></div>`}`;
     });
-    wireTip($("#totChart"), (g) => {
+    wireTip($(`#${pfx}TotChart`), (g) => {
       const a = A.by[g], b = B.by[g], d = a && b ? a.total - b.total : null;
       return `<b>After GW${g}</b><div class="r"><span><i style="background:var(--s-me)"></i>You</span><span>${a ? fmt(a.total) : "–"}</span></div><div class="r"><span><i style="background:var(--s-them)"></i>${esc(tn)}</span><span>${b ? fmt(b.total) : "–"}</span></div>${d == null ? "" : `<div class="r"><span>Gap</span><span>${d === 0 ? "Level" : sign(d)}</span></div>`}`;
     }, true);
+    };
+    return { html, wire };
   }
-
   function niceStep(range, target = 5) { const steps = [1, 2, 5, 10, 20, 25, 50, 100, 200, 250, 500]; return steps.find((s) => range / s <= target) || 1000; }
   const CW = 860;
 
@@ -3623,6 +3640,7 @@ td.fx2-c { padding: 4px 3px; }
       </tr>`;
     }).join("");
 
+    const RP = rivalPanels(members.find((x) => x.entry === rival), "lg");
     $("#app").innerHTML = `
     <section class="view">
       <div class="panel-head"><h2>${esc(D.league.name)}: standings</h2><span class="note">Tap a manager to compare squads with them</span></div>
@@ -3630,14 +3648,11 @@ td.fx2-c { padding: 4px 3px; }
         <thead><tr><th class="n">#</th><th>Team</th><th class="n">GW${gwCur}</th><th class="n">Total</th><th class="n">vs you</th><th>Captain</th><th>Chips (this half)</th><th class="n">Hits</th><th class="n">Bench pts</th></tr></thead>
         <tbody>${rows}</tbody></table></div>
       <div class="panel" id="cmp"><p class="empty">Comparing squads…</p></div>
-      ${freshness()}
-      <div class="panel">
-        <div class="panel-head"><h2>Season race</h2><span class="note">Points above or below the league average after each gameweek</span></div>
-        <div class="legend"><span><i style="background:var(--s-me)"></i>You</span><span><i style="background:var(--s-them)"></i>${esc(members.find((x) => x.entry === rival)?.player_name)}</span><span><i style="background:var(--chart-other)"></i>Rest of the league</span></div>
-        <div class="chart">${raceChart(rival)}</div>
-      </div>
+      ${RP.html}
       ${gwWinnersHTML()}
+      ${freshness()}
     </section>`;
+    RP.wire();
     document.querySelectorAll("tbody tr.click").forEach((tr) => tr.addEventListener("click", () => {
       const e = Number(tr.dataset.e); if (e === me) return; store.set("rival", e); renderLeague(); $("#cmp").scrollIntoView({ behavior: "smooth", block: "start" });
     }));
