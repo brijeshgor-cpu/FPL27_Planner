@@ -365,6 +365,11 @@ bench order, transfers or chip before the deadline?*
   (`OS.gw`). Insights: net gain after hits and the hit rate, the best and worst regular move, each wildcard judged as
   a whole (its one-for-one pairs are arbitrary), and a sold starter now outscoring his replacement over the last 3
   gameweeks.
+- **Standings: You vs rival, free transfers:** `renderRivalCompare()` shows free transfers for the next deadline.
+  Yours are live from `OFF` (left, made and limit, or unlimited with a chip). The rival's are `freeTransfers(r.m,
+  r.m.st)` from their public history: managers now store `st` (`started_event`). It's labelled an Estimate, because FPL
+  hides moves made for the next gameweek until the deadline. A chip played for the gameweek is named instead. The
+  estimator matched the owner's live count (3 for GW12).
 - **Rival watch:** `renderRivalWatch()`, at the top of Mini League analysis. It shows the leader and
   the 2 managers above and below you: their likely captain, their threats, your edges and the
   projected swing.
