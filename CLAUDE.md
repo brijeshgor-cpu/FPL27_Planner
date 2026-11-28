@@ -375,6 +375,15 @@ bench order, transfers or chip before the deadline?*
   r.m.st)` from their public history: managers now store `st` (`started_event`). It's labelled an Estimate, because FPL
   hides moves made for the next gameweek until the deadline. A chip played for the gameweek is named instead. The
   estimator matched the owner's live count (3 for GW12).
+- **View the site as another manager:** Overview's "View the site as" picker (`#viewAsSel`, league members) or
+  `?team=ID` sets `store "viewAs"`. `ENTRY_ID` comes from it, and `OWNER_ENTRY` is the owner's team; `OWNER_VIEW` is
+  false when viewing someone else. Then:
+  - `myTeamApi()` skips `/api/my-team`, so the public-data fallbacks run;
+  - `ownerKey()` returns null, so no notes, learning records or calibration are saved;
+  - a header banner (`#viewAsBar`) offers "Back to your team" (`viewTeam(null)`, a full reload);
+  - `gwSetupHTML()` explains the public-data view instead of the login help.
+
+  `prepare()` resets to the owner if the chosen team isn't in the league.
 - **Rival watch:** `renderRivalWatch()`, at the top of Mini League analysis. It shows the leader and
   the 2 managers above and below you: their likely captain, their threats, your edges and the
   projected swing.

@@ -857,6 +857,11 @@ td.fx2-c { padding: 4px 3px; }
 @media (max-width: 700px) { .st-row { flex-wrap: wrap; } .st-row select { flex: 1 1 100%; } .lr-sum { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
 /* Player predictions: compare */
 .pr-mode button { min-width: 130px; }
+.view-as { display: flex; flex-wrap: wrap; gap: 8px 14px; align-items: center; justify-content: space-between; padding: 8px 12px; margin-bottom: 6px; border-radius: 10px; background: color-mix(in srgb, var(--warn) 16%, var(--surface)); border: 1px solid color-mix(in srgb, var(--warn) 45%, transparent); font-size: .9rem; }
+.view-as[hidden] { display: none; }
+.view-pick { display: flex; flex-wrap: wrap; gap: 8px 16px; align-items: flex-end; }
+.view-pick label { flex: 0 1 340px; min-width: 0; } .view-pick select { width: 100%; } .view-pick .note { flex: 1 1 260px; }
+.view-pick .k { display: block; font-size: .7rem; text-transform: uppercase; letter-spacing: .06em; color: var(--muted); font-weight: 600; margin-bottom: 4px; }
 .rc-ft { display: flex; flex-wrap: wrap; gap: 6px 18px; align-items: center; padding: 10px 12px; border: 1px solid var(--line); border-radius: var(--r); background: var(--surface-2); margin: 10px 0; }
 .rc-ft .k { font-size: .7rem; text-transform: uppercase; letter-spacing: .06em; color: var(--muted); font-weight: 600; width: 100%; }
 .rc-ft > span { display: inline-flex; align-items: center; gap: 6px; } .rc-ft .note { flex-basis: 100%; display: block; }
@@ -1040,6 +1045,7 @@ td.fx2-c { padding: 4px 3px; }
     <div class="brand"><h1 id="teamName">FC27</h1><span class="who" id="who">Bobby Gor · Bring It On!</span></div>
     <div class="deadline"><span class="lbl" id="dlLbl">Next deadline</span><span class="cd" id="countdown">–</span></div>
   </div>
+  <div class="wrap view-as" id="viewAsBar" hidden></div>
   <nav class="wrap tabs" aria-label="Views">
     <a href="#overview" data-v="overview">Overview</a>
     <a href="#gw" data-v="gw" id="gwTab">Current gameweek</a>
@@ -1094,7 +1100,23 @@ td.fx2-c { padding: 4px 3px; }
   new MutationObserver(() => document.querySelectorAll("table.cards-sm:not([data-l])").forEach((t) => { t.dataset.l = "1"; labelTable(t); })).observe(document.getElementById("app"), { childList: true, subtree: true });
 
   // ---------- loading: live through the site's /api/ proxy, else the saved snapshot ----------
-  const ENTRY_ID = 1965328, LEAGUE_ID = 111899;
+  // The team the site is built around. The owner's team by default; Overview's "View as" picker (or ?team=ID)
+  // switches to another Bring It On! manager. Live Pick Team data and every owner write (notes, learning records,
+  // calibration) belong to the owner's team only, so they're switched off while viewing another team.
+  const OWNER_ENTRY = 1965328, LEAGUE_ID = 111899;
+  const ENTRY_ID = (() => {
+    const q = new URLSearchParams(location.search).get("team");
+    if (q != null) { const v = Number(q); store.set("viewAs", v && v !== OWNER_ENTRY ? v : null); }
+    const v = Number(store.get("viewAs", null)); return v > 0 ? v : OWNER_ENTRY;
+  })();
+  const OWNER_VIEW = ENTRY_ID === OWNER_ENTRY;
+  const myTeamApi = () => (OWNER_VIEW ? fetch("api/my-team", { cache: "no-store" }).then((r) => (r.ok ? r.json() : null)).catch(() => null) : Promise.resolve(null));
+  document.addEventListener("change", (ev) => { if (ev.target && ev.target.id === "viewAsSel") viewTeam(Number(ev.target.value)); });
+  function viewTeam(id) {
+    store.set("viewAs", id && id !== OWNER_ENTRY ? id : null);
+    const u = new URL(location.href);
+    if (u.searchParams.has("team")) { u.searchParams.delete("team"); location.replace(u.toString()); } else location.reload(); // a hash-only change wouldn't reload
+  }
   const EL_FIELDS = ["id", "web_name", "first_name", "second_name", "team", "element_type", "now_cost",
     "total_points", "event_points", "form", "points_per_game", "ep_next", "ep_this",
     "selected_by_percent", "minutes", "starts", "goals_scored", "assists", "clean_sheets",
@@ -1188,6 +1210,7 @@ td.fx2-c { padding: 4px 3px; }
     D.elements.forEach((row) => { const o = {}; F.forEach((f, i) => (o[f] = row[i])); E[o.id] = o; });
     T = {}; D.teams.forEach((t) => (T[t.id] = t));
     me = D.me; myM = D.managers[me];
+    if (!OWNER_VIEW && (!myM || !D.standings.some((x) => x.entry === me))) { viewTeam(null); throw new Error("view-as team not in the league"); }
     gwCur = D.current_gw; gwNext = D.next_gw || gwCur;
     const gt = document.getElementById("gwTab"); if (gt) gt.textContent = `Current gameweek (GW${gwNext})`;
     members = D.standings.map((s) => ({ ...s, m: D.managers[s.entry] })).filter((x) => x.m);
@@ -1222,6 +1245,7 @@ td.fx2-c { padding: 4px 3px; }
       (teamFx[a][ev] ||= []).push({ opp: h, home: false, fdr: ad, fin, hs: as, as: hs });
     });
     $("#teamName").textContent = D.entry.name;
+    const vb = $("#viewAsBar"); if (vb && !OWNER_VIEW) { vb.hidden = false; vb.innerHTML = `<span>Viewing <strong>${esc(D.entry.name)}</strong> (${esc(D.entry.player_first_name)} ${esc(D.entry.player_last_name)}). Projections use public data, and nothing is saved.</span><button class="btn sm" id="viewBack">Back to your team</button>`; $("#viewBack").addEventListener("click", () => viewTeam(null)); }
     $("#who").textContent = `${D.entry.player_first_name} ${D.entry.player_last_name} · ${D.league.name}`;
   }
 
@@ -1340,6 +1364,7 @@ td.fx2-c { padding: 4px 3px; }
       </div>
       ${freshness()}
       <div class="grid-2">
+        <div class="panel view-pick"><label><span class="k">View the site as</span><select id="viewAsSel">${[...members].sort((a, b) => a.rank - b.rank).map((x) => `<option value="${x.entry}" ${x.entry === me ? "selected" : ""}>${x.rank}. ${esc(x.entry_name)} · ${esc(x.player_name)}${x.entry === OWNER_ENTRY ? " (you)" : ""}</option>`).join("")}</select></label><span class="note">${OWNER_VIEW ? "Pick any Bring It On! manager to see the site built around their team: projections, transfers, captain and the league comparisons. Your own data isn't changed." : "You're viewing another manager's team. Their bank, free transfers and sale prices are estimated from public data, as FPL only shares those through each manager's own login."}</span></div>
         <div class="panel">
           <div class="panel-head"><h2>Your squad</h2><span class="note">GW${gwCur} points · next fixture · % of the league who own him</span></div>
           ${pitchHTML(myM)}
@@ -2197,7 +2222,7 @@ td.fx2-c { padding: 4px 3px; }
     const app = $("#app");
     app.innerHTML = `<section class="view"><div class="panel-head"><h2>Current gameweek: GW${gwNext}</h2></div><p class="empty">Loading your GW${gwNext} team from FPL…</p></section>`;
     let mt = null;
-    if (D.source === "live") mt = await fetch("api/my-team", { cache: "no-store" }).then((r) => (r.ok ? r.json() : null)).catch(() => null);
+    if (D.source === "live") mt = await myTeamApi();
     if (OFF === undefined) OFF = offFrom(mt); // your official team for the rest of the site
     try { await ensureFA(squadOf(myM).map((p) => p[0])); } catch (e) { /* season data used */ }
     if (view !== "gw") return;
@@ -2221,7 +2246,7 @@ td.fx2-c { padding: 4px 3px; }
     } else {
       const map = new Map(); (D.transfers || []).filter((t) => t[0] === gwNext).forEach((t) => map.set(t[3], t[1]));
       picks = old.map((p) => [map.get(p[0]) || p[0], p[1], p[1] <= 11 ? 1 : 0, p[3], p[4]]);
-      src = `Rebuilt from public data: your GW${gwCur} team${map.size ? ` plus ${map.size} published transfer${map.size > 1 ? "s" : ""}` : ""}. FPL keeps GW${gwNext} transfers private until the deadline`;
+      src = `Rebuilt from public data: ${OWNER_VIEW ? "your" : "their"} GW${gwCur} team${map.size ? ` plus ${map.size} published transfer${map.size > 1 ? "s" : ""}` : ""}. FPL keeps GW${gwNext} transfers private until the deadline`;
     }
     picks.sort((a, b) => a[1] - b[1]);
     const tr = live && live.transfers;
@@ -2255,7 +2280,7 @@ td.fx2-c { padding: 4px 3px; }
     if (document.hidden || gwBusy || !GWE.base) return;
     gwBusy = true;
     try {
-      const mt = await fetch("api/my-team", { cache: "no-store" }).then((r) => (r.ok ? r.json() : null)).catch(() => null);
+      const mt = await myTeamApi();
       if (!mt || view !== "gw") return;
       const prev = GWE.base, st = GWE.st;
       const edited = st && (st.xf.length || st.ids.join() !== prev.ids.join() || st.cap !== prev.cap || st.vc !== prev.vc);
@@ -2277,7 +2302,7 @@ td.fx2-c { padding: 4px 3px; }
   // The GW12 engine on your official team, shared with the Overview so every tab gives the same decision.
   async function gwEngine() {
     if (D.source !== "live") return null;
-    if (!GWE.mtP) GWE.mtP = fetch("api/my-team", { cache: "no-store" }).then((r) => (r.ok ? r.json() : null)).catch(() => null);
+    if (!GWE.mtP) GWE.mtP = myTeamApi();
     const mt = await GWE.mtP;
     if (!mt || !(mt.ok || mt.last)) return null;
     // odds, news and minutes must be in before any projection is cached
@@ -3180,6 +3205,7 @@ td.fx2-c { padding: 4px 3px; }
   function gwSetupHTML() {
     const B = GWE.base, mt = B.mt;
     if (B.live && !B.stale) return "";
+    if (!OWNER_VIEW) return `<p class="note">Viewing ${esc(D.entry.name)}: this is their GW${gwCur} team from FPL's public data, with any GW${gwNext} transfers they've made hidden until the deadline. Free transfers, bank and sale prices are estimates.</p>`;
     const why = !mt ? "Logged-in data only loads on the live site." : mt.reason === "not_configured" ? "The site isn't signed in to your FPL account yet." : mt.reason === "expired" ? "Your saved FPL login has expired or you signed out of FPL." : `FPL login problem (${esc(mt.reason)}).`;
     return `<details class="panel setup" ${mt && mt.reason === "not_configured" ? "open" : ""}><summary><strong>Connect your FPL account</strong> <span class="note">${why}</span></summary>
         <ol>
@@ -3776,7 +3802,7 @@ td.fx2-c { padding: 4px 3px; }
   async function loadOfficial() {
     if (OFF !== undefined) return OFF;
     if (D.source !== "live") return (OFF = null);
-    if (!GWE.mtP) GWE.mtP = fetch("api/my-team", { cache: "no-store" }).then((r) => (r.ok ? r.json() : null)).catch(() => null);
+    if (!GWE.mtP) GWE.mtP = myTeamApi();
     OFF = offFrom(await GWE.mtP);
     return OFF;
   }
@@ -5374,7 +5400,7 @@ td.fx2-c { padding: 4px 3px; }
   // =====================================================================================
 
   // ---- Owner key: lets this browser save notes and record advice (set once per device with ?owner=KEY) ----
-  const ownerKey = () => store.get("ownerKey", null);
+  const ownerKey = () => (OWNER_VIEW ? store.get("ownerKey", null) : null); // no saving while viewing another team
   // Checks this device's owner password with the server once per page load.
   let ownerOk = null, OWNER_CFG = true;
   async function checkOwner(k = ownerKey()) {
