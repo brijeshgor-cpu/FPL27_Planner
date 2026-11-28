@@ -1,0 +1,417 @@
+<!doctype html>
+<html lang="en-GB">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>BG27 Words Daily</title>
+<meta name="description" content="A daily word puzzle in British English, with category challenges and a shared leaderboard.">
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='8' fill='%230f7c74'/%3E%3Ctext x='16' y='23' font-family='Arial' font-weight='900' font-size='18' fill='white' text-anchor='middle'%3EW%3C/text%3E%3C/svg%3E">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,500;12..96,800&family=Inter:wght@400;500;600&display=swap">
+<style>
+/* Layout: one centred column. Header, mode chips, an info bar with the timer, the tile grid, then the keyboard. */
+:root {
+  --bg: #eef1f5; --surface: #ffffff; --fg: #18202b; --muted: #5d6878; --line: #c9d0da;
+  --hit: #0f7c74; --near: #e07a2e; --miss: #6b7585; --key: #d9dfe7; --on-tile: #ffffff; --gold: #b8860b;
+  --display: "Bricolage Grotesque", "Arial Black", system-ui, sans-serif;
+  --body: "Inter", system-ui, -apple-system, "Segoe UI", sans-serif;
+  color-scheme: light;
+}
+@media (prefers-color-scheme: dark) { :root {
+  --bg: #11161f; --surface: #1a212d; --fg: #e8edf4; --muted: #95a1b3; --line: #374253;
+  --hit: #17a598; --near: #ea8a3f; --miss: #455064; --key: #2b3443; --gold: #e0b84a; color-scheme: dark } }
+* { box-sizing: border-box; }
+html, body { height: 100%; margin: 0; }
+body { background: var(--bg); color: var(--fg); font: 14px/1.4 var(--body); -webkit-text-size-adjust: 100%; }
+.app { max-width: 520px; margin: 0 auto; min-height: 100%; display: flex; flex-direction: column; gap: 10px;
+  padding-left: max(16px, env(safe-area-inset-left, 0px)); padding-right: max(16px, env(safe-area-inset-right, 0px));
+  padding-block: calc(env(safe-area-inset-top, 0px) + 12px) calc(env(safe-area-inset-bottom, 0px) + 12px); }
+header { display: flex; align-items: center; justify-content: space-between; gap: 10px; }
+h1 { font-family: var(--display); font-weight: 800; font-size: clamp(1.2rem, 5.5vw, 1.55rem); letter-spacing: -0.02em; margin: 0; line-height: 1; white-space: nowrap; }
+h1 span { color: var(--hit); }
+.icons { display: flex; gap: 6px; }
+.icon-btn { background: var(--surface); border: 1px solid var(--line); color: var(--fg); border-radius: 10px; height: 36px; padding: 0 12px; font: 600 0.85rem var(--body); cursor: pointer; }
+button:focus-visible, input:focus-visible { outline: 3px solid var(--near); outline-offset: 2px; }
+
+.modes { display: flex; gap: 6px; overflow-x: auto; scrollbar-width: none; padding-bottom: 2px; }
+.modes::-webkit-scrollbar { display: none; }
+.chip { flex: 0 0 auto; border: 1px solid var(--line); background: var(--surface); color: var(--fg); border-radius: 999px; padding: 7px 14px; font: 600 0.85rem var(--body); cursor: pointer; display: flex; align-items: center; justify-content: center; gap: 6px; position: relative; }
+.modes .chip { flex: 1 1 auto; padding: 8px 6px; font-size: 0.76rem; }
+.modes .chip .dot { position: absolute; top: 3px; right: 6px; width: 6px; height: 6px; }
+.chip[aria-pressed="true"] { background: var(--fg); color: var(--bg); border-color: var(--fg); }
+.chip .dot { width: 7px; height: 7px; border-radius: 50%; background: transparent; }
+.chip .dot.won { background: var(--hit); } .chip .dot.lost { background: var(--near); }
+
+.info { display: flex; align-items: center; justify-content: space-between; gap: 10px; border-block: 1px solid var(--line); padding-block: 8px; }
+.info .what { display: flex; flex-direction: column; min-width: 0; }
+.info .what b { font: 800 1rem var(--display); }
+.info .what small { color: var(--muted); font-size: 0.72rem; letter-spacing: 0.05em; text-transform: uppercase; font-variant-numeric: tabular-nums; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.timer { font: 800 1.25rem var(--display); font-variant-numeric: tabular-nums; color: var(--muted); min-width: 4ch; text-align: right; }
+.timer.running { color: var(--fg); }
+.board-btn { background: var(--hit); color: var(--on-tile); border: 0; border-radius: 10px; height: 36px; padding: 0 12px; font: 600 0.85rem var(--body); cursor: pointer; white-space: nowrap; }
+
+.board-wrap { flex: 1; display: flex; align-items: center; justify-content: center; position: relative; min-height: 0; }
+.board { display: grid; gap: 6px; }
+.row { display: grid; gap: 6px; }
+.tile { aspect-ratio: 1; display: grid; place-items: center; font: 800 var(--tf, 1.9rem) var(--display); text-transform: uppercase;
+  border: 2px solid var(--line); border-radius: 12px 4px 12px 4px; background: var(--surface); color: var(--fg); user-select: none; }
+.tile.filled { border-color: var(--muted); animation: pop .1s ease-out; }
+.tile.hit, .tile.near, .tile.miss { color: var(--on-tile); border-color: transparent; }
+.tile.hit { background: var(--hit); } .tile.near { background: var(--near); } .tile.miss { background: var(--miss); }
+.tile.reveal { animation: turn .45s ease-in-out both; }
+.row.shake { animation: shake .4s; }
+@keyframes pop { 50% { transform: scale(1.08); } }
+@keyframes turn { 50% { transform: rotateX(90deg); } }
+@keyframes shake { 20%,60% { transform: translateX(-6px); } 40%,80% { transform: translateX(6px); } }
+@media (prefers-reduced-motion: reduce) { .tile, .row { animation: none !important; } }
+.toast { position: absolute; top: 4px; left: 50%; transform: translateX(-50%); background: var(--fg); color: var(--bg); padding: 10px 16px; border-radius: 8px; font-weight: 600; font-size: 0.9rem; z-index: 5; white-space: nowrap; }
+
+.keyboard { display: flex; flex-direction: column; gap: 7px; user-select: none; }
+.krow { display: flex; gap: 5px; justify-content: center; }
+.key { flex: 1 1 0; min-width: 0; height: 54px; border: 0; border-radius: 8px; background: var(--key); color: var(--fg); font: 600 1rem var(--body); text-transform: uppercase; cursor: pointer; padding: 0; touch-action: manipulation; }
+.key.wide { flex: 1.5 1 0; font-size: 0.72rem; letter-spacing: 0.04em; }
+.key.hit { background: var(--hit); color: var(--on-tile); } .key.near { background: var(--near); color: var(--on-tile); } .key.miss { background: var(--miss); color: var(--on-tile); opacity: .75; }
+.spacer { flex: 0.5 1 0; }
+
+dialog { border: 1px solid var(--line); border-radius: 16px; background: var(--surface); color: var(--fg); width: min(440px, calc(100% - 32px)); max-height: calc(100% - 48px); padding: 22px; }
+dialog::backdrop { background: rgb(0 0 0 / .45); }
+dialog h2 { font-family: var(--display); font-size: 1.3rem; margin: 0 0 12px; text-wrap: balance; }
+dialog h3 { font: 600 0.75rem var(--body); text-transform: uppercase; letter-spacing: 0.06em; color: var(--muted); margin: 18px 0 8px; }
+dialog p { line-height: 1.5; margin: 0 0 10px; }
+.muted { color: var(--muted); font-size: 0.85rem; }
+.close { float: right; }
+.stats { display: grid; grid-template-columns: repeat(4, 1fr); gap: 8px; text-align: center; }
+.stats b { display: block; font: 800 1.6rem var(--display); font-variant-numeric: tabular-nums; }
+.stats span { font-size: 0.68rem; color: var(--muted); text-transform: uppercase; letter-spacing: 0.05em; }
+.dist { display: flex; flex-direction: column; gap: 4px; }
+.bar { display: grid; grid-template-columns: 14px 1fr; gap: 8px; align-items: center; font-size: 0.85rem; font-variant-numeric: tabular-nums; }
+.bar i { display: block; background: var(--miss); color: var(--on-tile); font-style: normal; text-align: right; padding: 2px 8px; border-radius: 4px; min-width: 24px; font-weight: 600; }
+.bar i.now { background: var(--hit); }
+.end { display: flex; align-items: center; justify-content: space-between; gap: 12px; flex-wrap: wrap; margin-top: 16px; padding-top: 14px; border-top: 1px solid var(--line); }
+.next b { display: block; font: 800 1.3rem var(--display); font-variant-numeric: tabular-nums; }
+.next span { font-size: 0.7rem; color: var(--muted); text-transform: uppercase; letter-spacing: 0.05em; }
+.btn { background: var(--hit); color: var(--on-tile); border: 0; border-radius: 10px; padding: 11px 18px; font: 600 0.95rem var(--body); cursor: pointer; }
+.btn.ghost { background: transparent; color: var(--fg); border: 1px solid var(--line); }
+.answer { font: 800 1.1rem var(--display); letter-spacing: 0.12em; text-transform: uppercase; }
+.ex { display: flex; gap: 4px; margin: 6px 0; }
+.ex .tile { width: 36px; --tf: 1.1rem; border-radius: 8px 3px 8px 3px; }
+textarea, input[type=text] { width: 100%; font: 0.95rem var(--body); background: var(--bg); color: var(--fg); border: 1px solid var(--line); border-radius: 8px; padding: 9px 10px; }
+.post { display: flex; gap: 8px; }
+.post input { flex: 1; min-width: 0; }
+table.lb { width: 100%; border-collapse: collapse; font-variant-numeric: tabular-nums; }
+.lb th { text-align: left; font: 600 0.7rem var(--body); text-transform: uppercase; letter-spacing: 0.05em; color: var(--muted); padding: 4px 6px; border-bottom: 1px solid var(--line); }
+.lb td { padding: 7px 6px; border-bottom: 1px solid var(--line); }
+.lb td.num, .lb th.num { text-align: right; }
+.lb tr.me td { font-weight: 700; }
+.lb .rank { width: 2.2em; color: var(--muted); }
+.lb tr:first-child .rank.gold { color: var(--gold); }
+.lb .x { color: var(--near); }
+.lb-wrap { max-height: 46vh; overflow: auto; }
+.tabs { display: flex; gap: 6px; flex-wrap: wrap; margin-bottom: 10px; }
+.tabs .chip { padding: 5px 11px; font-size: 0.8rem; }
+@media (max-height: 680px) { .key { height: 46px; } }
+</style>
+</head>
+<body>
+<div class="app">
+  <header>
+    <h1>BG27 <span>Words</span> Daily</h1>
+    <div class="icons">
+      <button class="icon-btn" id="helpBtn">Help</button>
+      <button class="icon-btn" id="statsBtn">Stats</button>
+    </div>
+  </header>
+
+  <nav class="modes" id="modes" aria-label="Game mode"></nav>
+
+  <div class="info">
+    <div class="what"><b id="modeTitle">Daily word</b><small id="modeSub">Puzzle #1</small></div>
+    <div class="timer" id="timer" aria-label="Time taken">0:00</div>
+    <button class="board-btn" id="boardBtn">Leaderboard</button>
+  </div>
+
+  <div class="board-wrap">
+    <div class="toast" id="toast" hidden></div>
+    <div class="board" id="board" aria-label="Guesses"></div>
+  </div>
+
+  <div class="keyboard" id="keyboard" aria-label="Keyboard"></div>
+</div>
+
+<dialog id="helpDlg">
+  <button class="icon-btn close" data-close>Close</button>
+  <h2>How to play</h2>
+  <p>Find the hidden word in six tries. Every mode gets a new word at midnight, and everyone plays the same words.</p>
+  <div class="ex"><div class="tile hit">c</div><div class="tile">r</div><div class="tile">a</div><div class="tile">n</div><div class="tile">e</div></div>
+  <p class="muted"><b>C</b> is in the word and in the right spot.</p>
+  <div class="ex"><div class="tile">s</div><div class="tile near">t</div><div class="tile">o</div><div class="tile">n</div><div class="tile">e</div></div>
+  <p class="muted"><b>T</b> is in the word but in a different spot.</p>
+  <div class="ex"><div class="tile">p</div><div class="tile">l</div><div class="tile">u</div><div class="tile miss">m</div><div class="tile">b</div></div>
+  <p class="muted"><b>M</b> is not in the word.</p>
+  <h3>Modes</h3>
+  <p class="muted"><b>Daily</b> is a five-letter word in British English. Guesses must be real words.</p>
+  <p class="muted"><b>Football, Movies, Geography and Brands</b> are 4 to 7 letters, shown by the grid. The word is a club, player, film, place, brand or a term from that world. Any letters are allowed as guesses, because names aren't in the dictionary.</p>
+  <h3>Leaderboard</h3>
+  <p class="muted">The clock starts when you type your first letter. Finish, add a nickname and your result joins that day's board. Fewest guesses wins; time breaks ties.</p>
+</dialog>
+
+<dialog id="statsDlg">
+  <button class="icon-btn close" data-close>Close</button>
+  <h2 id="statsTitle">Your stats</h2>
+  <div class="stats" id="statsGrid"></div>
+  <h3>Guesses per win</h3>
+  <div class="dist" id="dist"></div>
+  <div id="postBox" hidden>
+    <h3>Post to today's leaderboard</h3>
+    <form class="post" id="postForm">
+      <input type="text" id="nick" maxlength="16" placeholder="Your nickname" autocomplete="nickname" required>
+      <button class="btn" type="submit" id="postBtn">Post</button>
+    </form>
+    <p class="muted" id="postMsg" style="margin-top:6px"></p>
+  </div>
+  <div class="end" id="endBox" hidden>
+    <div class="next"><span>Next word in</span><b id="countdown">--:--:--</b></div>
+    <div style="display:flex;gap:8px;flex-wrap:wrap">
+      <button class="btn ghost" id="seeBoard">Leaderboard</button>
+      <button class="btn" id="shareBtn">Copy result</button>
+    </div>
+    <textarea id="shareText" rows="8" readonly hidden></textarea>
+  </div>
+</dialog>
+
+<dialog id="boardDlg">
+  <button class="icon-btn close" data-close>Close</button>
+  <h2 id="lbTitle">Today's leaderboard</h2>
+  <div class="tabs" id="lbTabs"></div>
+  <div class="lb-wrap"><table class="lb"><thead><tr><th class="rank">#</th><th>Player</th><th class="num">Guesses</th><th class="num">Time</th></tr></thead><tbody id="lbBody"></tbody></table></div>
+  <p class="muted" id="lbNote" style="margin-top:10px"></p>
+</dialog>
+
+<script>
+/*WORDS*/
+/*LOGIC*/
+(() => {
+const $ = id => document.getElementById(id);
+const store = {
+  get(k, d) { try { const v = localStorage.getItem("bg27w:" + k); return v ? JSON.parse(v) : d; } catch { return d; } },
+  set(k, v) { try { localStorage.setItem("bg27w:" + k, JSON.stringify(v)); } catch {} }
+};
+const VALID = new Set([...ANSWERS, ...EXTRA]);
+function today() { const d = new Date(); return Date.UTC(d.getFullYear(), d.getMonth(), d.getDate()) / 864e5; }
+let dayNo = today();
+let mode = MODES.includes(store.get("mode", "daily")) ? store.get("mode", "daily") : "daily";
+const puzzleNo = () => dayNo - LAUNCH + 1;
+const answer = () => answerFor(mode, dayNo);
+const LEN = () => answer().length;
+
+// Migrate the first version's saved game and stats into the Daily mode.
+if (store.get("game", null) && !store.get("game:daily", null)) { store.set("game:daily", store.get("game", null)); }
+if (store.get("stats", null) && !store.get("stats:daily", null)) { store.set("stats:daily", store.get("stats", null)); }
+
+let S, current = "", busy = false;
+function load() { const s = store.get("game:" + mode, null); S = s && s.day === dayNo ? s : { day: dayNo, guesses: [], status: "play" }; current = ""; }
+function save() { store.set("game:" + mode, S); }
+function stateOf(m) { const s = store.get("game:" + m, null); return s && s.day === dayNo ? s.status : "play"; }
+
+const board = $("board"), kb = $("keyboard");
+function buildModes() {
+  $("modes").innerHTML = "";
+  for (const m of MODES) {
+    const b = document.createElement("button"); b.className = "chip"; b.type = "button"; b.dataset.mode = m;
+    b.setAttribute("aria-pressed", String(m === mode));
+    const st = stateOf(m);
+    b.innerHTML = `<span class="dot ${st === "won" ? "won" : st === "lost" ? "lost" : ""}"></span>${MODE_NAMES[m]}`;
+    $("modes").appendChild(b);
+  }
+}
+$("modes").addEventListener("click", e => { const b = e.target.closest(".chip"); if (!b || busy || b.dataset.mode === mode) return; mode = b.dataset.mode; store.set("mode", mode); start(); });
+
+function buildBoard() {
+  const n = LEN();
+  board.innerHTML = "";
+  board.style.width = `min(${n * 64}px, 100%)`;
+  board.style.setProperty("--tf", n <= 5 ? "1.9rem" : n === 6 ? "1.65rem" : "1.4rem");
+  for (let r = 0; r < ROWS; r++) {
+    const row = document.createElement("div"); row.className = "row"; row.style.gridTemplateColumns = `repeat(${n}, 1fr)`;
+    for (let c = 0; c < n; c++) { const t = document.createElement("div"); t.className = "tile"; row.appendChild(t); }
+    board.appendChild(row);
+  }
+}
+function buildKeys() {
+  kb.innerHTML = "";
+  ["qwertyuiop", "asdfghjkl", "+zxcvbnm-"].forEach((r, i) => {
+    const row = document.createElement("div"); row.className = "krow";
+    if (i === 1) row.appendChild(Object.assign(document.createElement("div"), { className: "spacer" }));
+    for (const ch of r) {
+      const b = document.createElement("button"); b.className = "key"; b.type = "button";
+      if (ch === "+") { b.textContent = "Enter"; b.dataset.k = "Enter"; b.classList.add("wide"); }
+      else if (ch === "-") { b.textContent = "Del"; b.dataset.k = "Backspace"; b.classList.add("wide"); b.setAttribute("aria-label", "Delete"); }
+      else { b.textContent = ch; b.dataset.k = ch; b.id = "key-" + ch; }
+      row.appendChild(b);
+    }
+    if (i === 1) row.appendChild(Object.assign(document.createElement("div"), { className: "spacer" }));
+    kb.appendChild(row);
+  });
+}
+
+function fmt(sec) { sec = Math.max(0, Math.round(sec)); const h = Math.floor(sec / 3600), m = Math.floor(sec / 60) % 60, s = sec % 60; return (h ? h + ":" + String(m).padStart(2, "0") : m) + ":" + String(s).padStart(2, "0"); }
+function elapsed() { if (!S.start) return 0; return ((S.end || Date.now()) - S.start) / 1000; }
+
+function paint() {
+  const ans = answer(), n = ans.length, rank = { miss: 1, near: 2, hit: 3 }, keyState = {};
+  $("modeTitle").textContent = mode === "daily" ? "Daily word" : MODE_NAMES[mode] + " challenge";
+  $("modeSub").textContent = `#${puzzleNo()} · ${n} letters · ${new Date().toLocaleDateString("en-GB", { day: "numeric", month: "short" })}`;
+  [...board.children].forEach((row, r) => {
+    const g = S.guesses[r], word = g || (r === S.guesses.length ? current : ""), res = g ? score(g, ans) : null;
+    [...row.children].forEach((t, c) => { t.textContent = word[c] || ""; t.className = "tile" + (word[c] ? " filled" : "") + (res ? " " + res[c] : ""); });
+    if (res) res.forEach((v, c) => { const k = g[c]; if (!keyState[k] || rank[v] > rank[keyState[k]]) keyState[k] = v; });
+  });
+  kb.querySelectorAll(".key[id]").forEach(k => { k.className = "key" + (keyState[k.dataset.k] ? " " + keyState[k.dataset.k] : ""); });
+  paintTimer();
+}
+function paintTimer() { const t = $("timer"); t.textContent = fmt(elapsed()); t.classList.toggle("running", !!S.start && !S.end); }
+
+let toastTimer;
+function toast(msg, ms = 1600) { const t = $("toast"); t.textContent = msg; t.hidden = false; clearTimeout(toastTimer); if (ms) toastTimer = setTimeout(() => t.hidden = true, ms); }
+function shake() { const row = board.children[S.guesses.length]; row.classList.remove("shake"); void row.offsetWidth; row.classList.add("shake"); }
+
+function submit() {
+  const n = LEN();
+  if (current.length < n) { toast("Not enough letters"); shake(); return; }
+  if (mode === "daily" && !VALID.has(current)) { toast("Not in the word list"); shake(); return; }
+  const ans = answer(), rowIdx = S.guesses.length;
+  S.guesses.push(current); current = "";
+  if (S.guesses[rowIdx] === ans) S.status = "won"; else if (S.guesses.length === ROWS) S.status = "lost";
+  if (S.status !== "play") S.end = Date.now();
+  save();
+  const reduce = matchMedia("(prefers-reduced-motion: reduce)").matches;
+  const res = score(S.guesses[rowIdx], ans), tiles = [...board.children[rowIdx].children];
+  busy = true;
+  tiles.forEach((t, i) => setTimeout(() => { t.classList.add("reveal"); setTimeout(() => t.classList.add(res[i]), reduce ? 0 : 220); }, reduce ? 0 : i * 230));
+  setTimeout(() => { busy = false; paint(); if (S.status !== "play") finish(); }, reduce ? 50 : n * 230 + 300);
+}
+
+const PRAISE = ["Genius", "Brilliant", "Superb", "Great", "Solid", "Phew"];
+function finish() {
+  const st = store.get("stats:" + mode, { played: 0, wins: 0, streak: 0, best: 0, dist: [0, 0, 0, 0, 0, 0] });
+  if (st.lastDay !== dayNo) {
+    st.played++;
+    if (S.status === "won") { st.wins++; st.dist[S.guesses.length - 1]++; st.streak = st.lastWin === dayNo - 1 ? st.streak + 1 : 1; st.best = Math.max(st.best, st.streak); st.lastWin = dayNo; }
+    else st.streak = 0;
+    st.lastDay = dayNo; store.set("stats:" + mode, st);
+  }
+  buildModes();
+  toast(S.status === "won" ? PRAISE[S.guesses.length - 1] + " · " + fmt(elapsed()) : answer().toUpperCase(), S.status === "won" ? 1800 : 0);
+  if (store.get("nick", "")) postScore(store.get("nick", ""));
+  setTimeout(openStats, 1400);
+}
+
+function openStats() {
+  const st = store.get("stats:" + mode, { played: 0, wins: 0, streak: 0, best: 0, dist: [0, 0, 0, 0, 0, 0] });
+  const streak = st.lastWin != null && st.lastWin >= dayNo - 1 ? st.streak : 0;
+  const pct = st.played ? Math.round(st.wins / st.played * 100) : 0;
+  $("statsGrid").innerHTML = [[st.played, "Played"], [pct, "Win %"], [streak, "Streak"], [st.best, "Best"]].map(([v, l]) => `<div><b>${v}</b><span>${l}</span></div>`).join("");
+  const max = Math.max(1, ...st.dist);
+  $("dist").innerHTML = st.dist.map((n, i) => `<div class="bar"><span>${i + 1}</span><i class="${S.status === "won" && S.guesses.length === i + 1 ? "now" : ""}" style="width:${Math.max(8, n / max * 100)}%">${n}</i></div>`).join("");
+  const done = S.status !== "play";
+  $("endBox").hidden = !done;
+  $("postBox").hidden = !done;
+  if (done) {
+    $("nick").value = store.get("nick", "");
+    const posted = S.posted;
+    $("postForm").hidden = !!posted;
+    $("postMsg").textContent = posted ? `Posted as ${posted}.` : "Your nickname is saved on this device for next time.";
+  }
+  const label = mode === "daily" ? "" : MODE_NAMES[mode] + ": ";
+  $("statsTitle").innerHTML = done ? (S.status === "won" ? `${label}solved in ${S.guesses.length}, ${fmt(elapsed())}` : `${label}the word was <span class="answer">${answer()}</span>`) : `${MODE_NAMES[mode]} stats`;
+  $("shareText").hidden = true;
+  if (!$("statsDlg").open) $("statsDlg").showModal();
+}
+
+async function postScore(name) {
+  name = name.trim().slice(0, 16);
+  if (!name || S.status === "play" || S.posted) return;
+  $("postMsg").textContent = "Posting…";
+  try {
+    const r = await fetch("/api/score", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ mode, day: dayNo, name, guesses: S.guesses, seconds: Math.round(elapsed()) }) });
+    const j = await r.json().catch(() => ({}));
+    if (r.ok) { S.posted = j.name || name; save(); store.set("nick", name); $("postForm").hidden = true; $("postMsg").textContent = `Posted as ${S.posted}. You're #${j.rank} of ${j.total} today.`; }
+    else $("postMsg").textContent = j.error || "That didn't post. Try again.";
+  } catch { $("postMsg").textContent = "No connection. Try again when you're back online."; }
+}
+$("postForm").addEventListener("submit", e => { e.preventDefault(); postScore($("nick").value); });
+
+let lbMode = mode;
+async function openBoard(m) {
+  lbMode = m || mode;
+  $("lbTabs").innerHTML = MODES.map(x => `<button class="chip" type="button" data-lb="${x}" aria-pressed="${x === lbMode}">${MODE_NAMES[x]}</button>`).join("");
+  $("lbTitle").textContent = `Leaderboard · #${puzzleNo()}`;
+  $("lbBody").innerHTML = `<tr><td colspan="4" class="muted">Loading…</td></tr>`;
+  $("lbNote").textContent = "";
+  if (!$("boardDlg").open) $("boardDlg").showModal();
+  try {
+    const r = await fetch(`/api/board?mode=${lbMode}&day=${dayNo}`);
+    const j = await r.json();
+    const rows = j.entries || [], me = (store.get("game:" + lbMode, {}) || {}).posted;
+    const body = $("lbBody"); body.innerHTML = "";
+    if (!rows.length) { body.innerHTML = `<tr><td colspan="4" class="muted">No scores yet today. Be the first.</td></tr>`; }
+    rows.forEach((e, i) => {
+      const tr = document.createElement("tr"); if (me && e.name === me) tr.className = "me";
+      const cells = [String(i + 1), e.name, e.won ? `${e.n}/6` : "X/6", fmt(e.s)];
+      cells.forEach((v, k) => { const td = document.createElement("td"); td.textContent = v; td.className = k === 0 ? "rank" + (i === 0 && e.won ? " gold" : "") : k >= 2 ? "num" + (k === 2 && !e.won ? " x" : "") : ""; tr.appendChild(td); });
+      body.appendChild(tr);
+    });
+    $("lbNote").textContent = stateOf(lbMode) === "play" ? "Play this mode to post your own score." : "Fewest guesses first; time breaks ties. Resets at midnight.";
+  } catch { $("lbBody").innerHTML = `<tr><td colspan="4" class="muted">Couldn't load the leaderboard. Check your connection.</td></tr>`; }
+}
+$("lbTabs").addEventListener("click", e => { const b = e.target.closest("[data-lb]"); if (b) openBoard(b.dataset.lb); });
+$("boardBtn").addEventListener("click", () => openBoard(mode));
+$("seeBoard").addEventListener("click", () => { $("statsDlg").close(); openBoard(mode); });
+
+function shareString() {
+  const ans = answer(), sym = { hit: "🟩", near: "🟧", miss: "⬛" };
+  const grid = S.guesses.map(g => score(g, ans).map(v => sym[v]).join("")).join("\n");
+  const label = mode === "daily" ? "" : " " + MODE_NAMES[mode];
+  return `BG27 Words Daily${label} #${puzzleNo()} ${S.status === "won" ? S.guesses.length : "X"}/6 · ${fmt(elapsed())}\n\n${grid}\n${location.origin}`;
+}
+$("shareBtn").addEventListener("click", () => {
+  const text = shareString(), ta = $("shareText");
+  const fallback = () => { ta.value = text; ta.hidden = false; ta.focus(); ta.select(); toast("Select and copy the text below"); };
+  if (navigator.share && matchMedia("(pointer: coarse)").matches) { navigator.share({ text }).catch(() => {}); return; }
+  try { navigator.clipboard.writeText(text).then(() => toast("Copied to clipboard"), fallback); } catch { fallback(); }
+});
+
+function press(k) {
+  if (busy || S.status !== "play") return;
+  if (k === "Enter") return submit();
+  if (k === "Backspace") { current = current.slice(0, -1); return paint(); }
+  if (/^[a-z]$/.test(k) && current.length < LEN()) {
+    if (!S.start) { S.start = Date.now(); save(); }
+    current += k; paint();
+  }
+}
+kb.addEventListener("click", e => { const b = e.target.closest(".key"); if (b) { press(b.dataset.k); b.blur(); } });
+document.addEventListener("keydown", e => {
+  if (e.ctrlKey || e.metaKey || e.altKey || document.querySelector("dialog[open]")) return;
+  const k = e.key.length === 1 ? e.key.toLowerCase() : e.key;
+  if (k === "Enter" || k === "Backspace" || /^[a-z]$/.test(k)) { e.preventDefault(); press(k); }
+});
+document.querySelectorAll("dialog").forEach(d => d.addEventListener("click", e => { if (e.target === d || e.target.closest("[data-close]")) d.close(); }));
+$("helpBtn").addEventListener("click", () => $("helpDlg").showModal());
+$("statsBtn").addEventListener("click", openStats);
+
+function tick() {
+  const now = new Date(), mid = new Date(now.getFullYear(), now.getMonth(), now.getDate() + 1);
+  const s = Math.floor((mid - now) / 1000);
+  $("countdown").textContent = [s / 3600, s / 60 % 60, s % 60].map(v => String(Math.floor(v)).padStart(2, "0")).join(":");
+  if (S.start && !S.end) paintTimer();
+  if (today() !== dayNo) { dayNo = today(); document.querySelectorAll("dialog[open]").forEach(d => d.close()); start(); toast("New words are ready"); }
+}
+function start() { load(); buildModes(); buildBoard(); paint(); }
+
+buildKeys(); start(); setInterval(tick, 1000); tick();
+if (!store.get("seenHelp2", false)) { store.set("seenHelp2", true); $("helpDlg").showModal(); }
+})();
+</script>
+</body>
+</html>

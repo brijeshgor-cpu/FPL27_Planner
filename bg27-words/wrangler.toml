@@ -1,0 +1,8 @@
+name = "bg27-words"
+main = "src/worker.js"
+compatibility_date = "2025-06-01"
+workers_dev = true
+
+[[kv_namespaces]]
+binding = "BG27_WORDS"
+id = "7105cc3c5bda40828e5fe02eb63d0226"
