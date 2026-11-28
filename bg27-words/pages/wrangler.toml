@@ -1,0 +1,9 @@
+# Cloudflare Pages project: the game at https://bg27-wordrush.pages.dev
+# public/_worker.js is the bundled Worker (built by build.py), so Pages runs the same code.
+name = "bg27-wordrush"
+pages_build_output_dir = "./public"
+compatibility_date = "2025-06-01"
+
+[[kv_namespaces]]
+binding = "BG27_WORDS"
+id = "7105cc3c5bda40828e5fe02eb63d0226"

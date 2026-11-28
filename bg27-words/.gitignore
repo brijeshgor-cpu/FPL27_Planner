@@ -2,3 +2,5 @@ src/page.gen.js
 dist/
 node_modules/
 .wrangler/
+.bundle/
+pages/public/_worker.js

@@ -134,9 +134,9 @@ function playerStats(doc, idx, today) {
 export default {
   async fetch(req, env) {
     const url = new URL(req.url);
-    // The game was renamed: send the old address to the new one.
-    if (url.hostname.startsWith("bg27-words.")) {
-      url.hostname = url.hostname.replace("bg27-words.", "bg27-wordrush.");
+    // The game lives at bg27-wordrush.pages.dev. The old workers.dev addresses forward there.
+    if (url.hostname.endsWith(".workers.dev")) {
+      url.hostname = "bg27-wordrush.pages.dev";
       return Response.redirect(url.toString(), 308);
     }
     if (url.pathname === "/" || url.pathname === "/index.html") {
