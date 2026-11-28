@@ -110,6 +110,19 @@ dialog p { line-height: 1.5; margin: 0 0 10px; }
 .stats b { display: block; font: 800 1.6rem var(--display); font-variant-numeric: tabular-nums; }
 .stats span { font-size: 0.68rem; color: var(--muted); text-transform: uppercase; letter-spacing: 0.05em; }
 .dist { display: flex; flex-direction: column; gap: 4px; }
+.tiles { display: grid; grid-template-columns: repeat(3, 1fr); gap: 16px 10px; }
+.tile-stat span { display: block; font-size: 0.75rem; color: var(--muted); }
+.tile-stat b { display: block; font: 800 1.75rem/1.15 var(--display); font-variant-numeric: tabular-nums; margin-top: 2px; }
+.tile-stat em { display: block; font-style: normal; font-size: 0.75rem; font-weight: 600; color: var(--muted); margin-top: 2px; }
+.tile-stat em.up { color: var(--good); } .tile-stat em.down { color: var(--near); }
+.dash-sep { border: 0; border-top: 1px solid var(--line); margin: 16px 0 4px; }
+.dash-note { margin-top: 10px; }
+.dev { margin-top: 16px; padding-top: 12px; border-top: 1px solid var(--line); }
+.dev .row2 { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; }
+.dev .code { font: 800 1.4rem var(--display); letter-spacing: 0.12em; }
+.dev input { flex: 1; min-width: 0; text-transform: uppercase; letter-spacing: 0.08em; }
+.linkish { background: none; border: 0; padding: 0; color: var(--accent); font: 600 0.85rem var(--body); cursor: pointer; text-decoration: underline; text-underline-offset: 2px; }
+.lb td.name button { all: unset; cursor: pointer; } .lb td.name button:hover, .lb td.name button:focus-visible { text-decoration: underline; }
 .bar { display: grid; grid-template-columns: 14px 1fr; gap: 8px; align-items: center; font-size: 0.85rem; font-variant-numeric: tabular-nums; }
 .bar i { display: block; background: var(--miss); color: var(--on-miss); font-style: normal; text-align: right; padding: 2px 8px; border-radius: 4px; min-width: 24px; font-weight: 600; }
 .bar i.now { background: var(--hit); color: var(--on-hit); }
@@ -201,14 +214,18 @@ table.lb { width: 100%; border-collapse: separate; border-spacing: 0 6px; font-v
   <p class="muted">Football, Movies, Geography and Brands. Words are 4 to 7 letters, shown by the grid. Any letters are allowed, because names aren't in the dictionary. Stuck? Tap <b>Hint</b> to see what kind of word it is, such as "Football player". There's no clock and no leaderboard, so take your time.</p>
   <h3>Daily leaderboard</h3>
   <p class="muted">Points: 1 guess 600, 2 guesses 500, 3 guesses 400, 4 guesses 300, 5 guesses 200, 6 guesses 100, a miss 0. Each day ranks by fewest guesses, then fastest time, and identical results share a place. Weekly and Monthly add up your points. All-time shows the ten best single games.</p>
+  <h3>Your stats and devices</h3>
+  <p class="muted">There's no login. The first device to post with a nickname owns it, so nobody else can post as you. Tap <b>Stats</b> to see your global rank, win rate, streaks and points. To play on another device, open Stats, tap <b>Get a link code</b> and enter the code on the new device. Tap any name on the leaderboard to see their stats.</p>
 </dialog>
 
 <dialog id="statsDlg">
   <button class="icon-btn close" data-close>Close</button>
   <h2 id="statsTitle">Your stats</h2>
   <div class="stats" id="statsGrid"></div>
-  <h3>Guesses per win</h3>
+  <div id="dash" hidden></div>
+  <h3>Guess distribution</h3>
   <div class="dist" id="dist"></div>
+  <p class="muted dash-note" id="dashNote" hidden></p>
   <div id="postBox" hidden>
     <h3>Post to the leaderboard</h3>
     <form class="post" id="postForm">
@@ -225,6 +242,27 @@ table.lb { width: 100%; border-collapse: separate; border-spacing: 0 6px; font-v
     </div>
     <textarea id="shareText" rows="8" readonly hidden></textarea>
   </div>
+  <div class="dev" id="devBox" hidden>
+    <h3 style="margin-top:0">Your devices</h3>
+    <div id="devOwn" hidden>
+      <p class="muted">Play on another phone or computer as <b id="devName"></b>: get a code here and enter it there. It works once, within 15 minutes.</p>
+      <div class="row2"><button class="btn ghost" type="button" id="codeBtn">Get a link code</button><span class="code" id="codeOut"></span></div>
+    </div>
+    <form class="row2" id="linkForm" style="margin-top:10px">
+      <input type="text" id="linkCode" maxlength="9" placeholder="Code, e.g. K7QM-2XPA" autocomplete="off" aria-label="Link code">
+      <button class="btn" type="submit">Link</button>
+    </form>
+    <p class="muted" id="devMsg" style="margin-top:6px"></p>
+  </div>
+</dialog>
+
+<dialog id="playerDlg">
+  <button class="icon-btn close" data-close>Close</button>
+  <h2 id="pTitle">Stats</h2>
+  <div id="pDash"></div>
+  <h3>Guess distribution</h3>
+  <div class="dist" id="pDist"></div>
+  <p class="muted dash-note" id="pNote"></p>
 </dialog>
 
 <dialog id="boardDlg">
@@ -409,20 +447,90 @@ function openStats() {
   }
   const label = isDaily() ? "" : MODE_NAMES[mode] + ": ";
   const time = isDaily() ? `, ${fmt(elapsed())} · ${pointsFor(true, S.guesses.length)} pts` : "";
-  $("statsTitle").innerHTML = done ? (S.status === "won" ? `${label}solved in ${S.guesses.length}${time}` : `${label}the word was <span class="answer">${answer()}</span>`) : `${MODE_NAMES[mode]} stats`;
+  $("statsTitle").innerHTML = done ? (S.status === "won" ? `${label}solved in ${S.guesses.length}${time}` : `${label}the word was <span class="answer">${answer()}</span>`) : (isDaily() ? "Your Daily stats" : `${MODE_NAMES[mode]} stats`);
   $("shareText").hidden = true;
+  // Daily: the server dashboard for this device's nickname, or a prompt to get one.
+  const daily = isDaily();
+  $("statsGrid").hidden = false; $("dash").hidden = true; $("devBox").hidden = !daily;
+  $("dashNote").hidden = !daily;
+  $("dashNote").textContent = daily ? "Post a Daily score with a nickname to get your global rank, total points and stats on every device." : "";
+  paintDevices();
   if (!$("statsDlg").open) $("statsDlg").showModal();
+  const nick = store.get("nick", "");
+  if (daily && nick) {
+    fetch(`/api/player?name=${encodeURIComponent(nick)}&day=${dayNo}`).then(r => r.ok ? r.json() : null).then(st => {
+      if (!st || mode !== "daily") return;
+      $("statsGrid").hidden = true; $("dash").hidden = false; $("dashNote").hidden = false;
+      $("dash").innerHTML = dashTiles(st);
+      paintDist($("dist"), st.dist, S.status === "won" && S.posted ? S.guesses.length : 0);
+      $("dashNote").textContent = st.best ? `Best game: ${st.best.n}/6 in ${fmt(st.best.s)} on ${fmtDate(st.best.d, { day: "numeric", month: "short" })}.` : "";
+    }).catch(() => {});
+  }
 }
+
+function paintDist(el, dist, now) {
+  const max = Math.max(1, ...dist);
+  el.innerHTML = dist.map((n, i) => `<div class="bar"><span>${i + 1}</span><i class="${now === i + 1 ? "now" : ""}" style="width:${Math.max(8, n / max * 100)}%">${n}</i></div>`).join("");
+}
+function dashTiles(st) {
+  const ch = st.rankChange;
+  const move = ch == null ? `<em>of ${st.players} players</em>` : ch > 0 ? `<em class="up">↑ ${ch} place${ch > 1 ? "s" : ""}</em>` : ch < 0 ? `<em class="down">↓ ${-ch} place${ch < -1 ? "s" : ""}</em>` : `<em>No change</em>`;
+  const t = (label, value, extra = "") => `<div class="tile-stat"><span>${label}</span><b>${value}</b>${extra}</div>`;
+  return `<div class="tiles">${t("Global rank", "#" + st.rank, move)}${t("Win rate", st.winRate + "%", `<em>${st.wins} of ${st.played}</em>`)}${t("Average guesses", st.avgGuesses == null ? "–" : st.avgGuesses.toFixed(1))}
+    ${t("Current streak", st.current)}${t("Longest streak", st.longest)}${t("Total points", st.points.toLocaleString("en-GB"))}</div><hr class="dash-sep">`;
+}
+async function openPlayer(name) {
+  $("pTitle").textContent = `${name}'s Daily stats`;
+  $("pDash").innerHTML = `<p class="muted">Loading…</p>`; $("pDist").innerHTML = ""; $("pNote").textContent = "";
+  if (!$("playerDlg").open) $("playerDlg").showModal();
+  try {
+    const r = await fetch(`/api/player?name=${encodeURIComponent(name)}&day=${dayNo}`);
+    if (!r.ok) { $("pDash").innerHTML = `<p class="muted">No stats for this player yet.</p>`; return; }
+    const st = await r.json();
+    $("pDash").innerHTML = dashTiles(st); paintDist($("pDist"), st.dist, 0);
+    $("pNote").textContent = st.best ? `Best game: ${st.best.n}/6 in ${fmt(st.best.s)}.` : "";
+  } catch { $("pDash").innerHTML = `<p class="muted">Couldn't load stats. Check your connection.</p>`; }
+}
+
+// Devices: the nickname belongs to the devices holding its key. A code links another device.
+function paintDevices() {
+  const nick = store.get("nick", ""), key = store.get("key", "");
+  $("devOwn").hidden = !(nick && key);
+  $("devName").textContent = nick;
+  $("codeOut").textContent = "";
+}
+$("codeBtn").addEventListener("click", async () => {
+  $("devMsg").textContent = "";
+  try {
+    const r = await fetch("/api/transfer", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ name: store.get("nick", ""), key: store.get("key", "") }) });
+    const j = await r.json();
+    if (r.ok) { $("codeOut").textContent = j.code; $("devMsg").textContent = `Enter this code on your other device within ${j.minutes} minutes.`; }
+    else $("devMsg").textContent = j.error || "Couldn't make a code. Try again.";
+  } catch { $("devMsg").textContent = "No connection. Try again when you're back online."; }
+});
+$("linkForm").addEventListener("submit", async e => {
+  e.preventDefault();
+  const code = $("linkCode").value.trim();
+  if (!code) return;
+  $("devMsg").textContent = "Linking…";
+  try {
+    const r = await fetch("/api/link", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ code }) });
+    const j = await r.json();
+    if (r.ok) { store.set("nick", j.name); store.set("key", j.key); $("linkCode").value = ""; $("devMsg").textContent = `Linked. This device now plays as ${j.name}.`; openStats(); if (isDaily() && S.status !== "play" && !S.posted) postScore(j.name); }
+    else $("devMsg").textContent = j.error || "That code didn't work.";
+  } catch { $("devMsg").textContent = "No connection. Try again when you're back online."; }
+});
 
 async function postScore(name) {
   name = name.trim().slice(0, 16);
   if (!name || !isDaily() || S.status === "play" || S.posted) return;
   $("postMsg").textContent = "Posting…";
   try {
-    const r = await fetch("/api/score", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ mode: "daily", day: dayNo, name, guesses: S.guesses, seconds: Math.round(elapsed()) }) });
+    const r = await fetch("/api/score", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ mode: "daily", day: dayNo, name, key: store.get("nick", "").toLowerCase() === name.toLowerCase() ? store.get("key", "") : "", guesses: S.guesses, seconds: Math.round(elapsed()) }) });
     const j = await r.json().catch(() => ({}));
-    if (r.ok) { S.posted = j.name || name; save(); store.set("nick", name); $("postForm").hidden = true; $("postMsg").textContent = `Posted as ${S.posted}: ${j.pts} points, #${j.rank} of ${j.total} today.`; }
-    else $("postMsg").textContent = j.error || "That didn't post. Try again.";
+    if (r.ok) { S.posted = j.name || name; save(); store.set("nick", S.posted); if (j.key) store.set("key", j.key); paintDevices(); $("postForm").hidden = true; $("postMsg").textContent = `Posted as ${S.posted}: ${j.pts} points, #${j.rank} of ${j.total} today.`; }
+    else if (j.already) { S.posted = name; save(); $("postForm").hidden = true; $("postMsg").textContent = j.error; }
+    else { $("postMsg").textContent = j.error || "That didn't post. Try again."; if (j.claimed) $("postForm").hidden = false; }
   } catch { $("postMsg").textContent = "No connection. Try again when you're back online."; }
 }
 $("postForm").addEventListener("submit", e => { e.preventDefault(); postScore($("nick").value); });
@@ -468,7 +576,9 @@ async function openBoard(view) {
       const tr = document.createElement("tr"), mine = me && e.name.toLowerCase() === me;
       if (mine) tr.className = "me";
       cell(tr, String(rk[i]), "rank" + (rk[i] <= 3 && e.pts > 0 ? " r" + rk[i] : ""));
-      cell(tr, e.name + (mine ? " (You)" : ""), "name", lbView === "alltime" && e.day ? fmtDate(e.day, { day: "2-digit", month: "2-digit", year: "2-digit" }) : "");
+      cell(tr, "", "name", lbView === "alltime" && e.day ? fmtDate(e.day, { day: "2-digit", month: "2-digit", year: "2-digit" }) : "");
+      const nb = document.createElement("button"); nb.type = "button"; nb.dataset.player = e.name; nb.textContent = e.name + (mine ? " (You)" : "");
+      tr.lastChild.prepend(nb);
       if (period) cell(tr, String(e.played), "num");
       else cell(tr, e.won ? `${e.n}/6` : "X/6", "num " + (e.won ? "g" : "x"));
       cell(tr, fmt(e.s), "num");
@@ -482,6 +592,7 @@ async function openBoard(view) {
     }
   } catch { if (asked === lbView) $("lbBody").innerHTML = `<tr><td colspan="5" class="empty">Couldn't load the leaderboard. Check your connection.</td></tr>`; }
 }
+$("lbBody").addEventListener("click", e => { const b = e.target.closest("[data-player]"); if (b) openPlayer(b.dataset.player); });
 $("lbTabs").addEventListener("click", e => { const b = e.target.closest("[data-lb]"); if (b) openBoard(b.dataset.lb); });
 $("boardBtn").addEventListener("click", () => openBoard());
 $("seeBoard").addEventListener("click", () => { $("statsDlg").close(); openBoard(); });
