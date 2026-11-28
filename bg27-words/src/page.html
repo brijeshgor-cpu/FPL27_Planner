@@ -60,6 +60,12 @@ button:focus-visible, input:focus-visible { outline: 3px solid var(--near); outl
 .chip[aria-expanded="true"] .caret { transform: rotate(180deg); }
 .cats { display: grid; grid-template-columns: repeat(4, 1fr); gap: 6px; }
 .cats .chip { padding: 8px 4px; font-size: 0.78rem; }
+.cats .chip.kids { grid-column: 1 / -1; border-style: dashed; border-color: var(--near); font-size: 0.85rem; }
+.cats .chip.kids svg { width: 14px; height: 14px; color: var(--near); }
+.cats .chip.kids[aria-pressed="true"] { background: var(--near); border-color: var(--near); border-style: solid; }
+.cats .chip.kids[aria-pressed="true"] svg { color: var(--on-near); }
+.lb-tip { text-align: center; color: var(--muted); font-size: 0.8rem; margin: 0 0 6px; }
+#confetti { position: fixed; inset: 0; width: 100%; height: 100%; pointer-events: none; z-index: 2147483647; }
 
 .info { display: flex; align-items: center; justify-content: space-between; gap: 10px; border-block: 1px solid var(--line); padding-block: 8px; min-height: 54px; }
 .info .what { display: flex; flex-direction: column; min-width: 0; flex: 1; }
@@ -89,7 +95,7 @@ button:focus-visible, input:focus-visible { outline: 3px solid var(--near); outl
 @keyframes turn { 50% { transform: rotateX(90deg); } }
 @keyframes shake { 20%,60% { transform: translateX(-6px); } 40%,80% { transform: translateX(6px); } }
 @media (prefers-reduced-motion: reduce) { .tile, .row { animation: none !important; } }
-.toast { position: absolute; top: 4px; left: 50%; transform: translateX(-50%); background: var(--near); color: var(--on-near); padding: 10px 16px; border-radius: 8px; font-weight: 600; font-size: 0.9rem; z-index: 5; white-space: nowrap; }
+.toast { position: absolute; top: 4px; left: 50%; transform: translateX(-50%); background: var(--near); color: var(--on-near); padding: 10px 16px; border-radius: 8px; font-weight: 600; font-size: 0.9rem; z-index: 5; width: max-content; max-width: 92%; text-align: center; }
 
 .keyboard { display: flex; flex-direction: column; gap: 7px; user-select: none; }
 .krow { display: flex; gap: 5px; justify-content: center; }
@@ -212,6 +218,8 @@ table.lb { width: 100%; border-collapse: separate; border-spacing: 0 6px; font-v
   <p class="muted">A five-letter word in British English. Guesses must be real words. The clock starts at your first letter, and your result goes on the leaderboard.</p>
   <h3>Categories</h3>
   <p class="muted">Football, Movies, Geography and Brands. Words are 4 to 7 letters, shown by the grid. Any letters are allowed, because names aren't in the dictionary. Stuck? Tap <b>Hint</b> to see what kind of word it is, such as "Football player". There's no clock and no leaderboard, so take your time.</p>
+  <h3>Kids zone</h3>
+  <p class="muted">For ages 7 to 13: Disney and Pixar, animals, countries, magical words, arts and crafts, fashion, school, space, hobbies and food. Words are 4 to 7 letters and the hint is always on. Get it right for confetti!</p>
   <h3>Daily leaderboard</h3>
   <p class="muted">Points: 1 guess 600, 2 guesses 500, 3 guesses 400, 4 guesses 300, 5 guesses 200, 6 guesses 100, a miss 0. Each day ranks by fewest guesses, then fastest time, and identical results share a place. Weekly and Monthly add up your points. All-time shows the ten best single games.</p>
   <h3>Your stats and devices</h3>
@@ -268,6 +276,7 @@ table.lb { width: 100%; border-collapse: separate; border-spacing: 0 6px; font-v
 <dialog id="boardDlg">
   <button class="icon-btn close" data-close>Close</button>
   <div class="lb-head"><h2>Daily leaderboard</h2><p id="lbSub">Puzzle #1</p></div>
+  <p class="lb-tip">Tap a player to see their stats</p>
   <div class="seg" id="lbTabs" role="group" aria-label="Leaderboard period">
     <button type="button" data-lb="today" aria-pressed="true">Today</button>
     <button type="button" data-lb="week" aria-pressed="false">Weekly</button>
@@ -320,6 +329,8 @@ function stateOf(m) { const s = store.get("game:" + m, null); return s && s.day 
 const dotClass = st => "dot" + (st === "won" ? " won" : st === "lost" ? " lost" : "");
 
 const board = $("board"), kb = $("keyboard");
+const isKids = () => mode === "kids";
+const STAR = '<svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M12 2l2.9 6.9 7.1.6-5.4 4.7 1.7 7.3L12 17.8 5.7 21.5l1.7-7.3L2 9.5l7.1-.6z"/></svg>';
 function paintModes() {
   $("dailyChip").setAttribute("aria-pressed", String(isDaily()));
   $("catChip").setAttribute("aria-pressed", String(!isDaily()));
@@ -330,7 +341,8 @@ function paintModes() {
   for (const c of CATEGORIES) {
     const b = document.createElement("button"); b.className = "chip"; b.type = "button"; b.dataset.mode = c;
     b.setAttribute("aria-pressed", String(c === mode));
-    b.innerHTML = `${MODE_NAMES[c]}<span class="${dotClass(stateOf(c))}"></span>`;
+    if (c === "kids") b.classList.add("kids");
+    b.innerHTML = (c === "kids" ? STAR : "") + `${MODE_NAMES[c]}${c === "kids" ? " · ages 7 to 13" : ""}<span class="${dotClass(stateOf(c))}"></span>`;
     $("cats").appendChild(b);
   }
 }
@@ -373,10 +385,11 @@ function elapsed() { if (!S.start) return 0; return ((S.end || Date.now()) - S.s
 
 function paint() {
   const ans = answer(), n = ans.length, rank = { miss: 1, near: 2, hit: 3 }, keyState = {};
-  $("modeTitle").textContent = isDaily() ? "Daily word" : MODE_NAMES[mode] + " challenge";
+  $("modeTitle").textContent = isDaily() ? "Daily word" : isKids() ? "Kids zone" : MODE_NAMES[mode] + " challenge";
   $("modeSub").textContent = `#${puzzleNo()} · ${n} letters · ${new Date().toLocaleDateString("en-GB", { day: "numeric", month: "short" })}`;
-  $("timer").hidden = !isDaily(); $("boardBtn").hidden = !isDaily(); $("hintBtn").hidden = isDaily();
-  const showHint = !isDaily() && (S.hint || S.status !== "play");
+  $("timer").hidden = !isDaily(); $("boardBtn").hidden = !isDaily(); $("hintBtn").hidden = isDaily() || isKids();
+  // Kids zone always shows its hint; other categories show it when asked or once the game is over.
+  const showHint = !isDaily() && (isKids() || S.hint || S.status !== "play");
   $("hintBox").hidden = !showHint;
   if (showHint) $("hintText").textContent = hintFor(mode, ans);
   $("hintBtn").disabled = !!S.hint || S.status !== "play";
@@ -409,10 +422,40 @@ function submit() {
   const res = score(S.guesses[rowIdx], ans), tiles = [...board.children[rowIdx].children];
   busy = true;
   tiles.forEach((t, i) => setTimeout(() => { t.classList.add("reveal"); setTimeout(() => t.classList.add(res[i]), reduce ? 0 : 220); }, reduce ? 0 : i * 230));
-  setTimeout(() => { busy = false; paint(); if (S.status !== "play") finish(); }, reduce ? 50 : n * 230 + 300);
+  setTimeout(() => {
+    busy = false; paint();
+    if (S.status !== "play") finish();
+    else if (isKids()) toast(encourage(res, ROWS - S.guesses.length), 2600);
+  }, reduce ? 50 : n * 230 + 300);
 }
 
 const PRAISE = ["Genius", "Brilliant", "Superb", "Great", "Solid", "Phew"];
+const KID_PRAISE = ["Wow, first go! Superstar!", "Amazing! You got it!", "Brilliant work!", "Well done, you did it!", "Great job, you got there!", "Phew! You did it!"];
+const pick = a => a[Math.floor(Math.random() * a.length)];
+// Friendly words after a guess that isn't right, for the Kids zone.
+function encourage(res, left) {
+  const hits = res.filter(r => r === "hit").length, near = res.filter(r => r === "near").length;
+  const last = left === 1 ? " Last go, you can do it!" : "";
+  if (hits >= res.length - 1) return "So close! Just one more letter to find." + last;
+  if (hits) return pick([`Great thinking! ${hits} letter${hits > 1 ? "s are" : " is"} in the right spot.`, `Nice! You've got ${hits} in the right place.`]) + last;
+  if (near) return pick([`Good try! ${near} letter${near > 1 ? "s are" : " is"} in the word.`, "You're getting warmer! Try moving the pink letters."]) + last;
+  return pick(["Good try! Now you know those letters aren't in it.", "Keep going! Try some different letters.", "No luck that time. You've got this!"]) + last;
+}
+// A short burst of confetti in the board colours.
+function confetti() {
+  if (matchMedia("(prefers-reduced-motion: reduce)").matches) return;
+  const c = document.createElement("canvas"); c.id = "confetti"; document.body.appendChild(c);
+  const ctx = c.getContext("2d"), dpr = devicePixelRatio || 1, W = innerWidth, H = innerHeight;
+  c.width = W * dpr; c.height = H * dpr; ctx.scale(dpr, dpr);
+  const cols = ["#22D3EE", "#FF4DA6", "#A855F7", "#FACC15", "#34D399"];
+  const bits = Array.from({ length: 160 }, () => ({ x: W / 2 + (Math.random() - .5) * W * .3, y: H * .35, vx: (Math.random() - .5) * 14, vy: -Math.random() * 14 - 4, r: Math.random() * Math.PI, vr: (Math.random() - .5) * .3, w: 6 + Math.random() * 6, h: 4 + Math.random() * 6, c: pick(cols) }));
+  const t0 = performance.now();
+  (function frame(t) {
+    ctx.clearRect(0, 0, W, H);
+    for (const b of bits) { b.vy += .35; b.vx *= .99; b.x += b.vx; b.y += b.vy; b.r += b.vr; ctx.save(); ctx.translate(b.x, b.y); ctx.rotate(b.r); ctx.fillStyle = b.c; ctx.fillRect(-b.w / 2, -b.h / 2, b.w, b.h); ctx.restore(); }
+    if (t - t0 < 3200) requestAnimationFrame(frame); else c.remove();
+  })(t0);
+}
 const blankStats = () => ({ played: 0, wins: 0, streak: 0, best: 0, dist: [0, 0, 0, 0, 0, 0] });
 function finish() {
   const st = store.get("stats:" + mode, blankStats());
@@ -424,7 +467,10 @@ function finish() {
   }
   paintModes();
   const won = S.status === "won";
-  toast(won ? PRAISE[S.guesses.length - 1] + (isDaily() ? " · " + fmt(elapsed()) : "") : answer().toUpperCase(), won ? 1800 : 0);
+  if (isKids()) {
+    if (won) confetti();
+    toast(won ? KID_PRAISE[S.guesses.length - 1] : `Good effort! The word was ${answer().toUpperCase()}. Try again tomorrow!`, won ? 2400 : 0);
+  } else toast(won ? PRAISE[S.guesses.length - 1] + (isDaily() ? " · " + fmt(elapsed()) : "") : answer().toUpperCase(), won ? 1800 : 0);
   if (isDaily() && store.get("nick", "")) postScore(store.get("nick", ""));
   setTimeout(openStats, 1400);
 }

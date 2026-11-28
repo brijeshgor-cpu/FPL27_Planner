@@ -2,9 +2,9 @@ import { ANSWERS, CATS, HINTS } from "./words.js";
 // Shared by the page and the Worker: which word is the answer on a given day.
 export const LAUNCH = Date.UTC(2026, 10, 28) / 864e5; // 28 Nov 2026 is puzzle #1
 export const ROWS = 6;
-export const MODES = ["daily", "football", "movies", "geography", "brands"];
+export const MODES = ["daily", "football", "movies", "geography", "brands", "kids"];
 export const CATEGORIES = MODES.slice(1);
-export const MODE_NAMES = { daily: "Daily", football: "Football", movies: "Movies", geography: "Geography", brands: "Brands" };
+export const MODE_NAMES = { daily: "Daily", football: "Football", movies: "Movies", geography: "Geography", brands: "Brands", kids: "Kids zone" };
 
 function rng(seed) { return () => { seed |= 0; seed = seed + 0x6D2B79F5 | 0; let t = Math.imul(seed ^ seed >>> 15, 1 | seed); t = t + Math.imul(t ^ t >>> 7, 61 | t) ^ t; return ((t ^ t >>> 14) >>> 0) / 4294967296; }; }
 function shuffle(list, seed) { const o = list.slice(), r = rng(seed); for (let i = o.length - 1; i > 0; i--) { const j = Math.floor(r() * (i + 1)); [o[i], o[j]] = [o[j], o[i]]; } return o; }

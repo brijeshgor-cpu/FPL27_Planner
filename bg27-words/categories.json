@@ -51,5 +51,17 @@
   "Travel company": "virgin ryanair easyjet uber",
   "Bank or payments": "visa monzo halifax natwest lloyds",
   "Toiletries brand": "colgate nivea dove lynx"
+ },
+ "kids": {
+  "Disney or Pixar": "elsa anna olaf moana simba nala nemo dory woody buzz stitch ariel belle mulan bambi dumbo mickey minnie goofy donald aladdin jasmine tiana merida mirabel coco remy sulley baymax frozen tangled encanto luca",
+  "Animal": "tiger zebra panda koala otter rabbit parrot penguin dolphin giraffe monkey hamster kitten puppy horse pony sheep goat camel llama whale shark octopus turtle lizard snake eagle robin badger beaver lion bear wolf deer frog duck swan bunny mouse sloth lemur meerkat hippo rhino cheetah leopard gorilla",
+  "Country": "france spain italy wales england ireland china japan india brazil mexico canada egypt kenya greece peru chile norway sweden iceland jamaica",
+  "Magical word": "wizard wand spell potion magic fairy unicorn dragon castle witch goblin giant mermaid crystal cloak charm phoenix pixie troll",
+  "Arts and crafts": "paint glitter crayon pencil collage sticker clay origami ribbon glue brush easel sketch beads sequin chalk stencil canvas marker",
+  "Fashion and accessories": "hoodie jeans wellies scarf gloves beanie jacket dress skirt boots sandals bangle locket ring watch tiara crown handbag pyjamas socks",
+  "School and learning": "school teacher pupil maths science reading history lesson lunch ruler desk class library globe quiz uniform poem story",
+  "Space and planets": "planet mars venus earth saturn jupiter neptune comet rocket galaxy star moon orbit alien meteor crater gravity nebula lunar solar eclipse",
+  "Hobbies and activities": "dance swim chess cooking baking drawing singing cycling skating karate gaming camping fishing puzzle coding ballet netball tennis hockey skiing surfing riding judo drama",
+  "Yummy food": "pizza pancake cupcake waffle cookie banana apple cheese popcorn noodles burger carrot sweets jelly"
  }
 }
