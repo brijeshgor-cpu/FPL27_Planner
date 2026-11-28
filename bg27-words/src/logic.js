@@ -33,10 +33,59 @@ export function score(guess, answer) {
   return res;
 }
 
-export function hintFor(mode, word) {
-  for (const [hint, words] of Object.entries(HINTS[mode] || {})) if (words.split(" ").includes(word)) return hint;
+// Category hints are kept a little vague; Kids zone shows its plain topic name.
+const VAGUE = {
+ "Football club": "A team",
+ "Football player": "A famous name",
+ "Football term": "You'd hear it during a match",
+ "Football ground": "A famous place",
+ "Football kit or fan gear": "Something you wear",
+ "Film title": "One you might have seen",
+ "Animated film": "A family favourite",
+ "Film-making term": "In front of or behind the camera",
+ "Film genre": "A kind of film",
+ "Film award": "Winners take it home",
+ "Cinema snack": "Something to munch on",
+ "Capital city": "An important city",
+ "World city": "A big city",
+ "Country": "It has its own flag",
+ "UK nation": "Close to home",
+ "River": "It flows",
+ "Mountain or mountain range": "Somewhere high up",
+ "Desert": "Somewhere very dry",
+ "Natural feature": "Shaped by nature",
+ "Line on the globe": "An imaginary line",
+ "Weather system": "Ask a weather forecaster",
+ "English county": "Somewhere in England",
+ "English city": "A historic place in England",
+ "Sportswear brand": "Look at your trainers",
+ "Luxury fashion house": "Very pricey",
+ "Watch brand": "Worn on the wrist",
+ "Clothing brand": "In your wardrobe",
+ "Footwear brand": "Think feet",
+ "Supermarket": "The weekly shop",
+ "High-street shop": "On the high street",
+ "Food and coffee chain": "Grab a bite",
+ "Tech company": "On your phone or computer",
+ "Toy brand": "Kids love it",
+ "Furniture shop": "For your home",
+ "Chocolate or biscuit": "A sweet treat",
+ "Crisp brand": "A savoury snack",
+ "Food brand": "In the kitchen cupboard",
+ "Soft drink": "Something to sip",
+ "Cleaning brand": "Under the sink",
+ "Home appliance brand": "Plugs in at home",
+ "Car maker": "On the road",
+ "Fuel company": "At the pump",
+ "Travel company": "Gets you places",
+ "Bank or payments": "To do with money",
+ "Toiletries brand": "In the bathroom"
+};
+export function topicFor(mode, word) {
+  for (const [topic, words] of Object.entries(HINTS[mode] || {})) if (words.split(" ").includes(word)) return topic;
   return "";
 }
+export function hintFor(mode, word) { const t = topicFor(mode, word); return mode === "kids" ? t : (VAGUE[t] || t); }
 // Weeks run Monday to Sunday (UK). Day numbers are days since 1 Jan 1970.
 export function weekStart(day) { const dow = new Date(day * 864e5).getUTCDay(); return day - ((dow + 6) % 7); }
 

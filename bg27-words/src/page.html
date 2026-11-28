@@ -192,7 +192,6 @@ table.lb { width: 100%; border-collapse: separate; border-spacing: 0 6px; font-v
     <div class="what"><b id="modeTitle">Daily word</b><small id="modeSub">Puzzle #1</small></div>
     <div class="timer" id="timer" aria-label="Time taken">0:00</div>
     <button class="act" id="boardBtn">Leaderboard</button>
-    <button class="act" id="hintBtn" hidden>Hint</button>
   </div>
   <div class="hint" id="hintBox" hidden><span>Hint</span><b id="hintText"></b></div>
 
@@ -217,7 +216,7 @@ table.lb { width: 100%; border-collapse: separate; border-spacing: 0 6px; font-v
   <h3>Daily</h3>
   <p class="muted">A five-letter word in British English. Guesses must be real words. The clock starts at your first letter, and your result goes on the leaderboard.</p>
   <h3>Categories</h3>
-  <p class="muted">Football, Movies, Geography and Brands. Words are 4 to 7 letters, shown by the grid. Any letters are allowed, because names aren't in the dictionary. Stuck? Tap <b>Hint</b> to see what kind of word it is, such as "Football player". There's no clock and no leaderboard, so take your time.</p>
+  <p class="muted">Football, Movies, Geography and Brands. Words are 4 to 7 letters, shown by the grid. Any letters are allowed, because names aren't in the dictionary. Each word comes with a gentle hint, such as "A famous name". Once the game ends, you see exactly what kind of word it was. There's no clock and no leaderboard, so take your time.</p>
   <h3>Kids zone</h3>
   <p class="muted">Easy, fun words: Disney and Pixar, animals, countries, magical words, arts and crafts, fashion, school, space, hobbies and food. Words are 4 to 7 letters and the hint is always on. Get it right for confetti!</p>
   <h3>Daily leaderboard</h3>
@@ -387,13 +386,11 @@ function paint() {
   const ans = answer(), n = ans.length, rank = { miss: 1, near: 2, hit: 3 }, keyState = {};
   $("modeTitle").textContent = isDaily() ? "Daily word" : isKids() ? "Kids zone" : MODE_NAMES[mode] + " challenge";
   $("modeSub").textContent = `#${puzzleNo()} · ${n} letters · ${new Date().toLocaleDateString("en-GB", { day: "numeric", month: "short" })}`;
-  $("timer").hidden = !isDaily(); $("boardBtn").hidden = !isDaily(); $("hintBtn").hidden = isDaily() || isKids();
-  // Kids zone always shows its hint; other categories show it when asked or once the game is over.
-  const showHint = !isDaily() && (isKids() || S.hint || S.status !== "play");
+  $("timer").hidden = !isDaily(); $("boardBtn").hidden = !isDaily(); 
+  // Every category shows its hint from the start; once the game is over, the exact topic is added.
+  const showHint = !isDaily();
   $("hintBox").hidden = !showHint;
-  if (showHint) $("hintText").textContent = hintFor(mode, ans);
-  $("hintBtn").disabled = !!S.hint || S.status !== "play";
-  $("hintBtn").textContent = S.hint ? "Hint used" : "Hint";
+  if (showHint) { const hn = hintFor(mode, ans), tp = topicFor(mode, ans); $("hintText").textContent = S.status !== "play" && !isKids() && tp !== hn ? `${hn} (${tp.toLowerCase()})` : hn; }
   [...board.children].forEach((row, r) => {
     const g = S.guesses[r], word = g || (r === S.guesses.length ? current : ""), res = g ? score(g, ans) : null;
     [...row.children].forEach((t, c) => { t.textContent = word[c] || ""; t.className = "tile" + (word[c] ? " filled" : "") + (res ? " " + res[c] : ""); });
@@ -403,7 +400,6 @@ function paint() {
   paintTimer();
 }
 function paintTimer() { const t = $("timer"); t.textContent = fmt(elapsed()); t.classList.toggle("running", !!S.start && !S.end); }
-$("hintBtn").addEventListener("click", () => { if (S.status !== "play" || S.hint) return; S.hint = true; save(); paint(); });
 
 let toastTimer;
 function toast(msg, ms = 1600) { const t = $("toast"); t.textContent = msg; t.hidden = false; clearTimeout(toastTimer); if (ms) toastTimer = setTimeout(() => t.hidden = true, ms); }
@@ -647,7 +643,7 @@ function shareString() {
   const ans = answer(), sym = { hit: "🟦", near: "🟪", miss: "⬛" };
   const grid = S.guesses.map(g => score(g, ans).map(v => sym[v]).join("")).join("\n");
   const res = S.status === "won" ? S.guesses.length : "X";
-  const head = isDaily() ? `BG27 WordRush #${puzzleNo()} ${res}/6 · ${fmt(elapsed())} · ${pointsFor(S.status === "won", S.guesses.length)} pts` : `BG27 WordRush ${MODE_NAMES[mode]} #${puzzleNo()} ${res}/6${S.hint ? " (hint)" : ""}`;
+  const head = isDaily() ? `BG27 WordRush #${puzzleNo()} ${res}/6 · ${fmt(elapsed())} · ${pointsFor(S.status === "won", S.guesses.length)} pts` : `BG27 WordRush ${MODE_NAMES[mode]} #${puzzleNo()} ${res}/6`;
   return `${head}\n\n${grid}\n${location.origin}`;
 }
 $("shareBtn").addEventListener("click", () => {
