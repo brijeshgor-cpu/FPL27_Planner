@@ -98,6 +98,10 @@ button:focus-visible, input:focus-visible { outline: 3px solid var(--near); outl
 @media (prefers-reduced-motion: reduce) { .tile, .row { animation: none !important; } }
 .toast { position: absolute; top: 4px; left: 50%; transform: translateX(-50%); background: var(--near); color: var(--on-near); padding: 10px 16px; border-radius: 8px; font-weight: 600; font-size: 0.9rem; z-index: 5; width: max-content; max-width: 92%; text-align: center; }
 
+.legend { display: flex; justify-content: center; flex-wrap: wrap; gap: 4px 12px; font-size: 0.78rem; color: var(--muted); }
+.legend span { display: inline-flex; align-items: center; gap: 6px; }
+.legend i { width: 14px; height: 14px; border-radius: 4px; display: inline-block; }
+.legend .k-hit { background: var(--hit); } .legend .k-near { background: var(--near); } .legend .k-miss { background: var(--miss); }
 .keyboard { display: flex; flex-direction: column; gap: 7px; user-select: none; }
 .krow { display: flex; gap: 5px; justify-content: center; }
 .key { flex: 1 1 0; min-width: 0; height: 54px; border: 0; border-radius: 8px; background: var(--key); color: var(--fg); font: 600 1rem var(--body); text-transform: uppercase; cursor: pointer; padding: 0; touch-action: manipulation; }
@@ -199,6 +203,11 @@ table.lb { width: 100%; border-collapse: separate; border-spacing: 0 6px; font-v
   <div class="board-wrap">
     <div class="toast" id="toast" hidden></div>
     <div class="board" id="board" aria-label="Guesses"></div>
+  </div>
+  <div class="legend" aria-label="Colour key">
+    <span><i class="k-hit"></i>Right spot</span>
+    <span><i class="k-near"></i>In word, wrong spot</span>
+    <span><i class="k-miss"></i>Not in word</span>
   </div>
 
   <div class="keyboard" id="keyboard" aria-label="Keyboard"></div>
@@ -361,7 +370,7 @@ $("cats").addEventListener("click", e => { const b = e.target.closest("[data-mod
 function buildBoard() {
   const n = LEN();
   board.innerHTML = "";
-  board.style.width = `min(${n * 64}px, 100%)`;
+  board.style.width = `min(${n * 64}px, 100%, calc((100dvh - 430px) * ${n} / 6.3))`;
   board.style.setProperty("--tf", n <= 5 ? "1.9rem" : n === 6 ? "1.65rem" : "1.4rem");
   for (let r = 0; r < ROWS; r++) {
     const row = document.createElement("div"); row.className = "row"; row.style.gridTemplateColumns = `repeat(${n}, 1fr)`;
