@@ -19,6 +19,8 @@ export function orderFor(mode) {
     const i = o.indexOf("story"); if (i > 0) { o.splice(i, 1); o.unshift("story"); }
   } else {
     o = shuffle(CATS[mode].split(" "), 2027 + MODES.indexOf(mode) * 101);
+    // Kids zone puzzle #1 went out before the easier list; keep it so earlier games still score.
+    if (mode === "kids") { const i = o.indexOf("dragon"); if (i > 0) { o.splice(i, 1); o.unshift("dragon"); } }
   }
   return ORDERS[mode] = o;
 }

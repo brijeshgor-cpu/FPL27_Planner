@@ -219,7 +219,7 @@ table.lb { width: 100%; border-collapse: separate; border-spacing: 0 6px; font-v
   <h3>Categories</h3>
   <p class="muted">Football, Movies, Geography and Brands. Words are 4 to 7 letters, shown by the grid. Any letters are allowed, because names aren't in the dictionary. Stuck? Tap <b>Hint</b> to see what kind of word it is, such as "Football player". There's no clock and no leaderboard, so take your time.</p>
   <h3>Kids zone</h3>
-  <p class="muted">For ages 7 to 13: Disney and Pixar, animals, countries, magical words, arts and crafts, fashion, school, space, hobbies and food. Words are 4 to 7 letters and the hint is always on. Get it right for confetti!</p>
+  <p class="muted">Easy, fun words: Disney and Pixar, animals, countries, magical words, arts and crafts, fashion, school, space, hobbies and food. Words are 4 to 7 letters and the hint is always on. Get it right for confetti!</p>
   <h3>Daily leaderboard</h3>
   <p class="muted">Points: 1 guess 600, 2 guesses 500, 3 guesses 400, 4 guesses 300, 5 guesses 200, 6 guesses 100, a miss 0. Each day ranks by fewest guesses, then fastest time, and identical results share a place. Weekly and Monthly add up your points. All-time shows the ten best single games.</p>
   <h3>Your stats and devices</h3>
@@ -342,7 +342,7 @@ function paintModes() {
     const b = document.createElement("button"); b.className = "chip"; b.type = "button"; b.dataset.mode = c;
     b.setAttribute("aria-pressed", String(c === mode));
     if (c === "kids") b.classList.add("kids");
-    b.innerHTML = (c === "kids" ? STAR : "") + `${MODE_NAMES[c]}${c === "kids" ? " · ages 7 to 13" : ""}<span class="${dotClass(stateOf(c))}"></span>`;
+    b.innerHTML = (c === "kids" ? STAR : "") + `${MODE_NAMES[c]}<span class="${dotClass(stateOf(c))}"></span>`;
     $("cats").appendChild(b);
   }
 }
@@ -467,8 +467,8 @@ function finish() {
   }
   paintModes();
   const won = S.status === "won";
+  if (won) confetti();
   if (isKids()) {
-    if (won) confetti();
     toast(won ? KID_PRAISE[S.guesses.length - 1] : `Good effort! The word was ${answer().toUpperCase()}. Try again tomorrow!`, won ? 2400 : 0);
   } else toast(won ? PRAISE[S.guesses.length - 1] + (isDaily() ? " · " + fmt(elapsed()) : "") : answer().toUpperCase(), won ? 1800 : 0);
   if (isDaily() && store.get("nick", "")) postScore(store.get("nick", ""));
@@ -686,7 +686,6 @@ function tick() {
 function start() { load(); paintModes(); buildBoard(); paint(); }
 
 buildKeys(); setCatsOpen(!isDaily()); start(); setInterval(tick, 1000); tick();
-if (!store.get("seenHelp3", false)) { store.set("seenHelp3", true); $("helpDlg").showModal(); }
 })();
 </script>
 </body>
