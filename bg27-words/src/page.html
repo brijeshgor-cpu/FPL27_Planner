@@ -64,6 +64,7 @@ button:focus-visible, input:focus-visible { outline: 3px solid var(--near); outl
 .cats .chip.kids svg { width: 14px; height: 14px; color: var(--near); }
 .cats .chip.kids[aria-pressed="true"] { background: var(--near); border-color: var(--near); border-style: solid; }
 .cats .chip.kids[aria-pressed="true"] svg { color: var(--on-near); }
+.lb-modes { justify-content: center; }
 .lb-tip { text-align: center; color: var(--muted); font-size: 0.8rem; margin: 0 0 6px; }
 #confetti { position: fixed; inset: 0; width: 100%; height: 100%; pointer-events: none; z-index: 2147483647; }
 
@@ -216,9 +217,9 @@ table.lb { width: 100%; border-collapse: separate; border-spacing: 0 6px; font-v
   <h3>Daily</h3>
   <p class="muted">A five-letter word in British English. Guesses must be real words. The clock starts at your first letter, and your result goes on the leaderboard.</p>
   <h3>Categories</h3>
-  <p class="muted">Football, Movies, Geography and Brands. Words are 4 to 7 letters, shown by the grid. Any letters are allowed, because names aren't in the dictionary. Each word comes with a gentle hint, such as "A famous name". Once the game ends, you see exactly what kind of word it was. There's no clock and no leaderboard, so take your time.</p>
+  <p class="muted">Football, Movies, Geography and Brands. Words are 4 to 7 letters, shown by the grid. Any letters are allowed, because names aren't in the dictionary. Each word comes with a gentle hint, such as "A famous name". Once the game ends, you see exactly what kind of word it was. There's no clock and no leaderboard, so take your time (Kids zone is the exception).</p>
   <h3>Kids zone</h3>
-  <p class="muted">Easy, fun words: Disney and Pixar, animals, countries, magical words, arts and crafts, fashion, school, space, hobbies and food. Words are 4 to 7 letters and the hint is always on. Get it right for confetti!</p>
+  <p class="muted">Easy, fun words: Disney and Pixar, animals, countries, magical words, arts and crafts, fashion, school, space, hobbies and food. Words are 4 to 7 letters and the hint is always on. It has its own leaderboard with the same points as Daily, so the clock runs from the first letter.</p>
   <h3>Daily leaderboard</h3>
   <p class="muted">Points: 1 guess 600, 2 guesses 500, 3 guesses 400, 4 guesses 300, 5 guesses 200, 6 guesses 100, a miss 0. Each day ranks by fewest guesses, then fastest time, and identical results share a place. Weekly and Monthly add up your points. All-time shows the ten best single games.</p>
   <h3>Your stats and devices</h3>
@@ -274,8 +275,12 @@ table.lb { width: 100%; border-collapse: separate; border-spacing: 0 6px; font-v
 
 <dialog id="boardDlg">
   <button class="icon-btn close" data-close>Close</button>
-  <div class="lb-head"><h2>Daily leaderboard</h2><p id="lbSub">Puzzle #1</p></div>
-  <p class="lb-tip">Tap a player to see their stats</p>
+  <div class="lb-head"><h2 id="lbName">Daily leaderboard</h2><p id="lbSub">Puzzle #1</p></div>
+  <div class="tabs lb-modes" style="justify-content:center" id="lbModes" role="group" aria-label="Which game">
+    <button class="chip" type="button" data-lbm="daily" aria-pressed="true">Daily</button>
+    <button class="chip" type="button" data-lbm="kids" aria-pressed="false">Kids zone</button>
+  </div>
+  <p class="lb-tip" id="lbTip">Tap a player to see their stats</p>
   <div class="seg" id="lbTabs" role="group" aria-label="Leaderboard period">
     <button type="button" data-lb="today" aria-pressed="true">Today</button>
     <button type="button" data-lb="week" aria-pressed="false">Weekly</button>
@@ -329,6 +334,8 @@ const dotClass = st => "dot" + (st === "won" ? " won" : st === "lost" ? " lost" 
 
 const board = $("board"), kb = $("keyboard");
 const isKids = () => mode === "kids";
+// Daily and Kids zone are timed and have leaderboards; the other categories don't.
+const isRanked = () => mode === "daily" || mode === "kids";
 const STAR = '<svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M12 2l2.9 6.9 7.1.6-5.4 4.7 1.7 7.3L12 17.8 5.7 21.5l1.7-7.3L2 9.5l7.1-.6z"/></svg>';
 function paintModes() {
   $("dailyChip").setAttribute("aria-pressed", String(isDaily()));
@@ -386,7 +393,7 @@ function paint() {
   const ans = answer(), n = ans.length, rank = { miss: 1, near: 2, hit: 3 }, keyState = {};
   $("modeTitle").textContent = isDaily() ? "Daily word" : isKids() ? "Kids zone" : MODE_NAMES[mode] + " challenge";
   $("modeSub").textContent = `#${puzzleNo()} · ${n} letters · ${new Date().toLocaleDateString("en-GB", { day: "numeric", month: "short" })}`;
-  $("timer").hidden = !isDaily(); $("boardBtn").hidden = !isDaily(); 
+  $("timer").hidden = !isRanked(); $("boardBtn").hidden = !isRanked(); 
   // Every category shows its hint from the start; once the game is over, the exact topic is added.
   const showHint = !isDaily();
   $("hintBox").hidden = !showHint;
@@ -465,9 +472,9 @@ function finish() {
   const won = S.status === "won";
   if (won) confetti();
   if (isKids()) {
-    toast(won ? KID_PRAISE[S.guesses.length - 1] : `Good effort! The word was ${answer().toUpperCase()}. Try again tomorrow!`, won ? 2400 : 0);
+    toast(won ? KID_PRAISE[S.guesses.length - 1] + " · " + fmt(elapsed()) : `Good effort! The word was ${answer().toUpperCase()}. Try again tomorrow!`, won ? 2400 : 0);
   } else toast(won ? PRAISE[S.guesses.length - 1] + (isDaily() ? " · " + fmt(elapsed()) : "") : answer().toUpperCase(), won ? 1800 : 0);
-  if (isDaily() && store.get("nick", "")) postScore(store.get("nick", ""));
+  if (isRanked() && store.get("nick", "")) postScore(store.get("nick", ""));
   setTimeout(openStats, 1400);
 }
 
@@ -480,15 +487,15 @@ function openStats() {
   $("dist").innerHTML = st.dist.map((n, i) => `<div class="bar"><span>${i + 1}</span><i class="${S.status === "won" && S.guesses.length === i + 1 ? "now" : ""}" style="width:${Math.max(8, n / max * 100)}%">${n}</i></div>`).join("");
   const done = S.status !== "play";
   $("endBox").hidden = !done;
-  $("seeBoard").hidden = !isDaily();
-  $("postBox").hidden = !(done && isDaily());
-  if (done && isDaily()) {
+  $("seeBoard").hidden = !isRanked();
+  $("postBox").hidden = !(done && isRanked());
+  if (done && isRanked()) {
     $("nick").value = store.get("nick", "");
     $("postForm").hidden = !!S.posted;
     $("postMsg").textContent = S.posted ? `Posted as ${S.posted}.` : "Your nickname is saved on this device for next time.";
   }
   const label = isDaily() ? "" : MODE_NAMES[mode] + ": ";
-  const time = isDaily() ? `, ${fmt(elapsed())} · ${pointsFor(true, S.guesses.length)} pts` : "";
+  const time = isRanked() ? `, ${fmt(elapsed())} · ${pointsFor(true, S.guesses.length)} pts` : "";
   $("statsTitle").innerHTML = done ? (S.status === "won" ? `${label}solved in ${S.guesses.length}${time}` : `${label}the word was <span class="answer">${answer()}</span>`) : (isDaily() ? "Your Daily stats" : `${MODE_NAMES[mode]} stats`);
   $("shareText").hidden = true;
   // Daily: the server dashboard for this device's nickname, or a prompt to get one.
@@ -558,17 +565,17 @@ $("linkForm").addEventListener("submit", async e => {
   try {
     const r = await fetch("/api/link", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ code }) });
     const j = await r.json();
-    if (r.ok) { store.set("nick", j.name); store.set("key", j.key); $("linkCode").value = ""; $("devMsg").textContent = `Linked. This device now plays as ${j.name}.`; openStats(); if (isDaily() && S.status !== "play" && !S.posted) postScore(j.name); }
+    if (r.ok) { store.set("nick", j.name); store.set("key", j.key); $("linkCode").value = ""; $("devMsg").textContent = `Linked. This device now plays as ${j.name}.`; openStats(); if (isRanked() && S.status !== "play" && !S.posted) postScore(j.name); }
     else $("devMsg").textContent = j.error || "That code didn't work.";
   } catch { $("devMsg").textContent = "No connection. Try again when you're back online."; }
 });
 
 async function postScore(name) {
   name = name.trim().slice(0, 16);
-  if (!name || !isDaily() || S.status === "play" || S.posted) return;
+  if (!name || !isRanked() || S.status === "play" || S.posted) return;
   $("postMsg").textContent = "Posting…";
   try {
-    const r = await fetch("/api/score", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ mode: "daily", day: dayNo, name, key: store.get("nick", "").toLowerCase() === name.toLowerCase() ? store.get("key", "") : "", guesses: S.guesses, seconds: Math.round(elapsed()) }) });
+    const r = await fetch("/api/score", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ mode, day: dayNo, name, key: store.get("nick", "").toLowerCase() === name.toLowerCase() ? store.get("key", "") : "", guesses: S.guesses, seconds: Math.round(elapsed()) }) });
     const j = await r.json().catch(() => ({}));
     if (r.ok) { S.posted = j.name || name; save(); store.set("nick", S.posted); if (j.key) store.set("key", j.key); paintDevices(); $("postForm").hidden = true; $("postMsg").textContent = `Posted as ${S.posted}: ${j.pts} points, #${j.rank} of ${j.total} today.`; }
     else if (j.already) { S.posted = name; save(); $("postForm").hidden = true; $("postMsg").textContent = j.error; }
@@ -577,8 +584,8 @@ async function postScore(name) {
 }
 $("postForm").addEventListener("submit", e => { e.preventDefault(); postScore($("nick").value); });
 
-// Leaderboard: Daily only. Today, Weekly (Mon-Sun), Monthly (calendar month) and All-time (ten best single games).
-let lbView = "today";
+// Leaderboards for Daily and Kids zone: Today, Weekly (Mon-Sun), Monthly (calendar month) and All-time (ten best single games).
+let lbView = "today", lbMode = "daily";
 const LB_NOTES = {
   today: "Fewest guesses first, then fastest time. Identical results share a place.",
   week: "Total points this week, then least total time. A new week starts on Monday.",
@@ -591,8 +598,11 @@ function cell(tr, text, cls, sub) {
   if (sub) { const s = document.createElement("small"); s.textContent = sub; td.appendChild(s); }
   tr.appendChild(td);
 }
-async function openBoard(view) {
-  lbView = view || lbView;
+async function openBoard(view, which) {
+  lbView = view || lbView; lbMode = which || lbMode;
+  document.querySelectorAll("#lbModes [data-lbm]").forEach(b => b.setAttribute("aria-pressed", String(b.dataset.lbm === lbMode)));
+  $("lbName").textContent = lbMode === "kids" ? "Kids zone leaderboard" : "Daily leaderboard";
+  $("lbTip").hidden = lbMode !== "daily";
   document.querySelectorAll("#lbTabs [data-lb]").forEach(b => b.setAttribute("aria-pressed", String(b.dataset.lb === lbView)));
   const ws = weekStart(dayNo);
   $("lbSub").textContent = {
@@ -606,20 +616,22 @@ async function openBoard(view) {
   $("lbBody").innerHTML = `<tr><td colspan="5" class="empty">Loading…</td></tr>`;
   $("lbNote").textContent = LB_NOTES[lbView]; $("champ").hidden = true;
   if (!$("boardDlg").open) $("boardDlg").showModal();
-  const me = (store.get("nick", "") || "").toLowerCase(), asked = lbView;
+  const me = (store.get("nick", "") || "").toLowerCase(), asked = lbView + lbMode;
   try {
-    const url = { today: `/api/board?day=${dayNo}`, week: `/api/week?day=${dayNo}`, month: `/api/month?day=${dayNo}`, alltime: "/api/alltime" }[lbView];
+    const url = { today: `/api/board?day=${dayNo}`, week: `/api/week?day=${dayNo}`, month: `/api/month?day=${dayNo}`, alltime: "/api/alltime?x=1" }[lbView] + `&mode=${lbMode}`;
     const j = await (await fetch(url)).json();
-    if (asked !== lbView) return;
+    if (asked !== lbView + lbMode) return;
     const rows = j.entries || [], body = $("lbBody"), rk = ranks(rows, period ? periodCmp : gameCmp);
     body.innerHTML = "";
-    if (!rows.length) body.innerHTML = `<tr><td colspan="5" class="empty">${lbView === "today" && stateOf("daily") === "play" ? "No scores yet. Play today's word to be first." : "No scores yet."}</td></tr>`;
+    if (!rows.length) body.innerHTML = `<tr><td colspan="5" class="empty">${lbView === "today" && stateOf(lbMode) === "play" ? "No scores yet. Play today's word to be first." : "No scores yet."}</td></tr>`;
     rows.forEach((e, i) => {
       const tr = document.createElement("tr"), mine = me && e.name.toLowerCase() === me;
       if (mine) tr.className = "me";
       cell(tr, String(rk[i]), "rank" + (rk[i] <= 3 && e.pts > 0 ? " r" + rk[i] : ""));
       cell(tr, "", "name", lbView === "alltime" && e.day ? fmtDate(e.day, { day: "2-digit", month: "2-digit", year: "2-digit" }) : "");
-      const nb = document.createElement("button"); nb.type = "button"; nb.dataset.player = e.name; nb.textContent = e.name + (mine ? " (You)" : "");
+      // Player stats cover Daily games, so only Daily names open them.
+      const nb = document.createElement(lbMode === "daily" ? "button" : "span"); if (lbMode === "daily") { nb.type = "button"; nb.dataset.player = e.name; }
+      nb.textContent = e.name + (mine ? " (You)" : "");
       tr.lastChild.prepend(nb);
       if (period) cell(tr, String(e.played), "num");
       else cell(tr, e.won ? `${e.n}/6` : "X/6", "num " + (e.won ? "g" : "x"));
@@ -632,18 +644,19 @@ async function openBoard(view) {
       const b = document.createElement("b"); b.textContent = j.lastWinner.name;
       c.append(`Last ${lbView === "week" ? "week" : "month"}'s champion: `, b, ` (${j.lastWinner.pts} pts)`);
     }
-  } catch { if (asked === lbView) $("lbBody").innerHTML = `<tr><td colspan="5" class="empty">Couldn't load the leaderboard. Check your connection.</td></tr>`; }
+  } catch { if (asked === lbView + lbMode) $("lbBody").innerHTML = `<tr><td colspan="5" class="empty">Couldn't load the leaderboard. Check your connection.</td></tr>`; }
 }
 $("lbBody").addEventListener("click", e => { const b = e.target.closest("[data-player]"); if (b) openPlayer(b.dataset.player); });
 $("lbTabs").addEventListener("click", e => { const b = e.target.closest("[data-lb]"); if (b) openBoard(b.dataset.lb); });
-$("boardBtn").addEventListener("click", () => openBoard());
-$("seeBoard").addEventListener("click", () => { $("statsDlg").close(); openBoard(); });
+$("lbModes").addEventListener("click", e => { const b = e.target.closest("[data-lbm]"); if (b) openBoard(null, b.dataset.lbm); });
+$("boardBtn").addEventListener("click", () => openBoard(null, isKids() ? "kids" : "daily"));
+$("seeBoard").addEventListener("click", () => { $("statsDlg").close(); openBoard(null, isKids() ? "kids" : "daily"); });
 
 function shareString() {
   const ans = answer(), sym = { hit: "🟦", near: "🟪", miss: "⬛" };
   const grid = S.guesses.map(g => score(g, ans).map(v => sym[v]).join("")).join("\n");
   const res = S.status === "won" ? S.guesses.length : "X";
-  const head = isDaily() ? `BG27 WordRush #${puzzleNo()} ${res}/6 · ${fmt(elapsed())} · ${pointsFor(S.status === "won", S.guesses.length)} pts` : `BG27 WordRush ${MODE_NAMES[mode]} #${puzzleNo()} ${res}/6`;
+  const head = isRanked() ? `BG27 WordRush${isKids() ? " Kids zone" : ""} #${puzzleNo()} ${res}/6 · ${fmt(elapsed())} · ${pointsFor(S.status === "won", S.guesses.length)} pts` : `BG27 WordRush ${MODE_NAMES[mode]} #${puzzleNo()} ${res}/6`;
   return `${head}\n\n${grid}\n${location.origin}`;
 }
 $("shareBtn").addEventListener("click", () => {
@@ -658,7 +671,7 @@ function press(k) {
   if (k === "Enter") return submit();
   if (k === "Backspace") { current = current.slice(0, -1); return paint(); }
   if (/^[a-z]$/.test(k) && current.length < LEN()) {
-    if (isDaily() && !S.start) { S.start = Date.now(); save(); }
+    if (isRanked() && !S.start) { S.start = Date.now(); save(); }
     current += k; paint();
   }
 }
@@ -676,7 +689,7 @@ function tick() {
   const now = new Date(), mid = new Date(now.getFullYear(), now.getMonth(), now.getDate() + 1);
   const s = Math.floor((mid - now) / 1000);
   $("countdown").textContent = [s / 3600, s / 60 % 60, s % 60].map(v => String(Math.floor(v)).padStart(2, "0")).join(":");
-  if (isDaily() && S.start && !S.end) paintTimer();
+  if (isRanked() && S.start && !S.end) paintTimer();
   if (today() !== dayNo) { dayNo = today(); document.querySelectorAll("dialog[open]").forEach(d => d.close()); start(); toast("New words are ready"); }
 }
 function start() { load(); paintModes(); buildBoard(); paint(); }
