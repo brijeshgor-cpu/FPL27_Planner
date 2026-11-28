@@ -1,8 +1,9 @@
-import { ANSWERS, CATS } from "./words.js";
+import { ANSWERS, CATS, HINTS } from "./words.js";
 // Shared by the page and the Worker: which word is the answer on a given day.
 export const LAUNCH = Date.UTC(2026, 10, 28) / 864e5; // 28 Nov 2026 is puzzle #1
 export const ROWS = 6;
 export const MODES = ["daily", "football", "movies", "geography", "brands"];
+export const CATEGORIES = MODES.slice(1);
 export const MODE_NAMES = { daily: "Daily", football: "Football", movies: "Movies", geography: "Geography", brands: "Brands" };
 
 function rng(seed) { return () => { seed |= 0; seed = seed + 0x6D2B79F5 | 0; let t = Math.imul(seed ^ seed >>> 15, 1 | seed); t = t + Math.imul(t ^ t >>> 7, 61 | t) ^ t; return ((t ^ t >>> 14) >>> 0) / 4294967296; }; }
@@ -29,3 +30,10 @@ export function score(guess, answer) {
   for (let i = 0; i < n; i++) { if (res[i] !== "hit" && left[guess[i]]) { res[i] = "near"; left[guess[i]]--; } }
   return res;
 }
+
+export function hintFor(mode, word) {
+  for (const [hint, words] of Object.entries(HINTS[mode] || {})) if (words.split(" ").includes(word)) return hint;
+  return "";
+}
+// Weeks run Monday to Sunday (UK). Day numbers are days since 1 Jan 1970.
+export function weekStart(day) { const dow = new Date(day * 864e5).getUTCDay(); return day - ((dow + 6) % 7); }

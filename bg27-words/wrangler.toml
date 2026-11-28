@@ -1,4 +1,4 @@
-name = "bg27-words"
+name = "bg27-wordrush"
 main = "src/worker.js"
 compatibility_date = "2025-06-01"
 workers_dev = true

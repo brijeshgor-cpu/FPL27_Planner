@@ -1,0 +1,55 @@
+{
+ "football": {
+  "Football club": "arsenal chelsea everton fulham burnley watford leeds wolves spurs villa celtic rangers stoke derby ipswich luton reading wigan bolton swansea cardiff hull",
+  "Football player": "kane salah saka foden rice palmer rooney gerrard beckham shearer owen messi ronaldo pele zidane henry haaland kompany vardy isak toney lineker moore hoddle cantona keane scholes giggs lampard terry drogba",
+  "Football term": "penalty offside striker keeper header volley corner tackle dribble referee captain winger goal pitch trophy league kickoff foul booking whistle manager coach bench nutmeg cross assist save dugout chant terrace stadium fixture playoff yellow sheet",
+  "Football ground": "anfield wembley",
+  "Football kit or fan gear": "scarf shirt boots studs"
+ },
+ "movies": {
+  "Film title": "titanic avatar jaws alien rocky psycho grease gandhi amadeus vertigo memento skyfall gravity joker barbie dune matrix casino heat speed twister fargo arrival hook rambo batman jumanji ghost rebecca chicago network patton lincoln bullitt snatch platoon cocoon zulu hulk thor venom blade",
+  "Animated film": "frozen shrek cars coco bambi dumbo aladdin mulan tangled encanto moana brave",
+  "Film-making term": "actor sequel cinema trailer script studio camera scene cameo remake prequel villain hero plot",
+  "Film genre": "comedy horror musical western drama biopic",
+  "Film award": "oscar bafta",
+  "Cinema snack": "popcorn"
+ },
+ "geography": {
+  "Capital city": "paris london rome madrid berlin vienna prague dublin belfast oslo lisbon athens cairo tokyo lima quito nairobi ottawa accra havana warsaw moscow beijing seoul manila jakarta bangkok hanoi kabul tehran riyadh doha",
+  "World city": "delhi sydney perth lagos dubai",
+  "Country": "france spain italy ireland norway sweden finland denmark poland greece egypt kenya ghana chile peru brazil mexico canada china japan india nepal cuba oman qatar yemen",
+  "UK nation": "wales england",
+  "River": "amazon nile thames severn danube rhine",
+  "Mountain or mountain range": "everest alps andes pennine snowdon atlas",
+  "Desert": "sahara",
+  "Natural feature": "river delta canyon glacier volcano desert tundra island fjord lagoon plateau valley estuary",
+  "Line on the globe": "equator tropic",
+  "Weather system": "monsoon",
+  "English county": "cumbria devon kent essex norfolk suffolk dorset",
+  "English city": "york bath bristol"
+ },
+ "brands": {
+  "Sportswear brand": "nike adidas puma",
+  "Luxury fashion house": "gucci prada chanel dior",
+  "Watch brand": "rolex",
+  "Clothing brand": "zara levis barbour boden",
+  "Footwear brand": "clarks hunter",
+  "Supermarket": "tesco asda aldi lidl ocado",
+  "High-street shop": "boots argos next primark",
+  "Food and coffee chain": "greggs nandos costa pret",
+  "Tech company": "apple google amazon netflix spotify samsung sony nokia",
+  "Toy brand": "lego",
+  "Furniture shop": "ikea",
+  "Chocolate or biscuit": "cadbury twix mars kitkat oreo",
+  "Crisp brand": "walkers",
+  "Food brand": "heinz marmite bovril hovis",
+  "Soft drink": "pepsi fanta sprite tango ribena vimto",
+  "Cleaning brand": "dettol persil fairy",
+  "Home appliance brand": "hoover dyson bosch miele",
+  "Car maker": "ford tesla honda toyota nissan jaguar bentley mini lotus audi skoda volvo ferrari porsche",
+  "Fuel company": "shell esso",
+  "Travel company": "virgin ryanair easyjet uber",
+  "Bank or payments": "visa monzo halifax natwest lloyds",
+  "Toiletries brand": "colgate nivea dove lynx"
+ }
+}
