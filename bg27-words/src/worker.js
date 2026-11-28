@@ -1,30 +1,55 @@
-// BG27 WordRush: serves the game and keeps the Daily leaderboard in KV (one key per day, totalled per week).
+// BG27 WordRush: serves the game and keeps the Daily leaderboard in KV.
+// One key per day holds that day's games; weekly and monthly tables total them,
+// and "alltime:daily" keeps the ten best single games ever.
 import { ANSWERS, EXTRA } from "./words.js";
-import { MODES, ROWS, LAUNCH, answerFor, weekStart } from "./logic.js";
+import { ROWS, LAUNCH, answerFor, weekStart, pointsFor, gameCmp, periodCmp, ranks } from "./logic.js";
 import PAGE from "./page.gen.js";
 
 const VALID = new Set([...ANSWERS, ...EXTRA]);
 const json = (body, status = 200) => new Response(JSON.stringify(body), { status, headers: { "content-type": "application/json; charset=utf-8", "cache-control": "no-store" } });
-const rankSort = (a, b) => (b.won - a.won) || (a.n - b.n) || (a.s - b.s) || (a.t - b.t);
 const utcDay = () => Math.floor(Date.now() / 864e5);
-const key = (mode, day) => `b:${mode}:${day}`;
+const dayKey = day => `b:daily:${day}`;
+const ALLTIME = "alltime:daily";
+const TOP = 10;
 
-async function readBoard(env, mode, day) { return (await env.BG27_WORDS.get(key(mode, day), "json")) || []; }
+// Entries saved before points existed get them worked out on read.
+const withPts = e => ({ ...e, pts: pointsFor(e.won, e.n) });
+const gameSort = (a, b) => gameCmp(a, b) || ((a.t || 0) - (b.t || 0));
+const pub = e => ({ name: e.name, n: e.n, won: e.won, s: e.s, pts: e.pts, day: e.day });
 
-// A week's table: wins first, then fewest guesses (a loss counts as 7), then least time.
-async function weekTable(env, start) {
-  const last = Math.min(start + 6, utcDay() + 1);
+async function readDay(env, day) { return ((await env.BG27_WORDS.get(dayKey(day), "json")) || []).map(e => withPts({ ...e, day })); }
+
+// A week or month: total points, then least total time.
+async function periodTable(env, first, last) {
+  last = Math.min(last, utcDay() + 1);
   const days = [];
-  for (let d = start; d <= last; d++) days.push(d);
-  const boards = await Promise.all(days.map(d => readBoard(env, "daily", d)));
+  for (let d = Math.max(first, LAUNCH); d <= last; d++) days.push(d);
+  const games = (await Promise.all(days.map(d => readDay(env, d)))).flat();
   const by = new Map();
-  boards.flat().forEach(e => {
+  for (const e of games) {
     const k = e.name.toLowerCase();
-    const p = by.get(k) || { name: e.name, played: 0, wins: 0, g: 0, s: 0 };
-    p.played++; if (e.won) p.wins++; p.g += e.won ? e.n : 7; p.s += e.s;
+    const p = by.get(k) || { name: e.name, played: 0, wins: 0, pts: 0, s: 0 };
+    p.played++; if (e.won) p.wins++; p.pts += e.pts; p.s += e.s;
     by.set(k, p);
-  });
-  return [...by.values()].sort((a, b) => (b.wins - a.wins) || (a.g / a.played - b.g / b.played) || (b.played - a.played) || (a.s - b.s));
+  }
+  return [...by.values()].sort(periodCmp);
+}
+function monthRange(day) {
+  const d = new Date(day * 864e5), y = d.getUTCFullYear(), m = d.getUTCMonth();
+  return [Date.UTC(y, m, 1) / 864e5, Date.UTC(y, m + 1, 0) / 864e5];
+}
+
+async function allTime(env) {
+  const saved = await env.BG27_WORDS.get(ALLTIME, "json");
+  if (saved) return saved.map(withPts);
+  // First use: build it from every day already stored.
+  const keys = [];
+  let cursor;
+  do { const r = await env.BG27_WORDS.list({ prefix: "b:daily:", cursor }); keys.push(...r.keys.map(k => k.name)); cursor = r.list_complete ? null : r.cursor; } while (cursor);
+  const games = (await Promise.all(keys.map(k => readDay(env, Number(k.split(":")[2]))))).flat();
+  const top = games.filter(e => e.won).sort(gameSort).slice(0, TOP).map(pub);
+  await env.BG27_WORDS.put(ALLTIME, JSON.stringify(top));
+  return top;
 }
 
 export default {
@@ -38,44 +63,57 @@ export default {
     if (url.pathname === "/" || url.pathname === "/index.html") {
       return new Response(PAGE, { headers: { "content-type": "text/html; charset=utf-8", "cache-control": "no-cache" } });
     }
-    if (url.pathname === "/api/board" && req.method === "GET") {
-      const mode = url.searchParams.get("mode"), day = Number(url.searchParams.get("day"));
-      if (mode !== "daily") return json({ error: "Only the Daily word has a leaderboard." }, 400);
-      if (!MODES.includes(mode) || !Number.isInteger(day)) return json({ error: "Unknown board." }, 400);
-      const entries = (await readBoard(env, mode, day)).sort(rankSort).map(({ name, n, won, s }) => ({ name, n, won, s }));
-      return json({ mode, day, entries });
+    const day = Number(url.searchParams.get("day"));
+
+    if (req.method === "GET" && url.pathname === "/api/board") {
+      if (!Number.isInteger(day)) return json({ error: "Unknown day." }, 400);
+      return json({ day, entries: (await readDay(env, day)).sort(gameSort).map(pub) });
     }
-    if (url.pathname === "/api/week" && req.method === "GET") {
-      const day = Number(url.searchParams.get("day"));
+    if (req.method === "GET" && url.pathname === "/api/week") {
       if (!Number.isInteger(day)) return json({ error: "Unknown week." }, 400);
       const start = weekStart(day);
-      const [entries, prev] = await Promise.all([weekTable(env, start), weekTable(env, start - 7)]);
-      return json({ start, entries, lastWinner: prev[0] && prev[0].wins ? prev[0] : null });
+      const [entries, prev] = await Promise.all([periodTable(env, start, start + 6), periodTable(env, start - 7, start - 1)]);
+      return json({ start, entries, lastWinner: prev[0] && prev[0].pts ? prev[0] : null });
     }
-    if (url.pathname === "/api/score" && req.method === "POST") {
+    if (req.method === "GET" && url.pathname === "/api/month") {
+      if (!Number.isInteger(day)) return json({ error: "Unknown month." }, 400);
+      const [first, last] = monthRange(day), [pf, pl] = monthRange(first - 1);
+      const [entries, prev] = await Promise.all([periodTable(env, first, last), periodTable(env, pf, pl)]);
+      return json({ first, entries, lastWinner: prev[0] && prev[0].pts ? prev[0] : null });
+    }
+    if (req.method === "GET" && url.pathname === "/api/alltime") {
+      return json({ entries: await allTime(env) });
+    }
+
+    if (req.method === "POST" && url.pathname === "/api/score") {
       let b; try { b = await req.json(); } catch { return json({ error: "Bad request." }, 400); }
-      const { mode, day, guesses } = b || {};
+      const { mode, guesses } = b || {}, d = b && b.day;
       if (mode !== "daily") return json({ error: "Only the Daily word has a leaderboard." }, 400);
-      if (!MODES.includes(mode) || !Number.isInteger(day) || day < LAUNCH || Math.abs(day - utcDay()) > 1) return json({ error: "That puzzle isn't open for scores." }, 400);
+      if (!Number.isInteger(d) || d < LAUNCH || Math.abs(d - utcDay()) > 1) return json({ error: "That puzzle isn't open for scores." }, 400);
       const name = String(b.name || "").replace(/[^\p{L}\p{N} _.'-]/gu, "").replace(/\s+/g, " ").trim().slice(0, 16);
       if (!name) return json({ error: "Pick a nickname using letters and numbers." }, 400);
-      const ans = answerFor(mode, day);
+      const ans = answerFor("daily", d);
       if (!Array.isArray(guesses) || guesses.length < 1 || guesses.length > ROWS) return json({ error: "Bad guesses." }, 400);
-      for (const g of guesses) {
-        if (typeof g !== "string" || g.length !== ans.length || !/^[a-z]+$/.test(g)) return json({ error: "Bad guesses." }, 400);
-        if (mode === "daily" && !VALID.has(g)) return json({ error: "Bad guesses." }, 400);
-      }
-      const hitAt = guesses.indexOf(ans);
-      const won = hitAt === guesses.length - 1;
+      for (const g of guesses) if (typeof g !== "string" || g.length !== ans.length || !/^[a-z]+$/.test(g) || !VALID.has(g)) return json({ error: "Bad guesses." }, 400);
+      const hitAt = guesses.indexOf(ans), won = hitAt === guesses.length - 1;
       if (!won && (hitAt !== -1 || guesses.length !== ROWS)) return json({ error: "Bad guesses." }, 400);
       const s = Math.min(86400, Math.max(1, Math.round(Number(b.seconds) || 0)));
-      const list = await readBoard(env, mode, day);
-      if (list.some(e => e.name.toLowerCase() === name.toLowerCase())) return json({ error: `"${name}" has already posted today. Pick another nickname.` }, 409);
-      if (list.length >= 500) return json({ error: "Today's board is full." }, 429);
-      const entry = { name, n: guesses.length, won, s, t: Date.now() };
-      list.push(entry); list.sort(rankSort);
-      await env.BG27_WORDS.put(key(mode, day), JSON.stringify(list), { expirationTtl: 60 * 864e2 });
-      return json({ ok: true, name, rank: list.indexOf(entry) + 1, total: list.length });
+
+      const raw = (await env.BG27_WORDS.get(dayKey(d), "json")) || [];
+      if (raw.some(e => e.name.toLowerCase() === name.toLowerCase())) return json({ error: `"${name}" has already posted today. Pick another nickname.` }, 409);
+      if (raw.length >= 500) return json({ error: "Today's board is full." }, 429);
+      const entry = { name, n: guesses.length, won, s, t: Date.now(), pts: pointsFor(won, guesses.length) };
+      const top = await allTime(env); // read before saving today's entry, so a first build can't count it twice
+      raw.push(entry);
+      await env.BG27_WORDS.put(dayKey(d), JSON.stringify(raw), { expirationTtl: 400 * 864e2 });
+
+      const full = { ...entry, day: d };
+      if (won && (top.length < TOP || gameSort(full, top[top.length - 1]) < 0)) {
+        top.push(pub(full)); top.sort(gameCmp);
+        await env.BG27_WORDS.put(ALLTIME, JSON.stringify(top.slice(0, TOP)));
+      }
+      const today = raw.map(withPts).sort(gameSort), rk = ranks(today, gameCmp);
+      return json({ ok: true, name, pts: entry.pts, rank: rk[today.findIndex(e => e.t === entry.t && e.name === name)], total: today.length });
     }
     return new Response("Not found", { status: 404 });
   },

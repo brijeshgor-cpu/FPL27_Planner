@@ -37,3 +37,13 @@ export function hintFor(mode, word) {
 }
 // Weeks run Monday to Sunday (UK). Day numbers are days since 1 Jan 1970.
 export function weekStart(day) { const dow = new Date(day * 864e5).getUTCDay(); return day - ((dow + 6) % 7); }
+
+// Daily points: 600 for one guess down to 100 for six, 0 for a miss.
+export const BASE_POINTS = [600, 500, 400, 300, 200, 100];
+export function pointsFor(won, n) { return won ? BASE_POINTS[n - 1] : 0; }
+// Games rank by fewest guesses (a miss is last), then fastest time. Identical results share a rank.
+export function gameCmp(a, b) { return ((a.won ? a.n : 7) - (b.won ? b.n : 7)) || (a.s - b.s); }
+// Weeks and months rank by total points, then least total time.
+export function periodCmp(a, b) { return (b.pts - a.pts) || (a.s - b.s); }
+// Rank numbers with ties sharing a place (1, 2, 2, 4).
+export function ranks(list, cmp) { const r = []; list.forEach((e, i) => r.push(i && cmp(list[i - 1], e) === 0 ? r[i - 1] : i + 1)); return r; }

@@ -17,7 +17,8 @@
   --hit: #22D3EE; --near: #FF4DA6; --miss: #392650; --accent: #A855F7; --title: #FF4DA6;
   --on-hit: #180D2E; --on-near: #FFFFFF; --on-miss: #E9DDFB; --on-accent: #FFFFFF;
   --bg: #F7F3FF; --surface: #FFFFFF; --fg: #180D2E; --muted: #6B5A8A; --line: #DCD0F0;
-  --key: #E6DDF5; --key-miss: #392650; --key-miss-fg: #9D8BBD; --title2: #7C3AED; --gold: #B7791F;
+  --key: #E6DDF5; --key-miss: #392650; --key-miss-fg: #9D8BBD; --title2: #7C3AED; --gold: #B7791F; --silver: #7D8597; --bronze: #B4632F; --good: #0E9AB0;
+  --row: #F1EBFB; --row-me: #E4D2FF;
   --overlay: rgb(24 13 46 / .45);
   --display: "Bricolage Grotesque", "Arial Black", system-ui, sans-serif;
   --body: "Inter", system-ui, -apple-system, "Segoe UI", sans-serif;
@@ -25,7 +26,8 @@
 }
 :root[data-theme="dark"] {
   --bg: #180D2E; --surface: #21143D; --fg: #F3E8FF; --muted: #B9A5D9; --line: #392650;
-  --key: #2A1A47; --key-miss: #120A22; --key-miss-fg: #6F5D8F; --title2: #22D3EE; --gold: #FACC15;
+  --key: #2A1A47; --key-miss: #120A22; --key-miss-fg: #6F5D8F; --title2: #22D3EE; --gold: #FACC15; --silver: #C0C7D4; --bronze: #E08A4F; --good: #22D3EE;
+  --row: #2A1A47; --row-me: #45287A;
   --overlay: rgb(0 0 0 / .55);
   color-scheme: dark;
 }
@@ -96,7 +98,8 @@ button:focus-visible, input:focus-visible { outline: 3px solid var(--near); outl
 .key.hit { background: var(--hit); color: var(--on-hit); } .key.near { background: var(--near); color: var(--on-near); } .key.miss { background: var(--key-miss); color: var(--key-miss-fg); }
 .spacer { flex: 0.5 1 0; }
 
-dialog { border: 1px solid var(--line); border-radius: 16px; background: var(--surface); color: var(--fg); width: min(440px, calc(100% - 32px)); max-height: calc(100% - 48px); padding: 22px; }
+dialog { border: 1px solid var(--line); border-radius: 16px; background: var(--surface); color: var(--fg); width: min(460px, calc(100% - 24px)); max-height: calc(100% - 48px); padding: 22px; }
+@media (max-width: 420px) { dialog { padding: 18px 14px; } .lb td { padding: 10px 5px; } .lb td:first-child { padding-left: 10px; } .lb td:last-child { padding-right: 10px; } }
 dialog::backdrop { background: var(--overlay); }
 dialog h2 { font-family: var(--display); font-size: 1.3rem; margin: 0 0 12px; text-wrap: balance; }
 dialog h3 { font: 600 0.75rem var(--body); text-transform: uppercase; letter-spacing: 0.06em; color: var(--muted); margin: 18px 0 8px; }
@@ -121,18 +124,29 @@ dialog p { line-height: 1.5; margin: 0 0 10px; }
 textarea, input[type=text] { width: 100%; font: 0.95rem var(--body); background: var(--bg); color: var(--fg); border: 1px solid var(--line); border-radius: 8px; padding: 9px 10px; }
 .post { display: flex; gap: 8px; }
 .post input { flex: 1; min-width: 0; }
-table.lb { width: 100%; border-collapse: collapse; font-variant-numeric: tabular-nums; }
-.lb th { text-align: left; font: 600 0.7rem var(--body); text-transform: uppercase; letter-spacing: 0.05em; color: var(--muted); padding: 4px 6px; border-bottom: 1px solid var(--line); }
-.lb td { padding: 7px 6px; border-bottom: 1px solid var(--line); }
-.lb td.num, .lb th.num { text-align: right; }
-.lb tr.me td { font-weight: 700; }
-.lb .rank { width: 2.2em; color: var(--muted); }
-.lb .rank.gold { color: var(--gold); font-weight: 700; }
-.lb .x { color: var(--near); }
-.lb-wrap { max-height: 46vh; overflow: auto; }
-.tabs { display: flex; gap: 6px; margin-bottom: 10px; }
-.tabs .chip { padding: 5px 12px; font-size: 0.8rem; }
-.champ { background: var(--bg); border: 1px solid var(--line); border-radius: 10px; padding: 8px 12px; margin-bottom: 10px; font-size: 0.85rem; }
+table.lb { width: 100%; border-collapse: separate; border-spacing: 0 6px; font-variant-numeric: tabular-nums; }
+.lb th { text-align: left; font: 600 0.68rem var(--body); text-transform: uppercase; letter-spacing: 0.04em; color: var(--muted); padding: 0 6px 2px; white-space: nowrap; }
+.lb td { padding: 11px 6px; background: var(--row); font-size: 0.95rem; }
+.lb td:first-child { border-radius: 10px 0 0 10px; padding-left: 12px; }
+.lb td:last-child { border-radius: 0 10px 10px 0; padding-right: 12px; }
+.lb th:first-child { padding-left: 12px; } .lb th:last-child { padding-right: 12px; }
+.lb .num { text-align: right; white-space: nowrap; width: 1%; }
+.lb .name { font-weight: 600; overflow-wrap: break-word; }
+.lb .name small { display: block; color: var(--muted); font-weight: 500; font-size: 0.72rem; }
+.lb .rank { width: 1%; white-space: nowrap; } .lb td.rank { font: 800 1.05rem var(--display); color: var(--muted); }
+.lb td.r1 { color: var(--gold); } .lb td.r2 { color: var(--silver); } .lb td.r3 { color: var(--bronze); }
+.lb .g { color: var(--good); font-weight: 600; } .lb .x { color: var(--near); font-weight: 600; }
+.lb .pts { font-weight: 800; }
+.lb tr.me td { background: var(--row-me); }
+.lb td.empty { text-align: center; color: var(--muted); font-size: 0.85rem; }
+.lb-wrap { max-height: 52vh; overflow: auto; }
+.lb-head { text-align: center; margin: 4px 0 14px; }
+.lb-head h2 { margin: 0; text-transform: uppercase; letter-spacing: 0.02em; }
+.lb-head p { margin: 4px 0 0; color: var(--accent); font-weight: 500; }
+.seg { display: grid; grid-template-columns: repeat(4, 1fr); background: var(--row); border-radius: 12px; padding: 4px; gap: 2px; margin-bottom: 8px; }
+.seg button { border: 0; background: transparent; color: var(--muted); font: 600 0.82rem var(--body); padding: 8px 2px; border-radius: 9px; cursor: pointer; }
+.seg button[aria-pressed="true"] { background: var(--surface); color: var(--accent); box-shadow: 0 1px 3px rgb(24 13 46 / .15); }
+.champ { background: var(--bg); border: 1px solid var(--line); border-radius: 10px; padding: 8px 12px; margin-bottom: 4px; font-size: 0.85rem; }
 .champ b { color: var(--gold); }
 @media (max-height: 700px) { .key { height: 46px; } }
 </style>
@@ -182,11 +196,11 @@ table.lb { width: 100%; border-collapse: collapse; font-variant-numeric: tabular
   <div class="ex"><div class="tile">p</div><div class="tile">l</div><div class="tile">u</div><div class="tile miss">m</div><div class="tile">b</div></div>
   <p class="muted"><b>M</b> is not in the word.</p>
   <h3>Daily</h3>
-  <p class="muted">A five-letter word in British English. Guesses must be real words. The clock starts at your first letter, and your result goes on the weekly leaderboard.</p>
+  <p class="muted">A five-letter word in British English. Guesses must be real words. The clock starts at your first letter, and your result goes on the leaderboard.</p>
   <h3>Categories</h3>
   <p class="muted">Football, Movies, Geography and Brands. Words are 4 to 7 letters, shown by the grid. Any letters are allowed, because names aren't in the dictionary. Stuck? Tap <b>Hint</b> to see what kind of word it is, such as "Football player". There's no clock and no leaderboard, so take your time.</p>
-  <h3>Weekly leaderboard</h3>
-  <p class="muted">Daily word only. It runs Monday to Sunday, then starts again. Most wins first, then fewest guesses on average, then fastest total time.</p>
+  <h3>Daily leaderboard</h3>
+  <p class="muted">Points: 1 guess 600, 2 guesses 500, 3 guesses 400, 4 guesses 300, 5 guesses 200, 6 guesses 100, a miss 0. Each day ranks by fewest guesses, then fastest time, and identical results share a place. Weekly and Monthly add up your points. All-time shows the ten best single games.</p>
 </dialog>
 
 <dialog id="statsDlg">
@@ -196,7 +210,7 @@ table.lb { width: 100%; border-collapse: collapse; font-variant-numeric: tabular
   <h3>Guesses per win</h3>
   <div class="dist" id="dist"></div>
   <div id="postBox" hidden>
-    <h3>Post to this week's leaderboard</h3>
+    <h3>Post to the leaderboard</h3>
     <form class="post" id="postForm">
       <input type="text" id="nick" maxlength="16" placeholder="Your nickname" autocomplete="nickname" required>
       <button class="btn" type="submit" id="postBtn">Post</button>
@@ -215,14 +229,16 @@ table.lb { width: 100%; border-collapse: collapse; font-variant-numeric: tabular
 
 <dialog id="boardDlg">
   <button class="icon-btn close" data-close>Close</button>
-  <h2 id="lbTitle">Leaderboard</h2>
-  <div class="tabs" id="lbTabs">
-    <button class="chip" type="button" data-lb="week" aria-pressed="true">This week</button>
-    <button class="chip" type="button" data-lb="today" aria-pressed="false">Today</button>
+  <div class="lb-head"><h2>Daily leaderboard</h2><p id="lbSub">Puzzle #1</p></div>
+  <div class="seg" id="lbTabs" role="group" aria-label="Leaderboard period">
+    <button type="button" data-lb="today" aria-pressed="true">Today</button>
+    <button type="button" data-lb="week" aria-pressed="false">Weekly</button>
+    <button type="button" data-lb="month" aria-pressed="false">Monthly</button>
+    <button type="button" data-lb="alltime" aria-pressed="false">All-time</button>
   </div>
   <div class="champ" id="champ" hidden></div>
   <div class="lb-wrap"><table class="lb"><thead id="lbHead"></thead><tbody id="lbBody"></tbody></table></div>
-  <p class="muted" id="lbNote" style="margin-top:10px"></p>
+  <p class="muted" id="lbNote" style="margin-top:6px"></p>
 </dialog>
 
 <script>
@@ -392,7 +408,7 @@ function openStats() {
     $("postMsg").textContent = S.posted ? `Posted as ${S.posted}.` : "Your nickname is saved on this device for next time.";
   }
   const label = isDaily() ? "" : MODE_NAMES[mode] + ": ";
-  const time = isDaily() ? `, ${fmt(elapsed())}` : "";
+  const time = isDaily() ? `, ${fmt(elapsed())} · ${pointsFor(true, S.guesses.length)} pts` : "";
   $("statsTitle").innerHTML = done ? (S.status === "won" ? `${label}solved in ${S.guesses.length}${time}` : `${label}the word was <span class="answer">${answer()}</span>`) : `${MODE_NAMES[mode]} stats`;
   $("shareText").hidden = true;
   if (!$("statsDlg").open) $("statsDlg").showModal();
@@ -405,51 +421,66 @@ async function postScore(name) {
   try {
     const r = await fetch("/api/score", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ mode: "daily", day: dayNo, name, guesses: S.guesses, seconds: Math.round(elapsed()) }) });
     const j = await r.json().catch(() => ({}));
-    if (r.ok) { S.posted = j.name || name; save(); store.set("nick", name); $("postForm").hidden = true; $("postMsg").textContent = `Posted as ${S.posted}. You're #${j.rank} of ${j.total} today.`; }
+    if (r.ok) { S.posted = j.name || name; save(); store.set("nick", name); $("postForm").hidden = true; $("postMsg").textContent = `Posted as ${S.posted}: ${j.pts} points, #${j.rank} of ${j.total} today.`; }
     else $("postMsg").textContent = j.error || "That didn't post. Try again.";
   } catch { $("postMsg").textContent = "No connection. Try again when you're back online."; }
 }
 $("postForm").addEventListener("submit", e => { e.preventDefault(); postScore($("nick").value); });
 
-// Leaderboard: Daily only. "This week" totals Monday to Sunday; "Today" is today's games.
-let lbView = "week";
-function cell(tr, text, cls) { const td = document.createElement("td"); td.textContent = text; if (cls) td.className = cls; tr.appendChild(td); }
+// Leaderboard: Daily only. Today, Weekly (Mon-Sun), Monthly (calendar month) and All-time (ten best single games).
+let lbView = "today";
+const LB_NOTES = {
+  today: "Fewest guesses first, then fastest time. Identical results share a place.",
+  week: "Total points this week, then least total time. A new week starts on Monday.",
+  month: "Total points this month, then least total time.",
+  alltime: "The ten best single games ever: fewest guesses, then fastest time.",
+};
+const fmtDate = (d, o) => new Date(d * 864e5).toLocaleDateString("en-GB", { timeZone: "UTC", ...o });
+function cell(tr, text, cls, sub) {
+  const td = document.createElement("td"); td.textContent = text; if (cls) td.className = cls;
+  if (sub) { const s = document.createElement("small"); s.textContent = sub; td.appendChild(s); }
+  tr.appendChild(td);
+}
 async function openBoard(view) {
   lbView = view || lbView;
   document.querySelectorAll("#lbTabs [data-lb]").forEach(b => b.setAttribute("aria-pressed", String(b.dataset.lb === lbView)));
-  const ws = weekStart(dayNo), fmtDay = d => new Date(d * 864e5).toLocaleDateString("en-GB", { day: "numeric", month: "short", timeZone: "UTC" });
-  $("lbTitle").textContent = lbView === "week" ? `Week of ${fmtDay(ws)}` : `Today · Daily #${puzzleNo()}`;
-  $("lbHead").innerHTML = lbView === "week"
-    ? `<tr><th class="rank">#</th><th>Player</th><th class="num">Won</th><th class="num">Avg</th><th class="num">Time</th></tr>`
-    : `<tr><th class="rank">#</th><th>Player</th><th class="num">Guesses</th><th class="num">Time</th></tr>`;
-  const cols = lbView === "week" ? 5 : 4;
-  $("lbBody").innerHTML = `<tr><td colspan="${cols}" class="muted">Loading…</td></tr>`;
-  $("lbNote").textContent = ""; $("champ").hidden = true;
+  const ws = weekStart(dayNo);
+  $("lbSub").textContent = {
+    today: `Puzzle #${puzzleNo()} · ${fmtDate(dayNo, { day: "numeric", month: "long" })}`,
+    week: `Week of ${fmtDate(ws, { day: "numeric", month: "long" })}`,
+    month: fmtDate(dayNo, { month: "long", year: "numeric" }),
+    alltime: "Top 10 single games",
+  }[lbView];
+  const period = lbView === "week" || lbView === "month";
+  $("lbHead").innerHTML = `<tr><th class="rank">Rank</th><th>Player</th><th class="num">${period ? "Played" : "Guesses"}</th><th class="num">Time</th><th class="num">Points</th></tr>`;
+  $("lbBody").innerHTML = `<tr><td colspan="5" class="empty">Loading…</td></tr>`;
+  $("lbNote").textContent = LB_NOTES[lbView]; $("champ").hidden = true;
   if (!$("boardDlg").open) $("boardDlg").showModal();
-  const me = (store.get("nick", "") || "").toLowerCase();
+  const me = (store.get("nick", "") || "").toLowerCase(), asked = lbView;
   try {
-    const r = await fetch(lbView === "week" ? `/api/week?day=${dayNo}` : `/api/board?mode=daily&day=${dayNo}`);
-    const j = await r.json(), rows = j.entries || [], body = $("lbBody");
+    const url = { today: `/api/board?day=${dayNo}`, week: `/api/week?day=${dayNo}`, month: `/api/month?day=${dayNo}`, alltime: "/api/alltime" }[lbView];
+    const j = await (await fetch(url)).json();
+    if (asked !== lbView) return;
+    const rows = j.entries || [], body = $("lbBody"), rk = ranks(rows, period ? periodCmp : gameCmp);
     body.innerHTML = "";
-    if (!rows.length) body.innerHTML = `<tr><td colspan="${cols}" class="muted">No scores yet. Be the first.</td></tr>`;
+    if (!rows.length) body.innerHTML = `<tr><td colspan="5" class="empty">${lbView === "today" && stateOf("daily") === "play" ? "No scores yet. Play today's word to be first." : "No scores yet."}</td></tr>`;
     rows.forEach((e, i) => {
-      const tr = document.createElement("tr"); if (me && e.name.toLowerCase() === me) tr.className = "me";
-      const top = i === 0 && (lbView === "week" ? e.wins > 0 : e.won);
-      cell(tr, String(i + 1), "rank" + (top ? " gold" : ""));
-      cell(tr, e.name);
-      if (lbView === "week") { cell(tr, `${e.wins}/${e.played}`, "num"); cell(tr, (e.g / e.played).toFixed(1), "num"); cell(tr, fmt(e.s), "num"); }
-      else { cell(tr, e.won ? `${e.n}/6` : "X/6", "num" + (e.won ? "" : " x")); cell(tr, fmt(e.s), "num"); }
+      const tr = document.createElement("tr"), mine = me && e.name.toLowerCase() === me;
+      if (mine) tr.className = "me";
+      cell(tr, String(rk[i]), "rank" + (rk[i] <= 3 && e.pts > 0 ? " r" + rk[i] : ""));
+      cell(tr, e.name + (mine ? " (You)" : ""), "name", lbView === "alltime" && e.day ? fmtDate(e.day, { day: "2-digit", month: "2-digit", year: "2-digit" }) : "");
+      if (period) cell(tr, String(e.played), "num");
+      else cell(tr, e.won ? `${e.n}/6` : "X/6", "num " + (e.won ? "g" : "x"));
+      cell(tr, fmt(e.s), "num");
+      cell(tr, String(e.pts), "num pts");
       body.appendChild(tr);
     });
-    if (lbView === "week" && j.lastWinner) {
+    if (period && j.lastWinner) {
       const c = $("champ"); c.hidden = false; c.textContent = "";
       const b = document.createElement("b"); b.textContent = j.lastWinner.name;
-      c.append("Last week's champion: ", b, ` (${j.lastWinner.wins} wins)`);
+      c.append(`Last ${lbView === "week" ? "week" : "month"}'s champion: `, b, ` (${j.lastWinner.pts} pts)`);
     }
-    $("lbNote").textContent = lbView === "week"
-      ? "Most wins, then fewest guesses on average (a miss counts as 7), then total time. A new week starts on Monday."
-      : (stateOf("daily") === "play" ? "Play today's Daily word to post your score." : "Fewest guesses first; time breaks ties.");
-  } catch { $("lbBody").innerHTML = `<tr><td colspan="${cols}" class="muted">Couldn't load the leaderboard. Check your connection.</td></tr>`; }
+  } catch { if (asked === lbView) $("lbBody").innerHTML = `<tr><td colspan="5" class="empty">Couldn't load the leaderboard. Check your connection.</td></tr>`; }
 }
 $("lbTabs").addEventListener("click", e => { const b = e.target.closest("[data-lb]"); if (b) openBoard(b.dataset.lb); });
 $("boardBtn").addEventListener("click", () => openBoard());
@@ -459,7 +490,7 @@ function shareString() {
   const ans = answer(), sym = { hit: "🟦", near: "🟪", miss: "⬛" };
   const grid = S.guesses.map(g => score(g, ans).map(v => sym[v]).join("")).join("\n");
   const res = S.status === "won" ? S.guesses.length : "X";
-  const head = isDaily() ? `BG27 WordRush #${puzzleNo()} ${res}/6 · ${fmt(elapsed())}` : `BG27 WordRush ${MODE_NAMES[mode]} #${puzzleNo()} ${res}/6${S.hint ? " (hint)" : ""}`;
+  const head = isDaily() ? `BG27 WordRush #${puzzleNo()} ${res}/6 · ${fmt(elapsed())} · ${pointsFor(S.status === "won", S.guesses.length)} pts` : `BG27 WordRush ${MODE_NAMES[mode]} #${puzzleNo()} ${res}/6${S.hint ? " (hint)" : ""}`;
   return `${head}\n\n${grid}\n${location.origin}`;
 }
 $("shareBtn").addEventListener("click", () => {
